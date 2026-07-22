@@ -1,0 +1,17 @@
+{
+  "name": "comfyui-serverless",
+  "image": "ghcr.io/aaronghent/comfyui-serverless:latest",
+  "gpu_type_id": "NVIDIA RTX A4000",
+  "container_disk_in_gb": 50,
+  "volume_in_gb": 100,
+  "volume_mount_path": "/runpod-volume",
+  "env": {
+    "MODE": "serverless",
+    "COMFYUI_PORT": "8188",
+    "COMFYUI_ARGS": "--use-sage-attention --lowvram"
+  },
+  "docker_args": "",
+  "start_ssh": false,
+  "description": "ComfyUI Serverless deployment - pay-per-execution with automatic scaling",
+  "readme": "Configure optional features by uploading .env file to /runpod-volume/.env in network storage. MODE=serverless enables the RunPod handler for API-driven job processing."
+}

@@ -1,0 +1,387 @@
+{
+  "last_node_id": 50,
+  "last_link_id": 60,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "DownloadAndLoadWanModel",
+      "pos": [100, 100],
+      "size": [350, 150],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "wan_model", "type": "WANMODEL", "links": [1]}
+      ],
+      "properties": {"Node name for S&R": "DownloadAndLoadWanModel"},
+      "widgets_values": [
+        "Wan-AI/Wan2.1-T2V-1.3B",
+        "bf16",
+        "disabled"
+      ],
+      "color": "#223",
+      "bgcolor": "#335"
+    },
+    {
+      "id": 2,
+      "type": "WanTextEncode",
+      "pos": [100, 300],
+      "size": [400, 200],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {"name": "wan_model", "type": "WANMODEL", "link": 1}
+      ],
+      "outputs": [
+        {"name": "conditioning", "type": "WANCOND", "links": [2]},
+        {"name": "negative", "type": "WANCOND", "links": [3]}
+      ],
+      "properties": {"Node name for S&R": "WanTextEncode"},
+      "widgets_values": [
+        "smooth animation transition, fluid motion, high quality, seamless",
+        "blurry, low quality, distorted, glitch, static, jerky motion, artifacts"
+      ],
+      "color": "#332922",
+      "bgcolor": "#593930"
+    },
+    {
+      "id": 10,
+      "type": "VHS_LoadImagesPath",
+      "pos": [100, 550],
+      "size": [350, 150],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "IMAGE", "type": "IMAGE", "links": [10, 11]},
+        {"name": "MASK", "type": "MASK", "links": null},
+        {"name": "count", "type": "INT", "links": [12]}
+      ],
+      "properties": {"Node name for S&R": "VHS_LoadImagesPath"},
+      "widgets_values": [
+        "/comfyui/input/transitions/",
+        "*.png",
+        0,
+        0,
+        "Disabled"
+      ],
+      "color": "#322",
+      "bgcolor": "#533"
+    },
+    {
+      "id": 11,
+      "type": "Note",
+      "pos": [100, 750],
+      "size": [350, 100],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "Place your transition images in:\n/comfyui/input/transitions/\n\nName them sequentially:\n001.png, 002.png, 003.png..."
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 15,
+      "type": "ImageFromBatch+",
+      "pos": [500, 550],
+      "size": [250, 100],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {"name": "image", "type": "IMAGE", "link": 10}
+      ],
+      "outputs": [
+        {"name": "IMAGE", "type": "IMAGE", "links": [15]}
+      ],
+      "properties": {"Node name for S&R": "ImageFromBatch+"},
+      "widgets_values": [0, 1],
+      "color": "#222",
+      "bgcolor": "#000"
+    },
+    {
+      "id": 16,
+      "type": "ImageFromBatch+",
+      "pos": [500, 700],
+      "size": [250, 100],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {"name": "image", "type": "IMAGE", "link": 11}
+      ],
+      "outputs": [
+        {"name": "IMAGE", "type": "IMAGE", "links": [16]}
+      ],
+      "properties": {"Node name for S&R": "ImageFromBatch+"},
+      "widgets_values": [-1, 1],
+      "color": "#222",
+      "bgcolor": "#000"
+    },
+    {
+      "id": 20,
+      "type": "WanFirstLastFrameToVideo",
+      "pos": [800, 100],
+      "size": [400, 300],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {"name": "wan_model", "type": "WANMODEL", "link": null},
+        {"name": "positive", "type": "WANCOND", "link": 2},
+        {"name": "negative", "type": "WANCOND", "link": 3},
+        {"name": "first_image", "type": "IMAGE", "link": 15},
+        {"name": "last_image", "type": "IMAGE", "link": 16}
+      ],
+      "outputs": [
+        {"name": "samples", "type": "LATENT", "links": [20]}
+      ],
+      "properties": {"Node name for S&R": "WanFirstLastFrameToVideo"},
+      "widgets_values": [
+        480,
+        832,
+        33,
+        20,
+        3.5,
+        12345,
+        "fixed"
+      ],
+      "color": "#223",
+      "bgcolor": "#335"
+    },
+    {
+      "id": 25,
+      "type": "WanVAEDecode",
+      "pos": [1250, 100],
+      "size": [250, 100],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {"name": "wan_model", "type": "WANMODEL", "link": null},
+        {"name": "samples", "type": "LATENT", "link": 20}
+      ],
+      "outputs": [
+        {"name": "images", "type": "IMAGE", "links": [25]}
+      ],
+      "properties": {"Node name for S&R": "WanVAEDecode"},
+      "widgets_values": [],
+      "color": "#223",
+      "bgcolor": "#335"
+    },
+    {
+      "id": 30,
+      "type": "DownloadAndLoadWanControlNet",
+      "pos": [100, 900],
+      "size": [350, 100],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "controlnet", "type": "WANCONTROLNET", "links": [30]}
+      ],
+      "properties": {"Node name for S&R": "DownloadAndLoadWanControlNet"},
+      "widgets_values": [
+        "depth",
+        "bf16"
+      ],
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 31,
+      "type": "DepthAnythingV2Preprocessor",
+      "pos": [500, 900],
+      "size": [300, 100],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {"name": "image", "type": "IMAGE", "link": null}
+      ],
+      "outputs": [
+        {"name": "IMAGE", "type": "IMAGE", "links": [31]}
+      ],
+      "properties": {"Node name for S&R": "DepthAnythingV2Preprocessor"},
+      "widgets_values": ["depth_anything_v2_vitb.pth", 512],
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 32,
+      "type": "WanControlNetApply",
+      "pos": [850, 900],
+      "size": [300, 150],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {"name": "conditioning", "type": "WANCOND", "link": null},
+        {"name": "controlnet", "type": "WANCONTROLNET", "link": 30},
+        {"name": "control_images", "type": "IMAGE", "link": 31}
+      ],
+      "outputs": [
+        {"name": "conditioning", "type": "WANCOND", "links": null}
+      ],
+      "properties": {"Node name for S&R": "WanControlNetApply"},
+      "widgets_values": [0.8, 0.0, 1.0],
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 33,
+      "type": "Note",
+      "pos": [500, 1100],
+      "size": [400, 100],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "ControlNet Section (Optional)\n\nConnect depth/pose/canny preprocessor output to WanControlNetApply.\nThen connect the output conditioning to the sampler."
+      ],
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 40,
+      "type": "LoadImageMask",
+      "pos": [100, 1250],
+      "size": [350, 150],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "MASK", "type": "MASK", "links": [40]}
+      ],
+      "properties": {"Node name for S&R": "LoadImageMask"},
+      "widgets_values": ["mask.png", "alpha"],
+      "color": "#323",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 41,
+      "type": "WanInpaintModelConditioning",
+      "pos": [500, 1250],
+      "size": [350, 150],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {"name": "wan_model", "type": "WANMODEL", "link": null},
+        {"name": "image", "type": "IMAGE", "link": null},
+        {"name": "mask", "type": "MASK", "link": 40}
+      ],
+      "outputs": [
+        {"name": "conditioning", "type": "WANCOND", "links": null},
+        {"name": "latent", "type": "LATENT", "links": null}
+      ],
+      "properties": {"Node name for S&R": "WanInpaintModelConditioning"},
+      "widgets_values": [],
+      "color": "#323",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 42,
+      "type": "Note",
+      "pos": [500, 1450],
+      "size": [400, 100],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "Inpainting Section (Optional)\n\nUse masks to animate only specific regions.\nWhite = animate, Black = keep static."
+      ],
+      "color": "#323",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 50,
+      "type": "VHS_VideoCombine",
+      "pos": [1550, 100],
+      "size": [400, 500],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {"name": "images", "type": "IMAGE", "link": 25},
+        {"name": "audio", "type": "AUDIO", "link": null},
+        {"name": "meta_batch", "type": "VHS_BatchManager", "link": null}
+      ],
+      "outputs": [
+        {"name": "Filenames", "type": "VHS_FILENAMES", "links": null}
+      ],
+      "properties": {"Node name for S&R": "VHS_VideoCombine"},
+      "widgets_values": {
+        "frame_rate": 24,
+        "loop_count": 0,
+        "filename_prefix": "pusa_transition",
+        "format": "video/h264-mp4",
+        "pingpong": false,
+        "save_output": true
+      },
+      "color": "#233",
+      "bgcolor": "#355"
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "WANMODEL"],
+    [2, 2, 0, 20, 1, "WANCOND"],
+    [3, 2, 1, 20, 2, "WANCOND"],
+    [10, 10, 0, 15, 0, "IMAGE"],
+    [11, 10, 0, 16, 0, "IMAGE"],
+    [12, 10, 2, null, null, "INT"],
+    [15, 15, 0, 20, 3, "IMAGE"],
+    [16, 16, 0, 20, 4, "IMAGE"],
+    [20, 20, 0, 25, 1, "LATENT"],
+    [25, 25, 0, 50, 0, "IMAGE"],
+    [30, 30, 0, 32, 1, "WANCONTROLNET"],
+    [31, 31, 0, 32, 2, "IMAGE"],
+    [40, 40, 0, 41, 2, "MASK"]
+  ],
+  "groups": [
+    {
+      "title": "Image Loading from Transitions Folder",
+      "bounding": [80, 510, 700, 300],
+      "color": "#b06000"
+    },
+    {
+      "title": "ControlNet Guidance (Optional)",
+      "bounding": [80, 860, 800, 300],
+      "color": "#2a7a2a"
+    },
+    {
+      "title": "Inpainting (Optional)",
+      "bounding": [80, 1210, 700, 300],
+      "color": "#7a2a7a"
+    },
+    {
+      "title": "First/Last Frame Animation",
+      "bounding": [780, 60, 500, 400],
+      "color": "#3f789e"
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.7,
+      "offset": [0, 0]
+    }
+  },
+  "version": 0.4
+}

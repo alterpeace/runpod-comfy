@@ -1,0 +1,742 @@
+"""
+RunPod Serverless Handler for ComfyUI
+
+This module provides the main serverless handler function for processing
+ComfyUI workflows on RunPod. It handles workflow validation, execution,
+output retrieval, and cleanup.
+"""
+
+import os
+import sys
+import json
+import base64
+import logging
+import subprocess
+import time
+import tempfile
+import shutil
+from typing import Dict, List, Optional, Any
+from pathlib import Path
+from datetime import datetime
+
+import runpod
+
+# Configure logging first
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Import ComfyUI client
+from comfyui_client import ComfyUIClient, ComfyUIError, ComfyUIConnectionError, ComfyUIWorkflowError
+
+# Import S3 storage (optional)
+try:
+    from storage_s3 import S3StorageClient, S3StorageError, create_s3_client_from_env
+    S3_AVAILABLE = True
+except ImportError:
+    S3_AVAILABLE = False
+    logger.warning("S3 storage module not available (boto3 not installed)")
+
+# Environment variable configuration with defaults and validation
+def get_env_int(key: str, default: int, min_val: Optional[int] = None, max_val: Optional[int] = None) -> int:
+    """Get integer environment variable with validation."""
+    try:
+        value = int(os.environ.get(key, str(default)))
+        if min_val is not None and value < min_val:
+            logger.warning(f"{key}={value} is below minimum {min_val}, using minimum")
+            return min_val
+        if max_val is not None and value > max_val:
+            logger.warning(f"{key}={value} is above maximum {max_val}, using maximum")
+            return max_val
+        return value
+    except (ValueError, TypeError):
+        logger.warning(f"Invalid {key} value, using default: {default}")
+        return default
+
+
+def get_env_bool(key: str, default: bool = False) -> bool:
+    """Get boolean environment variable."""
+    value = os.environ.get(key, '').lower()
+    if value in ('true', '1', 'yes', 'on'):
+        return True
+    elif value in ('false', '0', 'no', 'off', ''):
+        return False if not value else default
+    return default
+
+
+def validate_storage_type(storage_type: str) -> str:
+    """Validate storage type configuration."""
+    valid_types = ['response', 'volume', 's3']
+    if storage_type not in valid_types:
+        logger.warning(
+            f"Invalid STORAGE_TYPE '{storage_type}', must be one of {valid_types}. "
+            f"Using default: 'response'"
+        )
+        return 'response'
+    return storage_type
+
+
+def validate_mode(mode: str) -> str:
+    """Validate operating mode configuration."""
+    valid_modes = ['local', 'serverless', 'pods']
+    if mode not in valid_modes:
+        logger.warning(
+            f"Invalid MODE '{mode}', must be one of {valid_modes}. "
+            f"Using default: 'serverless'"
+        )
+        return 'serverless'
+    return mode
+
+
+# Configuration with defaults and validation
+# Operating Mode
+MODE = validate_mode(os.environ.get('MODE', 'serverless'))
+
+# ComfyUI Configuration
+COMFYUI_URL = os.environ.get('COMFYUI_URL', 'http://127.0.0.1:8188')
+COMFYUI_PORT = os.environ.get('COMFYUI_PORT', '8188')
+COMFYUI_ARGS = os.environ.get('COMFYUI_ARGS', '--use-sage-attention --lowvram')
+COMFYUI_PATH = os.environ.get('COMFYUI_PATH', '/comfyui')
+
+# Timeout Configuration (5 seconds to 1 hour)
+TIMEOUT = get_env_int('TIMEOUT', default=300, min_val=5, max_val=3600)
+
+# Storage Configuration
+STORAGE_TYPE = validate_storage_type(os.environ.get('STORAGE_TYPE', 'response'))
+VOLUME_OUTPUT_PATH = os.environ.get('VOLUME_OUTPUT_PATH', '/runpod-volume/outputs')
+
+# S3 Configuration (only used when STORAGE_TYPE='s3')
+S3_BUCKET = os.environ.get('S3_BUCKET', '')
+S3_REGION = os.environ.get('S3_REGION', 'us-east-1')
+S3_ENDPOINT_URL = os.environ.get('S3_ENDPOINT_URL', '')  # For S3-compatible services
+S3_PREFIX = os.environ.get('S3_PREFIX', 'comfyui-outputs')
+S3_PUBLIC = get_env_bool('S3_PUBLIC', default=False)
+
+# AWS Credentials (for S3)
+AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID', '')
+AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+
+# SSH Configuration
+ENABLE_SSH = get_env_bool('ENABLE_SSH', default=False)
+SSH_PUBLIC_KEY = os.environ.get('SSH_PUBLIC_KEY', '')
+SSH_AUTHORIZED_KEYS_PATH = os.environ.get('SSH_AUTHORIZED_KEYS_PATH', '')
+
+# OpenZiti Configuration
+OPENZITI_IDENTITY = os.environ.get('OPENZITI_IDENTITY', '')
+OPENZITI_IDENTITY_JSON = os.environ.get('OPENZITI_IDENTITY_JSON', '')
+OPENZITI_CONTROLLER = os.environ.get('OPENZITI_CONTROLLER', '')
+OPENZITI_SERVICE_HTTP = os.environ.get('OPENZITI_SERVICE_HTTP', 'comfyui-http')
+OPENZITI_SERVICE_SSH = os.environ.get('OPENZITI_SERVICE_SSH', 'comfyui-ssh')
+
+# Log configuration on startup
+logger.info(f"Configuration loaded:")
+logger.info(f"  MODE: {MODE}")
+logger.info(f"  COMFYUI_URL: {COMFYUI_URL}")
+logger.info(f"  COMFYUI_PORT: {COMFYUI_PORT}")
+logger.info(f"  TIMEOUT: {TIMEOUT}s")
+logger.info(f"  STORAGE_TYPE: {STORAGE_TYPE}")
+if STORAGE_TYPE == 'volume':
+    logger.info(f"  VOLUME_OUTPUT_PATH: {VOLUME_OUTPUT_PATH}")
+elif STORAGE_TYPE == 's3':
+    logger.info(f"  S3_BUCKET: {S3_BUCKET}")
+    logger.info(f"  S3_REGION: {S3_REGION}")
+    logger.info(f"  S3_PREFIX: {S3_PREFIX}")
+    if S3_ENDPOINT_URL:
+        logger.info(f"  S3_ENDPOINT_URL: {S3_ENDPOINT_URL}")
+logger.info(f"  ENABLE_SSH: {ENABLE_SSH}")
+logger.info(f"  OpenZiti: {'enabled' if OPENZITI_IDENTITY or OPENZITI_IDENTITY_JSON else 'disabled'}")
+
+# Global ComfyUI process and clients
+comfyui_process = None
+comfyui_client = None
+s3_client = None
+
+
+class HandlerError(Exception):
+    """Base exception for handler errors"""
+    pass
+
+
+class ValidationError(HandlerError):
+    """Raised when input validation fails"""
+    pass
+
+
+def initialize_comfyui() -> bool:
+    """
+    Start ComfyUI server in background if not already running.
+    
+    Returns:
+        True if ComfyUI is running and healthy
+        
+    Raises:
+        HandlerError: If ComfyUI fails to start
+    """
+    global comfyui_process, comfyui_client, s3_client
+    
+    # Initialize ComfyUI client
+    if comfyui_client is None:
+        comfyui_client = ComfyUIClient(
+            base_url=COMFYUI_URL,
+            timeout=TIMEOUT
+        )
+    
+    # Initialize S3 client if storage type is S3
+    if STORAGE_TYPE == 's3' and s3_client is None and S3_AVAILABLE:
+        try:
+            s3_client = create_s3_client_from_env()
+            if s3_client:
+                logger.info("S3 storage client initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize S3 client: {e}")
+            raise HandlerError(f"S3 storage configuration error: {e}")
+    
+    # Check if already running
+    if comfyui_client.health_check():
+        logger.info("ComfyUI server is already running")
+        return True
+    
+    logger.info("Starting ComfyUI server...")
+    
+    # Build command
+    cmd = [
+        sys.executable,
+        'main.py',
+        '--listen',
+        '0.0.0.0',
+        '--port',
+        COMFYUI_PORT
+    ]
+    
+    # Add additional arguments
+    if COMFYUI_ARGS:
+        cmd.extend(COMFYUI_ARGS.split())
+    
+    try:
+        # Start ComfyUI process
+        comfyui_process = subprocess.Popen(
+            cmd,
+            cwd=COMFYUI_PATH,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        # Wait for server to be ready
+        max_wait = 60  # seconds
+        start_time = time.time()
+        
+        while time.time() - start_time < max_wait:
+            if comfyui_client.health_check():
+                logger.info("ComfyUI server started successfully")
+                return True
+            
+            # Check if process died
+            if comfyui_process.poll() is not None:
+                stdout, stderr = comfyui_process.communicate()
+                raise HandlerError(
+                    f"ComfyUI process died during startup. "
+                    f"stdout: {stdout}, stderr: {stderr}"
+                )
+            
+            time.sleep(2)
+        
+        raise HandlerError(
+            f"ComfyUI server failed to start within {max_wait} seconds"
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to start ComfyUI: {e}")
+        raise HandlerError(f"Failed to start ComfyUI: {e}")
+
+
+def validate_workflow(workflow: Any) -> Dict[str, Any]:
+    """
+    Validate workflow input structure.
+    
+    Args:
+        workflow: Workflow data to validate
+        
+    Returns:
+        Validated workflow dictionary
+        
+    Raises:
+        ValidationError: If workflow is invalid
+    """
+    if workflow is None:
+        raise ValidationError("Workflow is required")
+    
+    if not isinstance(workflow, dict):
+        raise ValidationError(
+            f"Workflow must be a dictionary, got {type(workflow).__name__}"
+        )
+    
+    if not workflow:
+        raise ValidationError("Workflow cannot be empty")
+    
+    # Check for at least one node
+    if not any(key for key in workflow.keys() if key.isdigit() or isinstance(key, int)):
+        raise ValidationError(
+            "Workflow must contain at least one node (numeric keys)"
+        )
+    
+    # Validate node structure
+    for node_id, node_data in workflow.items():
+        if not isinstance(node_data, dict):
+            raise ValidationError(
+                f"Node {node_id} must be a dictionary, got {type(node_data).__name__}"
+            )
+        
+        if 'class_type' not in node_data:
+            raise ValidationError(
+                f"Node {node_id} missing required field 'class_type'"
+            )
+        
+        if 'inputs' not in node_data:
+            raise ValidationError(
+                f"Node {node_id} missing required field 'inputs'"
+            )
+    
+    logger.info(f"Workflow validation passed: {len(workflow)} nodes")
+    return workflow
+
+
+def upload_images(images: Optional[Dict[str, str]]) -> Dict[str, str]:
+    """
+    Upload input images to ComfyUI.
+    
+    Args:
+        images: Dictionary mapping filenames to base64 encoded image data
+        
+    Returns:
+        Dictionary mapping original filenames to uploaded filenames
+        
+    Raises:
+        HandlerError: If image upload fails
+    """
+    if not images:
+        logger.info("No input images to upload")
+        return {}
+    
+    if not isinstance(images, dict):
+        raise ValidationError(
+            f"Images must be a dictionary, got {type(images).__name__}"
+        )
+    
+    uploaded = {}
+    
+    for filename, image_data in images.items():
+        try:
+            # Decode base64 image
+            if isinstance(image_data, str):
+                # Remove data URL prefix if present
+                if image_data.startswith('data:'):
+                    image_data = image_data.split(',', 1)[1]
+                
+                image_bytes = base64.b64decode(image_data)
+            else:
+                raise ValidationError(
+                    f"Image data for {filename} must be base64 string"
+                )
+            
+            # Upload to ComfyUI
+            result = comfyui_client.upload_image(
+                image_data=image_bytes,
+                filename=filename,
+                overwrite=True
+            )
+            
+            uploaded[filename] = result.get('name', filename)
+            logger.info(f"Uploaded image: {filename}")
+            
+        except Exception as e:
+            logger.error(f"Failed to upload image {filename}: {e}")
+            raise HandlerError(f"Failed to upload image {filename}: {e}")
+    
+    return uploaded
+
+
+def execute_workflow(
+    workflow: Dict[str, Any],
+    timeout: Optional[int] = None,
+    clear_cache: bool = True
+) -> str:
+    """
+    Submit workflow to ComfyUI and monitor execution.
+    
+    Args:
+        workflow: Validated workflow dictionary
+        timeout: Maximum execution time in seconds (None = use default)
+        clear_cache: If True, clear cached latents before execution to prevent
+                    corrupted outputs from stale tensor data (default: True)
+        
+    Returns:
+        prompt_id: Unique identifier for the executed workflow
+        
+    Raises:
+        HandlerError: If workflow execution fails
+    """
+    if timeout is None:
+        timeout = TIMEOUT
+    
+    try:
+        # Clear cached latents and intermediate tensors before execution
+        # This prevents corrupted outputs from stale cached data on subsequent runs
+        if clear_cache:
+            cache_cleared = comfyui_client.clear_cache()
+            if cache_cleared:
+                logger.info("Cleared cached latents before workflow execution")
+            else:
+                logger.warning(
+                    "Could not clear cache (ComfyUI may not support /free endpoint). "
+                    "Proceeding with execution."
+                )
+        
+        # Submit workflow
+        prompt_id = comfyui_client.queue_prompt(workflow)
+        logger.info(f"Workflow submitted with prompt_id: {prompt_id}")
+        
+        # Wait for completion
+        history = comfyui_client.wait_for_completion(
+            prompt_id=prompt_id,
+            poll_interval=1,
+            max_wait_time=timeout
+        )
+        
+        logger.info(f"Workflow {prompt_id} completed successfully")
+        return prompt_id
+        
+    except ComfyUIWorkflowError as e:
+        logger.error(f"Workflow execution failed: {e}")
+        raise HandlerError(f"Workflow execution failed: {e}")
+    except ComfyUIConnectionError as e:
+        logger.error(f"Connection to ComfyUI failed: {e}")
+        raise HandlerError(f"Connection to ComfyUI failed: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error during workflow execution: {e}")
+        raise HandlerError(f"Unexpected error during workflow execution: {e}")
+
+
+def get_outputs(prompt_id: str) -> List[Dict[str, Any]]:
+    """
+    Retrieve generated images from completed workflow.
+    
+    Args:
+        prompt_id: Unique identifier of the workflow
+        
+    Returns:
+        List of output dictionaries containing:
+        - filename: Name of the output file
+        - data: Image data as bytes
+        - type: Output type
+        - node_id: Source node ID
+        
+    Raises:
+        HandlerError: If output retrieval fails
+    """
+    try:
+        outputs = comfyui_client.get_outputs(prompt_id)
+        logger.info(f"Retrieved {len(outputs)} outputs for prompt {prompt_id}")
+        return outputs
+        
+    except ComfyUIWorkflowError as e:
+        logger.error(f"Failed to retrieve outputs: {e}")
+        raise HandlerError(f"Failed to retrieve outputs: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error retrieving outputs: {e}")
+        raise HandlerError(f"Unexpected error retrieving outputs: {e}")
+
+
+def cleanup_temp_files() -> None:
+    """
+    Clean up temporary files after execution.
+    
+    This function removes temporary files created during workflow execution
+    to prevent disk space issues.
+    """
+    try:
+        # Clean up ComfyUI temp directory
+        temp_dir = Path(COMFYUI_PATH) / 'temp'
+        if temp_dir.exists():
+            for item in temp_dir.iterdir():
+                try:
+                    if item.is_file():
+                        item.unlink()
+                    elif item.is_dir():
+                        shutil.rmtree(item)
+                except Exception as e:
+                    logger.warning(f"Failed to delete {item}: {e}")
+        
+        logger.info("Temporary files cleaned up")
+        
+    except Exception as e:
+        logger.warning(f"Error during cleanup: {e}")
+
+
+def process_outputs(
+    outputs: List[Dict[str, Any]],
+    prompt_id: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Process outputs based on storage configuration.
+    
+    Args:
+        outputs: List of output dictionaries from get_outputs()
+        prompt_id: ComfyUI prompt ID for S3 organization
+        
+    Returns:
+        List of processed outputs with appropriate data format
+        
+    Raises:
+        HandlerError: If output processing fails
+    """
+    processed = []
+    
+    for output in outputs:
+        result = {
+            'filename': output['filename'],
+            'type': output.get('type', 'output'),
+            'node_id': output.get('node_id')
+        }
+        
+        if STORAGE_TYPE == 'volume':
+            # Save to volume storage
+            try:
+                output_path = Path(VOLUME_OUTPUT_PATH)
+                output_path.mkdir(parents=True, exist_ok=True)
+                
+                file_path = output_path / output['filename']
+                file_path.write_bytes(output['data'])
+                
+                result['path'] = str(file_path)
+                logger.info(f"Saved output to volume: {file_path}")
+                
+            except Exception as e:
+                logger.error(f"Failed to save to volume: {e}")
+                raise HandlerError(f"Failed to save to volume: {e}")
+        
+        elif STORAGE_TYPE == 's3':
+            # Upload to S3-compatible storage
+            if not S3_AVAILABLE:
+                logger.error("S3 storage requested but boto3 not installed")
+                raise HandlerError(
+                    "S3 storage not available. Install boto3: uv add boto3"
+                )
+            
+            if s3_client is None:
+                logger.error("S3 storage requested but client not initialized")
+                raise HandlerError(
+                    "S3 client not initialized. Check S3 configuration."
+                )
+            
+            try:
+                # Prepare metadata
+                metadata = {
+                    'prompt_id': prompt_id or 'unknown',
+                    'node_id': str(output.get('node_id', 'unknown')),
+                    'type': output.get('type', 'output'),
+                    'generated_at': datetime.now().isoformat()
+                }
+                
+                # Upload to S3
+                upload_result = s3_client.upload_file(
+                    file_data=output['data'],
+                    filename=output['filename'],
+                    prompt_id=prompt_id,
+                    node_id=output.get('node_id'),
+                    metadata=metadata,
+                    public=os.environ.get('S3_PUBLIC', 'false').lower() == 'true'
+                )
+                
+                # Add S3 information to result
+                result['s3_key'] = upload_result['key']
+                result['url'] = upload_result['url']
+                result['bucket'] = upload_result['bucket']
+                result['size'] = upload_result['size']
+                result['content_type'] = upload_result['content_type']
+                
+                logger.info(
+                    f"Uploaded {output['filename']} to S3: {upload_result['url']}"
+                )
+                
+            except S3StorageError as e:
+                logger.error(f"S3 upload failed: {e}")
+                raise HandlerError(f"S3 upload failed: {e}")
+            except Exception as e:
+                logger.error(f"Unexpected error during S3 upload: {e}")
+                raise HandlerError(f"Unexpected error during S3 upload: {e}")
+        
+        else:  # response (default)
+            # Return as base64 in response
+            result['data'] = base64.b64encode(output['data']).decode('utf-8')
+            result['encoding'] = 'base64'
+        
+        processed.append(result)
+    
+    return processed
+
+
+def handler(job: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Main RunPod serverless handler function.
+    
+    Args:
+        job: Dictionary containing:
+            - id: Job ID from RunPod
+            - input: User-provided input data
+                - workflow: ComfyUI workflow JSON (required)
+                - input_images: Optional dict of base64 encoded images
+                - timeout: Optional custom timeout in seconds
+                - clear_cache: Optional bool to clear latent cache before execution
+                              (default: True, prevents corrupted outputs)
+                - config: Optional configuration overrides
+    
+    Returns:
+        Dictionary containing:
+            - status: "success" or "error"
+            - output: Generated images or error details
+            - metadata: Execution details
+    """
+    job_id = job.get('id', 'unknown')
+    start_time = time.time()
+    prompt_id = None
+    
+    logger.info(f"Processing job {job_id}")
+    
+    try:
+        # Get input data
+        job_input = job.get('input', {})
+        
+        if not isinstance(job_input, dict):
+            raise ValidationError("Job input must be a dictionary")
+        
+        # Initialize ComfyUI
+        initialize_comfyui()
+        
+        # Extract and validate workflow
+        workflow = job_input.get('workflow')
+        workflow = validate_workflow(workflow)
+        
+        # Upload input images if provided
+        input_images = job_input.get('input_images')
+        uploaded_images = upload_images(input_images)
+        
+        # Get custom timeout if provided
+        custom_timeout = job_input.get('timeout')
+        if custom_timeout:
+            try:
+                custom_timeout = int(custom_timeout)
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid timeout value: {custom_timeout}, using default")
+                custom_timeout = None
+        
+        # Get clear_cache option (default True to prevent corrupted outputs)
+        clear_cache = job_input.get('clear_cache', True)
+        if isinstance(clear_cache, str):
+            clear_cache = clear_cache.lower() in ('true', '1', 'yes')
+        
+        # Execute workflow
+        prompt_id = execute_workflow(
+            workflow,
+            timeout=custom_timeout,
+            clear_cache=clear_cache
+        )
+        
+        # Get outputs
+        outputs = get_outputs(prompt_id)
+        
+        # Process outputs based on storage type
+        processed_outputs = process_outputs(outputs, prompt_id=prompt_id)
+        
+        # Clear history for this prompt to free memory
+        if comfyui_client:
+            comfyui_client.clear_history(prompt_id)
+        
+        # Clean up temporary files
+        cleanup_temp_files()
+        
+        # Calculate execution time
+        execution_time = time.time() - start_time
+        
+        # Build response
+        response = {
+            'status': 'success',
+            'output': {
+                'images': processed_outputs,
+                'prompt_id': prompt_id
+            },
+            'metadata': {
+                'job_id': job_id,
+                'prompt_id': prompt_id,
+                'execution_time': round(execution_time, 2),
+                'node_count': len(workflow),
+                'output_count': len(processed_outputs),
+                'storage_type': STORAGE_TYPE
+            }
+        }
+        
+        logger.info(
+            f"Job {job_id} completed successfully in {execution_time:.2f}s"
+        )
+        
+        return response
+        
+    except ValidationError as e:
+        logger.error(f"Validation error in job {job_id}: {e}")
+        return {
+            'status': 'error',
+            'error': {
+                'code': 'VALIDATION_ERROR',
+                'message': str(e),
+                'type': 'ValidationError'
+            },
+            'metadata': {
+                'job_id': job_id,
+                'execution_time': round(time.time() - start_time, 2)
+            }
+        }
+    
+    except HandlerError as e:
+        logger.error(f"Handler error in job {job_id}: {e}")
+        return {
+            'status': 'error',
+            'error': {
+                'code': 'HANDLER_ERROR',
+                'message': str(e),
+                'type': 'HandlerError'
+            },
+            'metadata': {
+                'job_id': job_id,
+                'execution_time': round(time.time() - start_time, 2)
+            }
+        }
+    
+    except Exception as e:
+        logger.error(f"Unexpected error in job {job_id}: {e}", exc_info=True)
+        return {
+            'status': 'error',
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': f"An unexpected error occurred: {str(e)}",
+                'type': type(e).__name__
+            },
+            'metadata': {
+                'job_id': job_id,
+                'execution_time': round(time.time() - start_time, 2)
+            }
+        }
+    
+    finally:
+        # Always attempt cleanup
+        try:
+            cleanup_temp_files()
+        except Exception as e:
+            logger.warning(f"Cleanup failed: {e}")
+
+
+# RunPod serverless entry point
+if __name__ == "__main__":
+    logger.info("Starting RunPod serverless handler")
+    runpod.serverless.start({"handler": handler})

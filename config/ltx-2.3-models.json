@@ -1,0 +1,267 @@
+{
+  "_comment": "Model manifest for LTX-2.3 V2V / IC-LoRA support. Consumed by scripts/install_ltx23.py. Each entry downloads a single file from a Hugging Face repo into models/<dest>/<filename>. Sets marked \"gated\": true require HF_TOKEN and clicking 'Agree and Access' on the repo page at least once.",
+  "profiles": {
+    "minimal": ["text_encoder", "checkpoint_fp8", "distilled_lora"],
+    "low_vram_8gb": ["text_encoder", "gguf_dev_q4", "gguf_distilled_q4", "video_vae", "audio_vae", "tiny_vae"],
+    "mid_vram_12_24gb": ["text_encoder", "checkpoint_fp8", "distilled_lora", "tiny_vae"],
+    "full": ["all"]
+  },
+  "models": [
+    {
+      "id": "text_encoder",
+      "desc": "Gemma 3 12B text encoder (fp4 mixed, smallest official variant)",
+      "repo": "Comfy-Org/ltx-2",
+      "file": "split_files/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors",
+      "dest": "text_encoders",
+      "gated": false
+    },
+    {
+      "id": "checkpoint_fp8",
+      "desc": "LTX-2.3 22B dev checkpoint, fp8 quantized (video+audio VAE bundled) - needs ~24GB VRAM",
+      "repo": "Comfy-Org/ltx-2.3",
+      "file": "ltx-2.3-22b-dev-fp8.safetensors",
+      "dest": "checkpoints",
+      "gated": false
+    },
+    {
+      "id": "checkpoint_bf16",
+      "desc": "LTX-2.3 22B dev checkpoint, full BF16 - needs 32GB+ VRAM",
+      "repo": "Lightricks/LTX-2.3",
+      "file": "ltx-2.3-22b-dev.safetensors",
+      "dest": "checkpoints",
+      "gated": false
+    },
+    {
+      "id": "distilled_lora",
+      "desc": "Distilled speed-up LoRA (8-step sampling instead of ~30)",
+      "repo": "Lightricks/LTX-2.3",
+      "file": "ltx-2.3-22b-distilled-lora-384-1.1.safetensors",
+      "dest": "loras",
+      "gated": false
+    },
+    {
+      "id": "gguf_dev_q4",
+      "desc": "LTX-2.3 dev GGUF Q4_K_M - fits ~12GB VRAM with ComfyUI-GGUF's Unet Loader (GGUF) node",
+      "repo": "unsloth/LTX-2.3-GGUF",
+      "file": "ltx-2.3-22b-dev-Q4_K_M.gguf",
+      "dest": "unet",
+      "gated": false
+    },
+    {
+      "id": "gguf_dev_q8",
+      "desc": "LTX-2.3 dev GGUF Q8_0 - higher quality, needs ~20GB VRAM",
+      "repo": "unsloth/LTX-2.3-GGUF",
+      "file": "ltx-2.3-22b-dev-Q8_0.gguf",
+      "dest": "unet",
+      "gated": false
+    },
+    {
+      "id": "gguf_distilled_q4",
+      "desc": "LTX-2.3 distilled GGUF Q4_K_M - fastest, fits ~8-12GB VRAM",
+      "repo": "unsloth/LTX-2.3-GGUF",
+      "file": "distilled-1.1/ltx-2.3-22b-distilled-1.1-Q4_K_M.gguf",
+      "dest": "unet",
+      "gated": false
+    },
+    {
+      "id": "video_vae",
+      "desc": "LTX-2.3 video VAE (bf16) - only needed if not using a bundled checkpoint/GGUF",
+      "repo": "unsloth/LTX-2.3-GGUF",
+      "file": "vae/ltx-2.3-22b-dev_video_vae.safetensors",
+      "dest": "vae",
+      "gated": false
+    },
+    {
+      "id": "audio_vae",
+      "desc": "LTX-2.3 audio VAE (bf16) - only needed if not using a bundled checkpoint/GGUF",
+      "repo": "unsloth/LTX-2.3-GGUF",
+      "file": "vae/ltx-2.3-22b-dev_audio_vae.safetensors",
+      "dest": "vae",
+      "gated": false
+    },
+    {
+      "id": "iclora_ingredients",
+      "desc": "IC-LoRA: character/prop consistency from a reference sheet image",
+      "repo": "Comfy-Org/ltx-2.3",
+      "file": "split_files/loras/ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors",
+      "dest": "loras",
+      "gated": false
+    },
+    {
+      "id": "iclora_colorization",
+      "desc": "IC-LoRA: colorize grayscale/B&W video (official Lightricks version)",
+      "repo": "Lightricks/LTX-2.3-22b-IC-LoRA-Colorization",
+      "file": "ltx-2.3-22b-ic-lora-colorization-0.9.safetensors",
+      "dest": "loras",
+      "gated": true
+    },
+    {
+      "id": "iclora_colorizer_doctordiffusion",
+      "desc": "IC-LoRA: colorize grayscale/B&W video (community alt, ungated)",
+      "repo": "DoctorDiffusion/LTX-2.3-IC-LoRA-Colorizer",
+      "file": "LTX-2.3-22b-IC-LoRA-Colorizer-0.9.safetensors",
+      "dest": "loras",
+      "gated": false
+    },
+    {
+      "id": "iclora_day_to_night",
+      "desc": "IC-LoRA: relight daytime video to night",
+      "repo": "Lightricks/LTX-2.3-22b-IC-LoRA-Day-To-Night",
+      "file": "ltx-2.3-22b-ic-lora-day-to-night-0.9.safetensors",
+      "dest": "loras",
+      "gated": true
+    },
+    {
+      "id": "iclora_decompression",
+      "desc": "IC-LoRA: remove compression artifacts / restore low-bitrate video",
+      "repo": "Lightricks/LTX-2.3-22b-IC-LoRA-Decompression",
+      "file": "ltx-2.3-22b-ic-lora-decompression-0.9.safetensors",
+      "dest": "loras",
+      "gated": true
+    },
+    {
+      "id": "iclora_deblur",
+      "desc": "IC-LoRA: sharpen out-of-focus / blurry video",
+      "repo": "Lightricks/LTX-2.3-22b-IC-LoRA-Deblur",
+      "file": "ltx-2.3-22b-ic-lora-deblur-0.9.safetensors",
+      "dest": "loras",
+      "gated": true
+    },
+    {
+      "id": "iclora_water_simulation",
+      "desc": "IC-LoRA: add realistic moving water VFX to a scene",
+      "repo": "Lightricks/LTX-2.3-22b-IC-LoRA-Water-Simulation",
+      "file": "ltx-2.3-22b-ic-lora-water-simulation-0.9.safetensors",
+      "dest": "loras",
+      "gated": true
+    },
+    {
+      "id": "iclora_in_outpainting",
+      "desc": "IC-LoRA: video inpainting and outpainting",
+      "repo": "Lightricks/LTX-2.3-22b-IC-LoRA-In-Outpainting",
+      "file": "ltx-2.3-22b-ic-lora-in-outpainting-0.9.safetensors",
+      "dest": "loras",
+      "gated": true
+    },
+    {
+      "id": "iclora_instant_shave",
+      "desc": "IC-LoRA: remove facial hair while preserving identity/motion (demo IC-LoRA)",
+      "repo": "Lightricks/LTX-2.3-22b-IC-LoRA-Instant-Shave",
+      "file": "ltx-2.3-22b-ic-lora-instant-shave-0.9.safetensors",
+      "dest": "loras",
+      "gated": true
+    },
+    {
+      "id": "iclora_hdr",
+      "desc": "IC-LoRA: 16-bit HDR generation / SDR-to-HDR conversion",
+      "repo": "Lightricks/LTX-2.3-22b-IC-LoRA-HDR",
+      "file": "ltx-2.3-22b-ic-lora-hdr-0.9.safetensors",
+      "dest": "loras",
+      "gated": true
+    },
+    {
+      "id": "detailer_experimental",
+      "desc": "EXPERIMENTAL: general post-processing detail/texture enhancer. Trained on LTX-2 19b, not confirmed compatible with LTX-2.3 22b - test before relying on it.",
+      "repo": "Lightricks/LTX-2-19b-IC-LoRA-Detailer",
+      "file": "ltx-2-19b-ic-lora-detailer.safetensors",
+      "dest": "loras",
+      "gated": false
+    },
+    {
+      "id": "audio_reactive",
+      "desc": "Audio-reactive LoRA for music-visualizer / beat-synced generations (fal.ai, v2)",
+      "repo": "fal/ltx2.3-audio-reactive-lora",
+      "file": "ltx2.3_audio_reactive_lora_v2.safetensors",
+      "dest": "loras",
+      "gated": false
+    },
+    {
+      "id": "id_lora_celebvhq",
+      "desc": "ID-LoRA for talking-head/identity consistency (CelebV-HQ trained)",
+      "repo": "Comfy-Org/ltx-2.3",
+      "file": "split_files/loras/ltx-2.3-id-lora-celebvhq-3k.safetensors",
+      "dest": "loras",
+      "gated": false
+    },
+    {
+      "id": "id_lora_talkvid",
+      "desc": "ID-LoRA for talking-head/identity consistency (TalkVid trained)",
+      "repo": "Comfy-Org/ltx-2.3",
+      "file": "split_files/loras/ltx-2.3-id-lora-talkvid-3k.safetensors",
+      "dest": "loras",
+      "gated": false
+    },
+    {
+      "id": "editanything_multitask",
+      "desc": "EXPERIMENTAL: Edit Anything v1.1 - prompt-only multitask video editing (Add/Remove/Replace/Style, ~300 style names). Standalone standard LoRA, no companion node/module needed - loads through any ComfyUI LoRA loader. Author explicitly labels these research artifacts, not production-ready. See docs/LTX_2.3_WORKFLOW_ENHANCEMENTS.md for prompting rules (strict caption-shape requirements per task type).",
+      "repo": "Alissonerdx/EditAnything",
+      "file": "edit_anything_v1.1_r256.safetensors",
+      "dest": "loras",
+      "gated": false
+    },
+    {
+      "id": "editanything_motion_transfer",
+      "desc": "EXPERIMENTAL: Edit Anything v0.1 motion-transfer LoRA (rank 128) - swap the first frame of a guide video then copy its motion onto the new subject. Standalone standard LoRA. Fails on hard scene cuts and fast motion - see setup doc.",
+      "repo": "Alissonerdx/EditAnything",
+      "file": "edit_anything_30k_v0.1_motion_transfer_r128.safetensors",
+      "dest": "loras",
+      "gated": false
+    },
+    {
+      "id": "editanything_refv2v_standard",
+      "desc": "EXPERIMENTAL: Edit Anything Ref V2V (reference-image add/replace), 4-extras build, standard LoRA half. MUST be loaded together with editanything_refv2v_module (same build) - do not mix with the 2-extras pair. Requires ComfyUI-BFSNodes custom node to consume the module sidecar.",
+      "repo": "Alissonerdx/EditAnything",
+      "file": "edit_anything_reference_v0.1_r128_ref_adaln_proj-role_embedding-ref_attn-ref_visual_proj.standard.safetensors",
+      "dest": "loras",
+      "gated": false
+    },
+    {
+      "id": "editanything_refv2v_module",
+      "desc": "EXPERIMENTAL: Edit Anything Ref V2V (reference-image add/replace), 4-extras build, module sidecar half. Load via ComfyUI-BFSNodes' LTXVEditAnythingModuleLoader, paired with editanything_refv2v_standard from the same build.",
+      "repo": "Alissonerdx/EditAnything",
+      "file": "edit_anything_reference_v0.1_r128_ref_adaln_proj-role_embedding-ref_attn-ref_visual_proj.module.safetensors",
+      "dest": "loras",
+      "gated": false
+    },
+    {
+      "id": "vbvr_i2v_lora",
+      "desc": "VBVR (Video Reasoning) I2V LoRA - trained on ~1M physics/causal/spatial reasoning videos (object trajectories, collisions, multi-object interaction). Community-reported to help motion realism and fine motion (e.g. hair) where base LTX-2.3 stays static. Official ComfyUI-converted file from LiconStudio; a diffsynth-format original and an earlier weaker ComfyUI port (siraxe) also circulate - this is the one reported strongest in community testing.",
+      "repo": "LiconStudio/Ltx2.3-VBVR-lora-I2V",
+      "file": "VBVR-official-comfyui.safetensors",
+      "dest": "loras",
+      "gated": false
+    },
+    {
+      "id": "omninft_rl_lora",
+      "desc": "OmniNFT RL-tuned quality LoRA (better AV sync, audio quality, prompt adherence). Use strength 2.0 in ComfyUI (not 1.0) to match the original alpha=64/rank=32 training config. NOTE: source repo (FastVideo/zghhui) is marked 'research use only' - confirm licensing fits your use case before deploying commercially.",
+      "repo": "Kijai/LTX2.3_comfy",
+      "file": "loras/LTX-2.3-OmniNFT-RL-Lora_bf16.safetensors",
+      "dest": "loras",
+      "gated": false
+    },
+    {
+      "id": "spatial_upscaler",
+      "desc": "2x latent spatial upscaler for LTX-2.3",
+      "repo": "Lightricks/LTX-2.3",
+      "file": "ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
+      "dest": "latent_upscale_models",
+      "gated": false
+    },
+    {
+      "id": "iclora_union_control",
+      "desc": "IC-LoRA: Union Control - combines depth + edge (canny) + human pose guidance into a single unified LoRA, operating on downsampled latents for speed. Use with the ICLoRA Union Control example workflow (LTX-2.3_ICLoRA_Union_Control_Distilled.json).",
+      "repo": "Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control",
+      "file": "ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors",
+      "dest": "loras",
+      "gated": false
+    },
+    {
+      "id": "tiny_vae",
+      "desc": "TAE (tiny autoencoder) for LTX-2.3 - fast, lower-quality VAE decode used for real-time-ish previews while a generation is still sampling. Not a substitute for the full video_vae on final output.",
+      "repo": "Kijai/LTX2.3_comfy",
+      "file": "vae/taeltx2_3.safetensors",
+      "dest": "vae",
+      "gated": false
+    }
+  ]
+}

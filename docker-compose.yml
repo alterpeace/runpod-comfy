@@ -1,0 +1,66 @@
+services:
+  comfy:
+    container_name: comfy
+    build:
+      context: .
+      shm_size: '2gb'
+      network: host
+      args:
+        COMFYUI_VERSION: ${COMFYUI_VERSION:-v0.27.0}
+        TORCH_VERSION: ${TORCH_VERSION:-2.10.0}
+        TORCH_FLAVOR: ${TORCH_FLAVOR:-cu129}
+        XFORMERS_VERSION: ${XFORMERS_VERSION:-0.0.34}
+        # Optional attention mechanisms (set to "true" or "false")
+        ENABLE_XFORMERS: ${ENABLE_XFORMERS:-true}
+        ENABLE_SAGEATTENTION: ${ENABLE_SAGEATTENTION:-true}
+        ENABLE_FLASHATTENTION: ${ENABLE_FLASHATTENTION:-false}
+        # CUDA compilation settings (reduce MAX_JOBS if build crashes)
+        TORCH_CUDA_ARCH_LIST: ${TORCH_CUDA_ARCH_LIST:-8.9}
+        MAX_JOBS: ${MAX_JOBS:-2}
+    image: ghcr.io/${GITHUB_USERNAME:-username}/comfyui-serverless:latest
+    ports:
+      - "8188:8188"  # ComfyUI HTTP
+      - "2222:22"    # SSH
+      - "8765:8765"  # Comfy MCP server (optional, ENABLE_MCP=true)
+    volumes:
+      # Local dev data mounts. Defaults to ./.local/* (repo-local, gitignored placeholders).
+      # Point COMFY_DATA_DIR at an existing ComfyUI install to reuse its models/custom_nodes/etc,
+      # e.g. via symlinks: ln -s ~/comfy/models .local/models (see README).
+      # These mounts are LOCAL DEV ONLY - RunPod ignores this file entirely and instead
+      # mounts its own network volume at /runpod-volume (see entrypoint.sh STORAGE_BACKEND).
+      - ${COMFY_DATA_DIR:-./.local}/models:/comfyui/models
+      - ${COMFY_DATA_DIR:-./.local}/output:/comfyui/output
+      - ${COMFY_DATA_DIR:-./.local}/input:/comfyui/input
+      - ${COMFY_DATA_DIR:-./.local}/custom_nodes:/comfyui/custom_nodes
+      - ${COMFY_DATA_DIR:-./.local}/user:/comfyui/user
+      - ./.env:/workspace/.env:ro  # Configuration file (optional features)
+      - ./entrypoint.sh:/workspace/entrypoint.sh:ro  # Mount entrypoint for live changes
+    environment:
+      - MODE=local
+      - COMFYUI_PORT=8188
+      # 7.8GB VRAM - AnimateDiff + IPAdapter together won't fit
+      # --novram keeps a in workflow, or use these conservative settings:
+      - COMFYUI_ARGS=${COMFYUI_ARGS:---lowvram --disable-smart-memory}
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:256
+      - CUDA_LAUNCH_BLOCKING=1
+      - PYTHONWARNINGS=ignore::UserWarning
+      - NO_ALBUMENTATIONS_UPDATE=1
+      - COMFYUI_MANAGER_DISABLE_UPDATE_CHECK=true
+      - TORCH_CUDNN_V8_API_ENABLED=0
+    # GPU access via CDI (Podman-compatible). Docker Desktop/Engine users can instead use:
+    #   deploy:
+    #     resources:
+    #       reservations:
+    #         devices:
+    #           - driver: nvidia
+    #             count: 1
+    #             capabilities: [gpu]
+    # This environment's `docker` CLI is a Podman shim, which does not support the
+    # Swarm-style `deploy.resources.reservations.devices` GPU block - it needs the CDI
+    # device syntax below instead. Requires ./scripts/fix_local_gpu_cdi.sh to have been
+    # run first (see README "Local Development Setup" / Troubleshooting).
+    devices:
+      - nvidia.com/gpu=all
+    restart: unless-stopped
+    network_mode: host  # Use host networking to fix DNS issues
+

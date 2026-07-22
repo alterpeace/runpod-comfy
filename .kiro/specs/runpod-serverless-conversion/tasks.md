@@ -1,0 +1,247 @@
+# Implementation Plan
+
+- [x] 1. Set up project structure and configuration files
+  - Create `runpod-serverless/` directory with subdirectories (openziti/, ssh/, tests/)
+  - Create `.env.example` with template for all optional features (OpenZiti, SSH, storage options)
+  - Create `.gitignore` to exclude `.env` file from Git
+  - Create `runpod-config.json` with RunPod template configuration
+  - Create `docker-compose.yml` for local development mode with .env volume mount
+  - Create `ssh/sshd_config` for SSH daemon configuration
+  - Create `pyproject.toml` for Python dependency management with uv
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 8.1, 8.4, 9.1, 10.1_
+
+- [x] 2. Implement ComfyUI API client wrapper
+  - Create `runpod-serverless/comfyui_client.py` with ComfyUIClient class
+  - Implement `queue_prompt()` method to submit workflows
+  - Implement `get_history()` method to check execution status
+  - Implement `get_image()` method to download generated images
+  - Implement `upload_image()` method for input image handling
+  - Implement `wait_for_completion()` method to poll for workflow completion
+  - Implement `get_outputs()` method to retrieve all output images
+  - Implement `health_check()` method to verify server status
+  - Add error handling and retry logic for API calls with custom exceptions
+  - _Requirements: 1.2, 1.3, 1.6_
+
+- [x] 2.1 Write unit tests for ComfyUI client
+  - Create `tests/test_comfyui_client.py` with comprehensive test coverage
+  - Test workflow submission and status checking
+  - Test image upload and download functionality
+  - Test error handling scenarios (connection errors, workflow errors)
+  - Test retry logic and timeout handling
+  - Test health check functionality
+  - _Requirements: 1.2, 1.3, 1.4, 1.5_
+
+- [x] 3. Implement RunPod serverless handler
+  - Create `runpod-serverless/handler.py` with main handler function
+  - Implement `initialize_comfyui()` to start ComfyUI server in background
+  - Implement `validate_workflow()` for input validation with detailed error messages
+  - Implement `upload_images()` to handle input image uploads with base64 decoding
+  - Implement `execute_workflow()` to submit and monitor workflow execution
+  - Implement `get_outputs()` to retrieve generated images
+  - Implement `process_outputs()` to handle different storage types (response, volume, s3)
+  - Implement `cleanup_temp_files()` for post-execution cleanup
+  - Add comprehensive error handling with proper error codes and messages
+  - Add custom exception classes (ValidationError, HandlerError)
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 5.5_
+
+- [x] 3.1 Write unit tests for handler functions
+  - Create `tests/test_handler.py` with comprehensive test coverage
+  - Test input validation with valid and invalid payloads
+  - Test workflow execution flow with mocked ComfyUI client
+  - Test error handling for various failure scenarios
+  - Test cleanup functionality
+  - Test output processing for different storage types
+  - Test handler with input images and custom timeouts
+  - _Requirements: 1.4, 1.5_
+
+- [x] 4. Create entrypoint script for mode detection and configuration loading
+  - Create `runpod-serverless/entrypoint.sh` with mode detection logic
+  - Implement detection of local vs serverless mode via RUNPOD_POD_ID and MODE env vars
+  - Add unified .env loading logic (check /runpod-volume/.env then /workspace/.env)
+  - Add conditional initialization of OpenZiti tunnel (if OPENZITI_IDENTITY* vars present)
+  - Add conditional startup of SSH server (if ENABLE_SSH=true and SSH_PUBLIC_KEY present)
+  - Add ComfyUI server startup with --listen 0.0.0.0 (REQUIRED in ALL modes for WebUI access)
+  - Add health check to ensure ComfyUI WebUI is ready before proceeding (60s timeout)
+  - Add mode-specific behavior (handler launch for serverless, keep-alive for local)
+  - Add colored logging for which features are enabled/disabled
+  - Add logging for WebUI access information (URL and port)
+  - _Requirements: 8.1, 8.4, 8.5, 8.6, 8.7, 8.9, 9.1, 9.4, 9.5, 10.1, 10.7_
+
+- [x] 5. Implement OpenZiti tunnel integration
+  - Create `runpod-serverless/openziti/tunnel_setup.sh` script
+  - Implement OpenZiti identity loading from environment variables (file path or JSON)
+  - Implement ziti-edge-tunnel initialization
+  - Add HTTP port forwarding for ComfyUI (port 8188)
+  - Add SSH port forwarding (port 22)
+  - Add tunnel health monitoring
+  - Add graceful error handling (log and continue if tunnel fails)
+  - Add support for both OPENZITI_IDENTITY (file path) and OPENZITI_IDENTITY_JSON (embedded)
+  - Create `openziti/README.md` with setup documentation
+  - Create `openziti/test_tunnel.sh` for testing tunnel connectivity
+  - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_
+
+- [x] 6. Implement SSH server setup
+  - Create `runpod-serverless/ssh/setup_ssh.sh` script
+  - Implement SSH host key generation (if not present)
+  - Configure SSH for public key authentication using sshd_config
+  - Add support for SSH_PUBLIC_KEY environment variable (write to authorized_keys)
+  - Add support for SSH_AUTHORIZED_KEYS_PATH from network storage
+  - Implement SSH daemon startup and monitoring
+  - Add access to network storage folder for package installation
+  - Add error handling and logging
+  - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7_
+
+- [x] 7. Create Dockerfile for multi-mode operation
+  - Create `runpod-serverless/Dockerfile` using ghcr.io/radiatingreverberations/comfyui-base:latest as base
+  - Add installation of extra-requirements.txt if present
+  - Add execution of add-dependancies.sh if present
+  - Install RunPod Python SDK and handler dependencies from pyproject.toml
+  - Install OpenSSH server and OpenZiti tunnel client
+  - Copy handler code, comfyui_client.py, entrypoint script, and configuration files
+  - Copy openziti/ and ssh/ directories with setup scripts
+  - Set entrypoint.sh as the container entrypoint with executable permissions
+  - Add health check endpoint
+  - Optimize layer caching for faster builds
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 8.6, 9.1, 10.1_
+
+- [x] 8. Implement output handling and storage (partial)
+  - Implement STORAGE_TYPE configuration to select storage method (volume, s3, or response)
+  - Add network volume storage option (save to /runpod-volume/outputs or custom path)
+  - Add base64 encoding for returning images in response (default)
+  - Add proper error handling for storage operations
+  - _Requirements: 5.2, 5.3, 5.4, 5.5, 7.4, 7.5_
+
+- [x] 8.1 Complete S3/cloud storage implementation
+  - Implement S3 upload functionality using boto3
+  - Add support for S3_ENDPOINT_URL for S3-compatible services (R2, MinIO, etc.)
+  - Implement path/URL generation for S3 objects
+  - Add support for multiple output formats (PNG, JPEG, etc.)
+  - Add proper error handling for S3 operations
+  - Update pyproject.toml to include boto3 as optional dependency
+  - _Requirements: 5.2, 5.3, 5.4, 7.4, 7.5_
+
+- [x] 9. Implement model and volume management
+  - Document model path configuration via environment variables in README
+  - Document custom_nodes directory handling in README
+  - Document model availability checking on startup in README
+  - Add example configurations for common model setups
+  - _Requirements: 5.1, 5.3, 5.4, 2.7_
+
+- [x] 10. Create build automation script
+  - Create `runpod-serverless/build.sh` script
+  - Implement Docker image building with proper tags
+  - Add GitHub Container Registry authentication using GITHUB_TOKEN
+  - Implement image pushing to ghcr.io
+  - Add validation checks for required files (Dockerfile, handler.py, etc.)
+  - Add support for version tagging (latest, semantic versions, commit SHA)
+  - Add error handling with clear messages for authentication failures
+  - Make script executable (chmod +x)
+  - _Requirements: 3.1, 3.2, 3.5, 6.1, 6.2, 6.4, 6.5_
+
+- [x] 11. Create deployment helper script
+  - Create `runpod-serverless/deploy.sh` script
+  - Implement RunPod template configuration via API or CLI
+  - Add environment variable configuration
+  - Add GPU requirements configuration
+  - Add timeout and scaling parameters configuration
+  - Support both serverless and pods deployment modes
+  - _Requirements: 6.3, 7.1, 7.2, 7.3_
+
+- [x] 12. Create local testing infrastructure
+  - Create `runpod-serverless/test_local.sh` for local container testing
+  - Create `runpod-serverless/test_runpod.py` for RunPod endpoint testing
+  - Create `runpod-serverless/examples/` directory for sample workflows
+  - Add sample workflow JSON files for testing (text-to-image, image-to-image)
+  - Implement test cases for simple text-to-image workflow
+  - Implement test cases for image-to-image workflow
+  - Implement test cases for error scenarios
+  - _Requirements: 8.3, 8.5_
+
+- [x] 12.1 Create comprehensive integration test suite
+  - Add integration tests for complete workflow execution
+  - Add performance tests for cold start and warm start timing
+  - Add tests for concurrent job handling
+  - Add tests for various workflow complexities
+  - _Requirements: 1.1, 1.2, 1.3, 1.4_
+
+- [x] 13. Implement RunPod lifecycle management tools
+  - Create `runpod-serverless/lifecycle/` directory
+  - Create `lifecycle/runpod_pods.py` with pod management commands (create, start, stop, terminate, status, list)
+  - Create `lifecycle/runpod_serverless.py` with serverless endpoint management (create, update, delete, invoke, status, list)
+  - Implement RunPod API authentication using RUNPOD_API_KEY
+  - Add interactive prompts for missing parameters using input()
+  - Add cost estimation and warnings (especially for pods billing)
+  - Add support for spot vs on-demand instances
+  - Add network volume attachment configuration
+  - Add JSON output mode for scripting (--json flag)
+  - Create `lifecycle/README.md` with usage examples and command reference
+  - Add requirements for runpod SDK to pyproject.toml if not present
+  - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8, 11.9, 11.10_
+
+- [x] 14. Update configuration files for multi-mode support (partial)
+  - Update entrypoint.sh to handle MODE detection (local vs serverless)
+  - Update `.env.example` to include MODE variable documentation
+  - _Requirements: 8.1, 8.4, 8.5, 8.11, 8.12_
+
+- [x] 14.1 Complete multi-mode configuration
+  - Update `runpod-config.json` to `runpod-config-serverless.json` with MODE=serverless
+  - Create `runpod-config-pods.json` with MODE=pods configuration
+  - Update entrypoint.sh to handle MODE=pods (no handler, keep-alive only)
+  - Add MODE variable validation in entrypoint.sh
+  - _Requirements: 8.1, 8.4, 8.5, 8.11, 8.12_
+
+- [x] 15. Create comprehensive documentation
+  - Create `runpod-serverless/README.md` with complete setup instructions
+  - Document unified .env configuration strategy (one file for all features)
+  - Document three-mode operation (local, serverless, pods) with decision matrix
+  - Add deployment mode selection guide with cost comparison table
+  - Document that ComfyUI WebUI is ALWAYS accessible in all three modes
+  - Document WebUI access methods for each mode (direct, OpenZiti, SSH tunnel, RunPod proxy)
+  - Add step-by-step instructions for creating .env from .env.example
+  - Add step-by-step instructions for local development with Docker Compose
+  - Add step-by-step build and deployment instructions for RunPod Serverless
+  - Add step-by-step build and deployment instructions for RunPod Pods
+  - Document pod lifecycle management (create, start, stop, terminate) with cost warnings
+  - Document serverless endpoint management (create, invoke, delete)
+  - Document how to upload .env to RunPod network storage
+  - Document OpenZiti tunnel setup and configuration (optional feature, all modes)
+  - Document SSH server setup for development and debugging (optional feature, all modes)
+  - Add example API calls for triggering serverless jobs
+  - Document GitHub Container Registry authentication setup
+  - Add example ComfyUI workflow JSON payloads
+  - Document cost considerations and optimization tips for each mode
+  - Add cost comparison examples (serverless vs pods, spot vs on-demand)
+  - Explain when to use each mode based on usage patterns
+  - Warn that stopping pods doesn't stop billing - must terminate
+  - Add troubleshooting section for OpenZiti and SSH issues
+  - Document environment variable configuration options (including MODE)
+  - Add model management and volume configuration guide
+  - Document how to install Python packages via SSH to network storage
+  - Add security best practices section (never commit .env, rotate keys, etc.)
+  - Document how to use WebUI in serverless mode for workflow testing before automation
+  - Document how network storage persists across pod lifecycles
+  - Add lifecycle management CLI tool usage examples
+  - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 12.8, 12.9, 12.10, 12.11, 12.12, 12.13, 4.5, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.9, 11.1, 11.2, 11.3, 11.4, 11.5, 11.10_
+
+- [x] 16. Create optional GitHub Actions CI/CD workflow
+  - Create `.github/workflows/build-and-push.yml`
+  - Implement automated build on git push to main branch
+  - Add GitHub Container Registry authentication using GITHUB_TOKEN
+  - Implement multi-tag pushing (latest, commit SHA, version tags)
+  - Add build validation and testing steps (run pytest)
+  - Add conditional deployment based on branch/tags
+  - _Requirements: 3.1, 3.2, 6.1, 6.2_
+
+- [x] 17. Add configuration and environment management (partial)
+  - Create `pyproject.toml` with Python dependencies (requests, runpod)
+  - Update `.env.example` with configuration options
+  - Document ComfyUI arguments configuration (--lowvram, --use-sage-attention, etc.)
+  - Add timeout configuration with sensible defaults
+  - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 8.5_
+
+- [x] 17.1 Complete environment management
+  - Generate `requirements.txt` from pyproject.toml for Docker builds (uv pip compile)
+  - Add default values and validation for all environment variables in handler.py
+  - Add MODE variable documentation (local, serverless, pods) in README
+  - Document all environment variables in a dedicated section of README
+  - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 8.5_

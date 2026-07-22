@@ -1,0 +1,33 @@
+# SSH Daemon Configuration for ComfyUI Development
+
+# Network
+Port 22
+AddressFamily any
+ListenAddress 0.0.0.0
+
+# Authentication
+PermitRootLogin yes
+PubkeyAuthentication yes
+PasswordAuthentication no
+ChallengeResponseAuthentication no
+UsePAM yes
+
+# Key files
+AuthorizedKeysFile /root/.ssh/authorized_keys
+
+# Security
+PermitEmptyPasswords no
+X11Forwarding no
+PrintMotd no
+AcceptEnv LANG LC_*
+
+# Subsystems
+Subsystem sftp /usr/lib/openssh/sftp-server
+
+# Logging
+SyslogFacility AUTH
+LogLevel INFO
+
+# Session
+ClientAliveInterval 60
+ClientAliveCountMax 3

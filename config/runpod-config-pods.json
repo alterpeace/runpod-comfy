@@ -1,0 +1,18 @@
+{
+  "name": "comfyui-pods",
+  "image": "ghcr.io/aaronghent/comfyui-serverless:latest",
+  "gpu_type_id": "NVIDIA RTX A4000",
+  "container_disk_in_gb": 50,
+  "volume_in_gb": 100,
+  "volume_mount_path": "/runpod-volume",
+  "env": {
+    "MODE": "pods",
+    "COMFYUI_PORT": "8188",
+    "COMFYUI_ARGS": "--use-sage-attention --lowvram"
+  },
+  "docker_args": "",
+  "start_ssh": false,
+  "ports": "8188/http,8765/http",
+  "description": "ComfyUI Pods deployment - persistent server with continuous WebUI access",
+  "readme": "Configure optional features by uploading .env file to /runpod-volume/.env in network storage. MODE=pods runs ComfyUI as a persistent server without the serverless handler. WARNING: Billing continues until pod is TERMINATED (stopping is not enough)."
+}
