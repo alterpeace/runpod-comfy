@@ -21,6 +21,7 @@ ARG COMFYUI_VERSION=v0.27.0
 ARG ENABLE_XFORMERS=true
 ARG ENABLE_SAGEATTENTION=true
 ARG ENABLE_FLASHATTENTION=true
+ARG ENABLE_TENSORRT=false
 
 # CUDA compilation settings (reduce MAX_JOBS if build crashes)
 ARG TORCH_CUDA_ARCH_LIST="8.9"
@@ -126,7 +127,11 @@ RUN --mount=type=cache,target=/cache/uv,sharing=locked \
     'kornia==0.7.2' \
     --index-strategy unsafe-best-match \
     --extra-index-url https://download.pytorch.org/whl/cu129 && \
-    uv pip install tensorrt tensorrt-cu12 --extra-index-url https://pypi.nvidia.com
+    if [ "${ENABLE_TENSORRT}" = "true" ]; then \
+        uv pip install tensorrt tensorrt-cu12 --extra-index-url https://pypi.nvidia.com; \
+    else \
+        echo ">>> Skipping TensorRT (ENABLE_TENSORRT=${ENABLE_TENSORRT})"; \
+    fi
 
 # =============================================================================
 # OPTIONAL: xformers (prebuilt wheel - fast install)
@@ -241,6 +246,7 @@ ARG XFORMERS_VERSION=0.0.34
 ARG ENABLE_XFORMERS=true
 ARG ENABLE_SAGEATTENTION=true
 ARG ENABLE_FLASHATTENTION=true
+ARG ENABLE_TENSORRT=false
 
 COPY --from=base /usr/local/bin/uv /usr/local/bin/uv
 COPY --from=deps /comfyui /comfyui
@@ -325,10 +331,15 @@ RUN . /comfyui/venv/bin/activate && \
     UV_CONSTRAINT= PIP_CONSTRAINT= uv pip install 'kornia==0.7.2' --no-deps --force-reinstall && \
     echo "xformers installation complete"
 
-# Install TensorRT for depth-anything-tensorrt and other TRT nodes
-# Then upgrade protobuf to fix TensorFlow/transformers compatibility
+# Install TensorRT for depth-anything-tensorrt and other TRT nodes (optional)
+# Gated by ENABLE_TENSORRT build arg (default: false, saves ~6.2GB)
 RUN . /comfyui/venv/bin/activate && \
-    uv pip install tensorrt tensorrt-cu12 --extra-index-url https://pypi.nvidia.com
+    if [ "${ENABLE_TENSORRT}" = "true" ]; then \
+        echo ">>> Installing TensorRT (ENABLE_TENSORRT=true)..." && \
+        uv pip install tensorrt tensorrt-cu12 --extra-index-url https://pypi.nvidia.com; \
+    else \
+        echo ">>> Skipping TensorRT (ENABLE_TENSORRT=${ENABLE_TENSORRT})"; \
+    fi
 
 # Install additional dependencies for custom nodes
 RUN . /comfyui/venv/bin/activate && \
@@ -382,6 +393,18 @@ RUN chmod +x ./openziti/*.sh ./ssh/*.sh ./storage/*.sh 2>/dev/null || true
 COPY src/handler.py src/comfyui_client.py src/storage_s3.py ./
 COPY entrypoint.sh ./
 RUN chmod +x entrypoint.sh
+
+# =============================================================================
+# FINAL CLEANUP: Remove system CUDA deb packages (~3.1GB) and build toolchain
+# torch uses pip-bundled nvidia/* libs, so system CUDA debs are redundant.
+# This runs last so it doesn't interfere with any install steps above.
+# =============================================================================
+RUN dpkg-query -W --showformat='${Package}\n' 2>/dev/null | \
+      grep -iE "cuda|nccl|npp|cublas|cusparse|cusolver|cufft|curand|nvjitlink|cupti|nvrtc" | \
+      xargs -r apt-get purge -y --allow-change-held-packages 2>/dev/null || true && \
+    apt-get autoremove -y 2>/dev/null || true && \
+    rm -rf /usr/local/cuda-12.9 /usr/local/cuda /usr/local/cuda-12 /var/lib/apt/lists/* && \
+    find /comfyui -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
 EXPOSE 8188 22 8765
 
