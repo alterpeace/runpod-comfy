@@ -41,3 +41,5 @@ user
 user/
 .local/
 .env
+# Kiro IDE specs/steering (local only)
+.kiro/
