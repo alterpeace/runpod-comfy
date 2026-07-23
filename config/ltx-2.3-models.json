@@ -18,7 +18,7 @@
     {
       "id": "checkpoint_fp8",
       "desc": "LTX-2.3 22B dev checkpoint, fp8 quantized (video+audio VAE bundled) - needs ~24GB VRAM",
-      "repo": "Comfy-Org/ltx-2.3",
+      "repo": "Lightricks/LTX-2.3-fp8",
       "file": "ltx-2.3-22b-dev-fp8.safetensors",
       "dest": "checkpoints",
       "gated": false
