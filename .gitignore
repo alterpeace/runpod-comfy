@@ -33,13 +33,17 @@ htmlcov/
 temp/
 
 
-models/
-output/
-input/
-custom_nodes/
+# ComfyUI data dirs — bare names (no trailing slash) so they also
+# catch symlinks (e.g. .local/ -> external ComfyUI install).
+models
+output
+input
+custom_nodes
 user
 user/
 .local/
 .env
+# Local planning notes (not for the repo)
+plans/
 # Kiro IDE specs/steering (local only)
 .kiro/

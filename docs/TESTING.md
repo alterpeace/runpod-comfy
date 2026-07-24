@@ -14,10 +14,10 @@ This guide explains how to test the ComfyUI RunPod serverless handler locally an
 
 ```bash
 # Build with default tag (comfyui-serverless:latest)
-./build.sh
+./scripts/build.sh
 
 # Or let the test script build it with a custom tag
-IMAGE_NAME=comfyui-serverless:local ./test_local.sh
+IMAGE_NAME=comfyui-serverless:local ./scripts/test_local.sh
 ```
 
 The test script will automatically build the image if it doesn't exist (for local images only).
@@ -28,11 +28,11 @@ The test script will automatically build the image if it doesn't exist (for loca
 
 ```bash
 # Test with default workflow
-./test_local.sh
+./scripts/test_local.sh
 
 # Test with specific workflow
-./test_local.sh examples/text_to_image_simple.json
-./test_local.sh examples/image_to_image.json
+./scripts/test_local.sh examples/text_to_image_simple.json
+./scripts/test_local.sh examples/image_to_image.json
 ```
 
 #### Custom Configuration
@@ -41,19 +41,19 @@ You can customize the test environment using environment variables:
 
 ```bash
 # Use a custom image
-IMAGE_NAME=my-registry/comfyui:v1.0 ./test_local.sh
+IMAGE_NAME=my-registry/comfyui:v1.0 ./scripts/test_local.sh
 
 # Use locally built image
-IMAGE_NAME=comfyui-serverless:local ./test_local.sh
+IMAGE_NAME=comfyui-serverless:local ./scripts/test_local.sh
 
 # Use custom container name and port
-CONTAINER_NAME=my-test TEST_PORT=8080 ./test_local.sh
+CONTAINER_NAME=my-test TEST_PORT=8080 ./scripts/test_local.sh
 
 # Combine multiple options
 IMAGE_NAME=comfyui-serverless:local \
 CONTAINER_NAME=comfyui-dev \
 TEST_PORT=8080 \
-./test_local.sh examples/text_to_image_simple.json
+./scripts/test_local.sh examples/text_to_image_simple.json
 ```
 
 #### Available Environment Variables
@@ -111,33 +111,33 @@ export RUNPOD_API_KEY="your-api-key"
 
 ```bash
 # Test with default workflow
-python test_runpod.py
+python tests/test_runpod.py
 
 # Test with specific workflow
-python test_runpod.py --workflow examples/text_to_image_simple.json
+python tests/test_runpod.py --workflow examples/text_to_image_simple.json
 ```
 
 #### Advanced Options
 
 ```bash
 # Test image-to-image workflow
-python test_runpod.py \
+python tests/test_runpod.py \
   --workflow examples/image_to_image.json \
   --input-image path/to/input.png \
   --input-image-name input_image.png
 
 # Custom timeout
-python test_runpod.py \
+python tests/test_runpod.py \
   --workflow examples/text_to_image_simple.json \
   --timeout 600
 
 # Custom output directory
-python test_runpod.py \
+python tests/test_runpod.py \
   --workflow examples/text_to_image_simple.json \
   --output-dir my_outputs
 
 # Verbose output (shows full response JSON)
-python test_runpod.py \
+python tests/test_runpod.py \
   --workflow examples/text_to_image_simple.json \
   --verbose
 ```
@@ -201,7 +201,7 @@ uv run pytest --cov=. tests/
 ### Text-to-Image
 
 ```bash
-./test_local.sh examples/text_to_image_simple.json
+./scripts/test_local.sh examples/text_to_image_simple.json
 ```
 
 Generates a 512x512 image from a text prompt using Stable Diffusion XL.
@@ -210,10 +210,10 @@ Generates a 512x512 image from a text prompt using Stable Diffusion XL.
 
 ```bash
 # Local testing
-./test_local.sh examples/image_to_image.json
+./scripts/test_local.sh examples/image_to_image.json
 
 # RunPod testing
-python test_runpod.py \
+python tests/test_runpod.py \
   --workflow examples/image_to_image.json \
   --input-image path/to/input.png
 ```
@@ -229,7 +229,7 @@ If you see "Unable to find image" error:
 **For local images** (no registry prefix):
 ```bash
 # The script will automatically build it
-IMAGE_NAME=comfyui-serverless:local ./test_local.sh
+IMAGE_NAME=comfyui-serverless:local ./scripts/test_local.sh
 
 # Or build manually first
 docker build -t comfyui-serverless:local .
@@ -241,7 +241,7 @@ docker build -t comfyui-serverless:local .
 docker pull ghcr.io/username/comfyui-serverless:latest
 
 # Then run the test
-IMAGE_NAME=ghcr.io/username/comfyui-serverless:latest ./test_local.sh
+IMAGE_NAME=ghcr.io/username/comfyui-serverless:latest ./scripts/test_local.sh
 ```
 
 **Note:** The script distinguishes between local and remote images:
@@ -267,7 +267,7 @@ If requests timeout:
 
 ```bash
 # Increase timeout
-python test_runpod.py --timeout 900
+python tests/test_runpod.py --timeout 900
 ```
 
 ### Permission Denied
@@ -275,7 +275,7 @@ python test_runpod.py --timeout 900
 Make scripts executable:
 
 ```bash
-chmod +x test_local.sh test_runpod.py
+chmod +x scripts/test_local.sh tests/test_runpod.py
 ```
 
 ## CI/CD Integration

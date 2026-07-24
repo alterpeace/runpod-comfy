@@ -549,7 +549,7 @@ RCLONE_CACHE_MAX_AGE=24h
 docker-compose build
 
 # Or using build script
-./build.sh
+./scripts/build.sh
 
 # Verify image size
 docker images | grep comfyui

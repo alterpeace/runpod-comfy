@@ -71,10 +71,10 @@ Use these workflows with the test scripts:
 
 ```bash
 # Test with local container
-./test_local.sh examples/text_to_image_simple.json
+./scripts/test_local.sh examples/text_to_image_simple.json
 
 # Test with RunPod endpoint
-python test_runpod.py --workflow examples/text_to_image_simple.json
+python tests/test_runpod.py --workflow examples/text_to_image_simple.json
 ```
 
 ### ltx23_v2v_music_visuals_patch.json / ltx23_v2v_music_visuals_patch_ui.json

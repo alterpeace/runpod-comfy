@@ -85,7 +85,7 @@ The entrypoint script handles:
 ### Quick Build
 
 ```bash
-./build.sh
+./scripts/build.sh
 ```
 
 This interactive script will:
@@ -120,7 +120,7 @@ Example:
 export IMAGE_NAME="my-comfyui"
 export VERSION="1.0.0"
 export GITHUB_USERNAME="myusername"
-./build.sh
+./scripts/build.sh
 ```
 
 ## Pushing to GitHub Container Registry
@@ -142,7 +142,7 @@ export GITHUB_USERNAME="myusername"
 
 ```bash
 # Using build script (recommended)
-./build.sh
+./scripts/build.sh
 # Answer 'y' when prompted to push
 
 # Manual push
@@ -263,11 +263,13 @@ docker build --build-arg BASE_IMAGE=custom/comfyui:tag \
 
 ### Required Files
 - `Dockerfile`
-- `handler.py`
-- `comfyui_client.py`
+- `src/handler.py`
+- `src/comfyui_client.py`
+- `src/storage_s3.py`
 - `entrypoint.sh`
 - `pyproject.toml`
-- `runpod-config.json`
+- `config/runpod-config-serverless.json`
+- `config/runpod-config-pods.json`
 - `.env.example`
 - `openziti/tunnel_setup.sh`
 - `ssh/setup_ssh.sh`
