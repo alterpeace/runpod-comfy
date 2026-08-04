@@ -21,7 +21,6 @@ ARG COMFYUI_VERSION=v0.27.0
 ARG ENABLE_XFORMERS=true
 ARG ENABLE_SAGEATTENTION=true
 ARG ENABLE_FLASHATTENTION=true
-ARG ENABLE_TENSORRT=false
 
 # CUDA compilation settings (reduce MAX_JOBS if build crashes)
 ARG TORCH_CUDA_ARCH_LIST="8.9"
@@ -38,13 +37,10 @@ RUN apt-get update && \
 ADD https://github.com/astral-sh/uv/releases/download/0.8.6/uv-x86_64-unknown-linux-gnu.tar.gz /tmp/uv.tar.gz
 RUN tar -xzf /tmp/uv.tar.gz --strip-components=1 && mv uv /usr/local/bin/uv && rm /tmp/uv.tar.gz
 
-# UV_CONCURRENT_DOWNLOADS is configurable so low-memory build hosts can throttle
-# parallel downloads (each large CUDA wheel can be 500MB+) and avoid OOM kills.
-ARG UV_CONCURRENT_DOWNLOADS=5
 ENV UV_CACHE_DIR=/cache/uv \
     UV_LINK_MODE=copy \
     UV_HTTP_TIMEOUT=300 \
-    UV_CONCURRENT_DOWNLOADS=${UV_CONCURRENT_DOWNLOADS}
+    UV_CONCURRENT_DOWNLOADS=5
 
 WORKDIR /comfyui
 RUN uv venv venv
@@ -94,8 +90,6 @@ ARG ENABLE_SAGEATTENTION=true
 ARG ENABLE_FLASHATTENTION=true
 ARG TORCH_CUDA_ARCH_LIST="8.9"
 ARG MAX_JOBS=2
-ARG UV_CONCURRENT_DOWNLOADS=5
-ENV UV_CONCURRENT_DOWNLOADS=${UV_CONCURRENT_DOWNLOADS}
 
 # Set CUDA compilation environment for this stage
 ENV TORCH_CUDA_ARCH_LIST=${TORCH_CUDA_ARCH_LIST} MAX_JOBS=${MAX_JOBS}
@@ -107,15 +101,14 @@ RUN curl -L "https://github.com/Comfy-Org/ComfyUI/archive/refs/tags/${COMFYUI_VE
 COPY extra-requirements.txt /tmp/extra-requirements.txt
 
 # Install base dependencies (without optional attention libs)
-# NOTE: We install ON TOP of the existing venv from the base stage (which
-# already has torch + core ML deps). The previous approach of `rm -rf
-# site-packages/*` before reinstalling caused uv's "File exists (os error 17)"
-# bug: the rm removes files from the overlay upper layer but the base stage's
-# read-only lower layer still contains them, so uv sees stale files and fails
-# to overwrite. Installing with --reinstall lets uv handle conflicts properly.
+# CRITICAL: Clear site-packages and use a SINGLE uv pip install to avoid uv's
+# "File exists (os error 17)" bug when UV_LINK_MODE=copy and multiple install
+# commands try to overwrite files from previous installs.
+# UV_LINK_MODE=clone is used here as it handles overwrites better than copy.
 RUN --mount=type=cache,target=/cache/uv,sharing=locked \
     . venv/bin/activate && \
-    uv pip install \
+    rm -rf venv/lib/python3.12/site-packages/* && \
+    UV_LINK_MODE=clone uv pip install \
     "torch==${TORCH_VERSION}+${TORCH_FLAVOR}" \
     "torchvision==0.25.0+${TORCH_FLAVOR}" \
     "torchaudio==2.10.0+${TORCH_FLAVOR}" \
@@ -127,11 +120,7 @@ RUN --mount=type=cache,target=/cache/uv,sharing=locked \
     'kornia==0.7.2' \
     --index-strategy unsafe-best-match \
     --extra-index-url https://download.pytorch.org/whl/cu129 && \
-    if [ "${ENABLE_TENSORRT}" = "true" ]; then \
-        uv pip install tensorrt tensorrt-cu12 --extra-index-url https://pypi.nvidia.com; \
-    else \
-        echo ">>> Skipping TensorRT (ENABLE_TENSORRT=${ENABLE_TENSORRT})"; \
-    fi
+    UV_LINK_MODE=clone uv pip install tensorrt tensorrt-cu12 --extra-index-url https://pypi.nvidia.com
 
 # =============================================================================
 # OPTIONAL: xformers (prebuilt wheel - fast install)
@@ -246,7 +235,6 @@ ARG XFORMERS_VERSION=0.0.34
 ARG ENABLE_XFORMERS=true
 ARG ENABLE_SAGEATTENTION=true
 ARG ENABLE_FLASHATTENTION=true
-ARG ENABLE_TENSORRT=false
 
 COPY --from=base /usr/local/bin/uv /usr/local/bin/uv
 COPY --from=deps /comfyui /comfyui
@@ -331,15 +319,10 @@ RUN . /comfyui/venv/bin/activate && \
     UV_CONSTRAINT= PIP_CONSTRAINT= uv pip install 'kornia==0.7.2' --no-deps --force-reinstall && \
     echo "xformers installation complete"
 
-# Install TensorRT for depth-anything-tensorrt and other TRT nodes (optional)
-# Gated by ENABLE_TENSORRT build arg (default: false, saves ~6.2GB)
+# Install TensorRT for depth-anything-tensorrt and other TRT nodes
+# Then upgrade protobuf to fix TensorFlow/transformers compatibility
 RUN . /comfyui/venv/bin/activate && \
-    if [ "${ENABLE_TENSORRT}" = "true" ]; then \
-        echo ">>> Installing TensorRT (ENABLE_TENSORRT=true)..." && \
-        uv pip install tensorrt tensorrt-cu12 --extra-index-url https://pypi.nvidia.com; \
-    else \
-        echo ">>> Skipping TensorRT (ENABLE_TENSORRT=${ENABLE_TENSORRT})"; \
-    fi
+    uv pip install tensorrt tensorrt-cu12 --extra-index-url https://pypi.nvidia.com
 
 # Install additional dependencies for custom nodes
 RUN . /comfyui/venv/bin/activate && \
@@ -393,18 +376,6 @@ RUN chmod +x ./openziti/*.sh ./ssh/*.sh ./storage/*.sh 2>/dev/null || true
 COPY src/handler.py src/comfyui_client.py src/storage_s3.py ./
 COPY entrypoint.sh ./
 RUN chmod +x entrypoint.sh
-
-# =============================================================================
-# FINAL CLEANUP: Remove system CUDA deb packages (~3.1GB) and build toolchain
-# torch uses pip-bundled nvidia/* libs, so system CUDA debs are redundant.
-# This runs last so it doesn't interfere with any install steps above.
-# =============================================================================
-RUN dpkg-query -W --showformat='${Package}\n' 2>/dev/null | \
-      grep -iE "cuda|nccl|npp|cublas|cusparse|cusolver|cufft|curand|nvjitlink|cupti|nvrtc" | \
-      xargs -r apt-get purge -y --allow-change-held-packages 2>/dev/null || true && \
-    apt-get autoremove -y 2>/dev/null || true && \
-    rm -rf /usr/local/cuda-12.9 /usr/local/cuda /usr/local/cuda-12 /var/lib/apt/lists/* && \
-    find /comfyui -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
 EXPOSE 8188 22 8765
 

@@ -111,75 +111,15 @@ fi
 
 echo "✓ rclone configuration created"
 
-# Construct remote path (needed by both disk-space check and connectivity test)
-if [ -n "$B2_PATH" ]; then
-    REMOTE_PATH="b2:${B2_BUCKET}/${B2_PATH}"
-else
-    REMOTE_PATH="b2:${B2_BUCKET}"
-fi
-
-# ============================================================================
-# DISK SPACE VERIFICATION (done before connectivity so target dir is ready)
-# ============================================================================
-
-echo "Checking disk space..."
-
-# Get available disk space
-SYNC_TARGET_DIR=$(dirname "$SYNC_TARGET")
-
-# Create target directory if it doesn't exist
-if ! mkdir -p "$SYNC_TARGET_DIR" 2>/dev/null; then
-    echo "ERROR: Failed to create sync target directory"
-    echo "  - Path: $SYNC_TARGET_DIR"
-    echo "  - Check permissions and available disk space"
-    exit 3
-fi
-
-# Verify target directory is writable
-if [ ! -w "$SYNC_TARGET_DIR" ]; then
-    echo "ERROR: Sync target directory is not writable"
-    echo "  - Path: $SYNC_TARGET_DIR"
-    echo "  - Current permissions:"
-    ls -ld "$SYNC_TARGET_DIR"
-    exit 3
-fi
-
-# Get available disk space
-AVAILABLE_BYTES=$(df --output=avail -B1 "$SYNC_TARGET_DIR" 2>/dev/null | tail -1)
-
-if [ -z "$AVAILABLE_BYTES" ]; then
-    echo "ERROR: Could not determine available disk space"
-    echo "  - Target directory: $SYNC_TARGET_DIR"
-    echo "  - Check if filesystem is mounted correctly"
-    exit 3
-fi
-
-AVAILABLE_GB=$((AVAILABLE_BYTES / 1024 / 1024 / 1024))
-AVAILABLE_MB=$((AVAILABLE_BYTES / 1024 / 1024))
-
-if [ $AVAILABLE_GB -gt 0 ]; then
-    echo "Available disk space: ${AVAILABLE_GB}GB (${AVAILABLE_BYTES} bytes)"
-else
-    echo "Available disk space: ${AVAILABLE_MB}MB (${AVAILABLE_BYTES} bytes)"
-fi
-
-# Create sync target directory
-echo "Creating sync target directory at $SYNC_TARGET..."
-mkdir -p "$SYNC_TARGET"
-
 # ============================================================================
 # B2 CONNECTIVITY TESTING
 # ============================================================================
 
 echo "Testing B2 connectivity..."
 
-# Test basic connectivity with detailed error handling.
-# NOTE: `set +e` prevents `set -e` from aborting the script before the
-# explicit error handler below can run with the correct exit code (2).
-set +e
+# Test basic connectivity with detailed error handling
 CONNECTIVITY_TEST_OUTPUT=$(rclone lsd b2:${B2_BUCKET} --max-depth 1 2>&1)
 CONNECTIVITY_EXIT_CODE=$?
-set -e
 
 if [ $CONNECTIVITY_EXIT_CODE -ne 0 ]; then
     echo "ERROR: Failed to connect to B2 bucket"
@@ -241,18 +181,23 @@ if [ "$BUCKET_CONTENTS" -eq 0 ]; then
     echo ""
 fi
 
+# Construct remote path
+if [ -n "$B2_PATH" ]; then
+    REMOTE_PATH="b2:${B2_BUCKET}/${B2_PATH}"
+else
+    REMOTE_PATH="b2:${B2_BUCKET}"
+fi
+
 # ============================================================================
-# REMOTE SIZE CALCULATION (after connectivity is confirmed)
+# DISK SPACE VERIFICATION
 # ============================================================================
 
-# Get remote size with timeout and error handling.
-# NOTE: `set +e` prevents `set -e` from aborting the script; the exit code is
-# captured and handled below.
+echo "Checking disk space..."
+
+# Get remote size with timeout and error handling
 echo "Calculating remote bucket size..."
-set +e
 REMOTE_SIZE_OUTPUT=$(timeout 60 rclone size "$REMOTE_PATH" --json 2>&1)
 REMOTE_SIZE_EXIT_CODE=$?
-set -e
 
 if [ $REMOTE_SIZE_EXIT_CODE -eq 124 ]; then
     echo "WARNING: Remote size calculation timed out after 60 seconds"
@@ -284,6 +229,45 @@ elif [ $REMOTE_SIZE_GB -gt 0 ]; then
     echo "Remote bucket size: ${REMOTE_SIZE_GB}GB (${REMOTE_SIZE_BYTES} bytes)"
 else
     echo "Remote bucket size: ${REMOTE_SIZE_MB}MB (${REMOTE_SIZE_BYTES} bytes)"
+fi
+
+# Get available disk space
+SYNC_TARGET_DIR=$(dirname "$SYNC_TARGET")
+
+# Create target directory if it doesn't exist
+if ! mkdir -p "$SYNC_TARGET_DIR" 2>/dev/null; then
+    echo "ERROR: Failed to create sync target directory"
+    echo "  - Path: $SYNC_TARGET_DIR"
+    echo "  - Check permissions and available disk space"
+    exit 3
+fi
+
+# Verify target directory is writable
+if [ ! -w "$SYNC_TARGET_DIR" ]; then
+    echo "ERROR: Sync target directory is not writable"
+    echo "  - Path: $SYNC_TARGET_DIR"
+    echo "  - Current permissions:"
+    ls -ld "$SYNC_TARGET_DIR"
+    exit 3
+fi
+
+# Get available disk space
+AVAILABLE_BYTES=$(df --output=avail -B1 "$SYNC_TARGET_DIR" 2>/dev/null | tail -1)
+
+if [ -z "$AVAILABLE_BYTES" ]; then
+    echo "ERROR: Could not determine available disk space"
+    echo "  - Target directory: $SYNC_TARGET_DIR"
+    echo "  - Check if filesystem is mounted correctly"
+    exit 3
+fi
+
+AVAILABLE_GB=$((AVAILABLE_BYTES / 1024 / 1024 / 1024))
+AVAILABLE_MB=$((AVAILABLE_BYTES / 1024 / 1024))
+
+if [ $AVAILABLE_GB -gt 0 ]; then
+    echo "Available disk space: ${AVAILABLE_GB}GB (${AVAILABLE_BYTES} bytes)"
+else
+    echo "Available disk space: ${AVAILABLE_MB}MB (${AVAILABLE_BYTES} bytes)"
 fi
 
 # Check if we have enough space (with 10% buffer)
@@ -328,6 +312,10 @@ if [ $REMOTE_SIZE_BYTES -gt 0 ]; then
 else
     echo "✓ Skipping disk space check (remote size unknown)"
 fi
+
+# Create sync target directory
+echo "Creating sync target directory at $SYNC_TARGET..."
+mkdir -p "$SYNC_TARGET"
 
 # ============================================================================
 # SYNC EXECUTION

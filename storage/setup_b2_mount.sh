@@ -116,93 +116,14 @@ fi
 echo "✓ rclone configuration created"
 
 # ============================================================================
-# NETWORK VOLUME VERIFICATION (done before connectivity so cache dir is ready)
-# ============================================================================
-
-echo "Verifying network volume for cache storage..."
-
-# Determine the cache volume root from RCLONE_CACHE_DIR (defaults to
-# /runpod-volume/rclone-cache, so parent is /runpod-volume).  Using the
-# parent instead of hardcoding /runpod-volume lets tests (and non-RunPod
-# environments) point RCLONE_CACHE_DIR at any writable directory.
-CACHE_VOLUME_ROOT=$(dirname "$RCLONE_CACHE_DIR")
-
-# Check if network volume is mounted
-if [ ! -d "$CACHE_VOLUME_ROOT" ]; then
-    echo "ERROR: Network volume not found at $CACHE_VOLUME_ROOT"
-    echo ""
-    echo "The rclone cache requires a network volume to be mounted."
-    echo ""
-    echo "Possible causes:"
-    echo "  - Running in an environment without a network volume"
-    echo "  - Network volume failed to mount"
-    echo "  - Incorrect mount path configuration"
-    echo ""
-    echo "Solutions:"
-    echo "  - Ensure your RunPod pod/serverless has a network volume attached"
-    echo "  - Check RunPod dashboard for network volume status"
-    echo "  - For local development, create a directory: mkdir -p $CACHE_VOLUME_ROOT"
-    echo ""
-    exit 3
-fi
-
-# Verify network volume is writable
-if [ ! -w "$CACHE_VOLUME_ROOT" ]; then
-    echo "ERROR: Network volume at $CACHE_VOLUME_ROOT is not writable"
-    echo ""
-    echo "The rclone cache requires write access to the network volume."
-    echo ""
-    echo "Possible causes:"
-    echo "  - Insufficient permissions"
-    echo "  - Read-only mount"
-    echo "  - Filesystem error"
-    echo ""
-    echo "Current permissions:"
-    ls -ld "$CACHE_VOLUME_ROOT"
-    echo ""
-    exit 3
-fi
-
-echo "✓ Network volume is accessible and writable"
-
-# Create cache directory on network volume
-echo "Creating cache directory at $RCLONE_CACHE_DIR..."
-if ! mkdir -p "$RCLONE_CACHE_DIR"; then
-    echo "ERROR: Failed to create cache directory at $RCLONE_CACHE_DIR"
-    echo ""
-    echo "Possible causes:"
-    echo "  - Insufficient permissions"
-    echo "  - Disk full"
-    echo "  - Invalid path"
-    echo ""
-    exit 3
-fi
-
-# Verify cache directory is writable
-if [ ! -w "$RCLONE_CACHE_DIR" ]; then
-    echo "ERROR: Cache directory at $RCLONE_CACHE_DIR is not writable"
-    echo ""
-    echo "Current permissions:"
-    ls -ld "$RCLONE_CACHE_DIR"
-    echo ""
-    exit 3
-fi
-
-echo "✓ Cache directory created and verified"
-
-# ============================================================================
 # B2 CONNECTIVITY TESTING
 # ============================================================================
 
 echo "Testing B2 connectivity..."
 
-# Test basic connectivity with detailed error handling.
-# NOTE: `set +e` prevents `set -e` from aborting the script before the
-# explicit error handler below can run with the correct exit code (2).
-set +e
+# Test basic connectivity with detailed error handling
 CONNECTIVITY_TEST_OUTPUT=$(rclone lsd b2:${B2_BUCKET} --max-depth 1 2>&1)
 CONNECTIVITY_EXIT_CODE=$?
-set -e
 
 if [ $CONNECTIVITY_EXIT_CODE -ne 0 ]; then
     echo "ERROR: Failed to connect to B2 bucket"
@@ -264,8 +185,77 @@ if [ "$BUCKET_CONTENTS" -eq 0 ]; then
     echo ""
 fi
 
+# ============================================================================
+# NETWORK VOLUME VERIFICATION
+# ============================================================================
+
+echo "Verifying network volume for cache storage..."
+
+# Check if network volume is mounted
+if [ ! -d "/runpod-volume" ]; then
+    echo "ERROR: Network volume not found at /runpod-volume"
+    echo ""
+    echo "The rclone cache requires a network volume to be mounted."
+    echo ""
+    echo "Possible causes:"
+    echo "  - Running in an environment without a network volume"
+    echo "  - Network volume failed to mount"
+    echo "  - Incorrect mount path configuration"
+    echo ""
+    echo "Solutions:"
+    echo "  - Ensure your RunPod pod/serverless has a network volume attached"
+    echo "  - Check RunPod dashboard for network volume status"
+    echo "  - For local development, create a directory: mkdir -p /runpod-volume"
+    echo ""
+    exit 3
+fi
+
+# Verify network volume is writable
+if [ ! -w "/runpod-volume" ]; then
+    echo "ERROR: Network volume at /runpod-volume is not writable"
+    echo ""
+    echo "The rclone cache requires write access to the network volume."
+    echo ""
+    echo "Possible causes:"
+    echo "  - Insufficient permissions"
+    echo "  - Read-only mount"
+    echo "  - Filesystem error"
+    echo ""
+    echo "Current permissions:"
+    ls -ld /runpod-volume
+    echo ""
+    exit 3
+fi
+
+echo "✓ Network volume is accessible and writable"
+
+# Create cache directory on network volume
+echo "Creating cache directory at $RCLONE_CACHE_DIR..."
+if ! mkdir -p "$RCLONE_CACHE_DIR"; then
+    echo "ERROR: Failed to create cache directory at $RCLONE_CACHE_DIR"
+    echo ""
+    echo "Possible causes:"
+    echo "  - Insufficient permissions"
+    echo "  - Disk full"
+    echo "  - Invalid path"
+    echo ""
+    exit 3
+fi
+
+# Verify cache directory is writable
+if [ ! -w "$RCLONE_CACHE_DIR" ]; then
+    echo "ERROR: Cache directory at $RCLONE_CACHE_DIR is not writable"
+    echo ""
+    echo "Current permissions:"
+    ls -ld "$RCLONE_CACHE_DIR"
+    echo ""
+    exit 3
+fi
+
+echo "✓ Cache directory created and verified"
+
 # Check network volume space
-AVAILABLE_BYTES=$(df --output=avail -B1 "$CACHE_VOLUME_ROOT" | tail -1)
+AVAILABLE_BYTES=$(df --output=avail -B1 /runpod-volume | tail -1)
 AVAILABLE_GB=$((AVAILABLE_BYTES / 1024 / 1024 / 1024))
 AVAILABLE_MB=$((AVAILABLE_BYTES / 1024 / 1024))
 

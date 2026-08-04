@@ -16,7 +16,7 @@ Command-line tools for managing RunPod Pods (persistent servers) and Serverless 
 
 3. **Install Dependencies**:
    ```bash
-   cd runpod-comfy
+   cd runpod-serverless
    uv sync
    ```
 

@@ -11,10 +11,10 @@ Get up and running with local testing in 2 minutes.
 
 ```bash
 # Clone and navigate to the directory
-cd runpod-comfy
+cd runpod-serverless
 
 # Run test with auto-build
-IMAGE_NAME=comfyui-serverless:local ./scripts/test_local.sh
+IMAGE_NAME=comfyui-serverless:local ./test_local.sh
 ```
 
 That's it! The script will:
@@ -48,11 +48,11 @@ open http://localhost:8188
 ```bash
 # Image-to-image transformation
 IMAGE_NAME=comfyui-serverless:local \
-./scripts/test_local.sh examples/image_to_image.json
+./test_local.sh examples/image_to_image.json
 
 # Custom workflow
 IMAGE_NAME=comfyui-serverless:local \
-./scripts/test_local.sh path/to/your/workflow.json
+./test_local.sh path/to/your/workflow.json
 ```
 
 ### Clean Up
@@ -68,7 +68,7 @@ docker stop comfyui-test && docker rm comfyui-test
 
 ```bash
 # Just run it - everything is automatic
-IMAGE_NAME=comfyui-serverless:local ./scripts/test_local.sh
+IMAGE_NAME=comfyui-serverless:local ./test_local.sh
 ```
 
 ### Scenario 2: Testing After Code Changes
@@ -78,7 +78,7 @@ IMAGE_NAME=comfyui-serverless:local ./scripts/test_local.sh
 docker build -t comfyui-serverless:local .
 
 # Run tests
-IMAGE_NAME=comfyui-serverless:local ./scripts/test_local.sh
+IMAGE_NAME=comfyui-serverless:local ./test_local.sh
 ```
 
 ### Scenario 3: Using a Pre-built Image
@@ -88,7 +88,7 @@ IMAGE_NAME=comfyui-serverless:local ./scripts/test_local.sh
 docker pull ghcr.io/username/comfyui-serverless:latest
 
 # Test it
-IMAGE_NAME=ghcr.io/username/comfyui-serverless:latest ./scripts/test_local.sh
+IMAGE_NAME=ghcr.io/username/comfyui-serverless:latest ./test_local.sh
 ```
 
 ### Scenario 4: Custom Configuration
@@ -98,7 +98,7 @@ IMAGE_NAME=ghcr.io/username/comfyui-serverless:latest ./scripts/test_local.sh
 IMAGE_NAME=comfyui-serverless:local \
 CONTAINER_NAME=my-test \
 TEST_PORT=8080 \
-./scripts/test_local.sh examples/text_to_image_simple.json
+./test_local.sh examples/text_to_image_simple.json
 ```
 
 ## Troubleshooting
@@ -118,7 +118,7 @@ sudo systemctl start docker  # Linux
 docker pull ghcr.io/username/comfyui-serverless:latest
 
 # Or use a local image name (auto-builds)
-IMAGE_NAME=comfyui-serverless:local ./scripts/test_local.sh
+IMAGE_NAME=comfyui-serverless:local ./test_local.sh
 ```
 
 ### "Container stopped unexpectedly"
@@ -137,7 +137,7 @@ docker logs comfyui-test
 
 ```bash
 # Check you're in the right directory
-pwd  # Should show .../runpod-comfy
+pwd  # Should show .../runpod-serverless
 
 # Verify Dockerfile exists
 ls -la Dockerfile

@@ -45,18 +45,6 @@ COMFYUI_PORT=8188
 COMFYUI_ARGS=--lowvram --disable-smart-memory
 ```
 
-### Reusing an existing ComfyUI install (symlinks)
-
-If you already have a ComfyUI checkout elsewhere, you can symlink
-`models/`, `custom_nodes/`, `output/`, `input/`, and `user/` into the
-repo root (or under `.local/`) instead of duplicating data. These
-symlinks are gitignored — `.gitignore` lists them as **bare names**
-(no trailing slash) so git matches both real directories *and* symlinks
-(a trailing-slash pattern like `models/` only matches real directories
-and would let a `models` symlink slip through untracked). See the
-"Reusing an Existing ComfyUI Install" section in `README.md` for the
-full symlink and `COMFY_DATA_DIR` instructions.
-
 ### Build with the correct arch
 
 ```bash

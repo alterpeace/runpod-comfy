@@ -20,11 +20,11 @@ open http://localhost:8188
 # 1. Build and push image
 export GITHUB_USERNAME=your-username
 export GITHUB_TOKEN=your-token
-./scripts/build.sh --push
+./build.sh --push
 
 # 2. Deploy to RunPod
 export RUNPOD_API_KEY=your-api-key
-./scripts/deploy.sh --mode serverless \
+./deploy.sh --mode serverless \
   --name comfyui-api \
   --image ghcr.io/$GITHUB_USERNAME/comfyui-serverless:latest
 ```
@@ -52,32 +52,32 @@ docker-compose up -d
 
 ```bash
 # Build locally (no push)
-./scripts/build.sh
+./build.sh
 
 # Build and push to GitHub Container Registry
-./scripts/build.sh --username your-github-user --push
+./build.sh --username your-github-user --push
 
 # Build with version tag
-./scripts/build.sh --username your-github-user --tag v1.0.0 --push
+./build.sh --username your-github-user --tag v1.0.0 --push
 ```
 
 ### Deploying to RunPod
 
 ```bash
 # Deploy serverless endpoint
-./scripts/deploy.sh --mode serverless \
+./deploy.sh --mode serverless \
   --name comfyui-api \
   --image ghcr.io/user/comfyui-serverless:latest \
   --gpu "NVIDIA RTX A4000"
 
 # Deploy persistent pod
-./scripts/deploy.sh --mode pods \
+./deploy.sh --mode pods \
   --name comfyui-workspace \
   --image ghcr.io/user/comfyui-serverless:latest \
   --spot  # Use spot instance (cheaper)
 
 # Deploy with existing volume (reuse models)
-./scripts/deploy.sh --mode serverless \
+./deploy.sh --mode serverless \
   --name comfyui-api \
   --image ghcr.io/user/comfyui-serverless:latest \
   --volume-id abc123def456
@@ -124,28 +124,22 @@ uv run python storage/manage_b2.py verify --local ./models
 ## Project Structure
 
 ```
-runpod-comfy/
-├── src/                        # Application code
-│   ├── handler.py              # RunPod serverless handler
-│   ├── comfyui_client.py       # ComfyUI API client
-│   └── storage_s3.py           # S3 storage integration
-├── entrypoint.sh               # Container entrypoint
-├── docker-compose.yml          # Local development config
-├── Dockerfile                  # Container build
-├── scripts/                    # Build & deploy automation
-│   ├── build.sh                # Build automation
-│   ├── deploy.sh               # Deployment automation
-│   ├── test_local.sh           # Local testing script
-│   └── install_ltx23.sh        # LTX-2.3 model/node installer
-├── config/                     # RunPod + model configs
-├── storage/                    # B2 storage integration
-│   ├── manage_b2.py            # B2 management CLI
-│   ├── setup_b2_mount.sh       # rclone mount setup
-│   ├── setup_b2_sync.sh        # B2 sync setup
-│   └── examples/               # Example configurations
-├── lifecycle/                  # RunPod lifecycle management
-├── tests/                      # Test suite
-└── examples/                   # Example workflows
+runpod-serverless/
+├── handler.py              # RunPod serverless handler
+├── comfyui_client.py       # ComfyUI API client
+├── entrypoint.sh           # Container entrypoint
+├── docker-compose.yml      # Local development config
+├── Dockerfile              # Container build
+├── build.sh                # Build automation
+├── deploy.sh               # Deployment automation
+├── storage/                # B2 storage integration
+│   ├── manage_b2.py        # B2 management CLI
+│   ├── setup_b2_mount.sh   # rclone mount setup
+│   ├── setup_b2_sync.sh    # B2 sync setup
+│   └── examples/           # Example configurations
+├── lifecycle/              # RunPod lifecycle management
+├── tests/                  # Test suite
+└── examples/               # Example workflows
 ```
 
 ## Local Development Setup
@@ -193,18 +187,6 @@ ln -s ~/comfy/input .local/input
 ln -s ~/comfy/user .local/user
 ```
 
-You can also symlink at the **repo root** instead of under `.local/` (useful if you want
-the paths to match a standalone ComfyUI checkout exactly, e.g. for tools that expect
-`./models/` at the project root):
-
-```bash
-# Root-level symlinks (alternative to .local/):
-ln -s /media/data/comfy/models ./models
-ln -s /media/data/comfy/custom_nodes ./custom_nodes
-ln -s /media/data/comfy/output ./output
-ln -s /media/data/comfy/input ./input
-```
-
 Or point at a different directory entirely without touching `.local/` via the
 `COMFY_DATA_DIR` env var (checked for `models/`, `custom_nodes/`, `output/`, `input/`,
 `user/` subdirectories):
@@ -212,16 +194,6 @@ Or point at a different directory entirely without touching `.local/` via the
 ```bash
 COMFY_DATA_DIR=~/comfy docker compose up   # or podman-compose up, see below
 ```
-
-#### How `.gitignore` handles these symlinks
-
-`models`, `output`, `input`, and `custom_nodes` are listed in `.gitignore` as **bare
-names** (no trailing slash). This is deliberate: git treats a symlink as a *file*, not a
-directory, so a pattern like `models/` (trailing slash) only matches a real directory and
-would let a root-level `models` symlink slip through untracked. The bare-name form matches
-both real directories and symlinks, so neither the placeholder `.local/models` nor a
-root-level `./models` symlink will ever be committed. The same applies to `plans/` (local
-planning notes, not for the repo).
 
 This is **local development only**. On RunPod, `entrypoint.sh` sets up storage from
 `/runpod-volume` (network volume) or B2 (`STORAGE_BACKEND=b2-mount`/`b2-sync`) - RunPod
@@ -303,7 +275,7 @@ rclone sync ./models b2:my-comfyui-models/models --progress
 export GITHUB_USERNAME=your-username
 export GITHUB_TOKEN=your-token  # needs write:packages permission
 
-./scripts/build.sh --username $GITHUB_USERNAME --push
+./build.sh --username $GITHUB_USERNAME --push
 ```
 
 ### Step 4: Deploy to RunPod
@@ -311,7 +283,7 @@ export GITHUB_TOKEN=your-token  # needs write:packages permission
 ```bash
 export RUNPOD_API_KEY=your-runpod-api-key
 
-./scripts/deploy.sh --mode serverless \
+./deploy.sh --mode serverless \
   --name comfyui-api \
   --image ghcr.io/$GITHUB_USERNAME/comfyui-serverless:latest \
   --gpu "NVIDIA RTX A4000"
@@ -535,15 +507,11 @@ See the [comfyui-mcp documentation](https://comfyui-mcp.artokun.io/docs) for ful
 
 ## Additional Documentation
 
-- [Build Documentation](docs/BUILD.md) - Docker build details
+- [Build Documentation](BUILD.md) - Docker build details
 - [B2 Quick Start](storage/B2_RUNPOD_QUICKSTART.md) - Detailed B2 setup guide
 - [Storage Migration](storage/MIGRATION.md) - Migrate between storage backends
 - [Example Configs](storage/examples/) - Pre-configured .env examples
-- [Testing Guide](docs/TESTING.md) - Test suite documentation
-- [LTX-2.3 V2V RunPod Guide](docs/LTX_2.3_V2V_RUNPOD_GUIDE.md) - Complete V2V setup with content upload
-- [LTX-2.3 IC-LoRA Setup](docs/LTX_2.3_V2V_ICLORA_SETUP.md) - IC-LoRA catalog and VRAM tiers
-- [Local & RunPod Testing](docs/LTX_2.3_LOCAL_AND_RUNPOD_TESTING.md) - Local→RunPod testing checklist
-- [WebUI Access](docs/WEBUI_ACCESS.md) - WebUI access methods in all modes
+- [Testing Guide](TESTING.md) - Test suite documentation
 
 ## License
 
