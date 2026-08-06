@@ -21,6 +21,7 @@ ARG COMFYUI_VERSION=v0.27.0
 ARG ENABLE_XFORMERS=true
 ARG ENABLE_SAGEATTENTION=true
 ARG ENABLE_FLASHATTENTION=true
+ARG ENABLE_TENSORRT=false
 
 # CUDA compilation settings (reduce MAX_JOBS if build crashes)
 ARG TORCH_CUDA_ARCH_LIST="8.9"
@@ -88,6 +89,7 @@ ARG COMFYUI_VERSION=v0.10.0
 ARG ENABLE_XFORMERS=true
 ARG ENABLE_SAGEATTENTION=true
 ARG ENABLE_FLASHATTENTION=true
+ARG ENABLE_TENSORRT=false
 ARG TORCH_CUDA_ARCH_LIST="8.9"
 ARG MAX_JOBS=2
 
@@ -120,7 +122,12 @@ RUN --mount=type=cache,target=/cache/uv,sharing=locked \
     'kornia==0.7.2' \
     --index-strategy unsafe-best-match \
     --extra-index-url https://download.pytorch.org/whl/cu129 && \
-    UV_LINK_MODE=clone uv pip install tensorrt tensorrt-cu12 --extra-index-url https://pypi.nvidia.com
+    if [ "${ENABLE_TENSORRT}" = "true" ]; then \
+        echo ">>> Installing TensorRT (ENABLE_TENSORRT=true)..." && \
+        UV_LINK_MODE=clone uv pip install tensorrt tensorrt-cu12 --extra-index-url https://pypi.nvidia.com; \
+    else \
+        echo ">>> Skipping TensorRT (ENABLE_TENSORRT=false, saves ~6.2GB)"; \
+    fi
 
 # =============================================================================
 # OPTIONAL: xformers (prebuilt wheel - fast install)
@@ -235,6 +242,7 @@ ARG XFORMERS_VERSION=0.0.34
 ARG ENABLE_XFORMERS=true
 ARG ENABLE_SAGEATTENTION=true
 ARG ENABLE_FLASHATTENTION=true
+ARG ENABLE_TENSORRT=false
 
 COPY --from=base /usr/local/bin/uv /usr/local/bin/uv
 COPY --from=deps /comfyui /comfyui
@@ -319,10 +327,14 @@ RUN . /comfyui/venv/bin/activate && \
     UV_CONSTRAINT= PIP_CONSTRAINT= uv pip install 'kornia==0.7.2' --no-deps --force-reinstall && \
     echo "xformers installation complete"
 
-# Install TensorRT for depth-anything-tensorrt and other TRT nodes
-# Then upgrade protobuf to fix TensorFlow/transformers compatibility
+# Install TensorRT for depth-anything-tensorrt and other TRT nodes (optional, ~6.2GB)
 RUN . /comfyui/venv/bin/activate && \
-    uv pip install tensorrt tensorrt-cu12 --extra-index-url https://pypi.nvidia.com
+    if [ "${ENABLE_TENSORRT}" = "true" ]; then \
+        echo ">>> Installing TensorRT (ENABLE_TENSORRT=true)..." && \
+        uv pip install tensorrt tensorrt-cu12 --extra-index-url https://pypi.nvidia.com; \
+    else \
+        echo ">>> Skipping TensorRT (ENABLE_TENSORRT=false, saves ~6.2GB)"; \
+    fi
 
 # Install additional dependencies for custom nodes
 RUN . /comfyui/venv/bin/activate && \
