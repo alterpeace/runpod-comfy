@@ -291,6 +291,50 @@ class ServerlessManager:
                 print(f"❌ Error invoking endpoint: {e}")
             return {"error": str(e)}
     
+    def get_job_status(self, endpoint_id: str, job_id: str, json_output: bool = False) -> Dict[str, Any]:
+        """Get the status of a specific job via the RunPod REST API."""
+        import urllib.request
+        import urllib.error
+
+        url = f"https://api.runpod.ai/v2/{endpoint_id}/status/{job_id}"
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {self.api_key}"})
+
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                response = json.loads(resp.read().decode())
+
+            if json_output:
+                print(json.dumps(response, indent=2))
+            else:
+                print(f"\n{'='*60}")
+                print(f"Job Status: {job_id}")
+                print(f"{'='*60}")
+                print(f"Status: {response.get('status', 'N/A')}")
+                if response.get('delayTime') is not None:
+                    print(f"Queue delay: {response['delayTime']/1000:.1f}s")
+                if response.get('executionTime') is not None:
+                    print(f"Execution time: {response['executionTime']/1000:.1f}s")
+                if response.get('error'):
+                    print(f"Error: {response['error']}")
+                output = response.get('output')
+                if output is not None:
+                    rendered = json.dumps(output, indent=2)
+                    print(f"Output: {rendered[:2000]}")
+                print(f"{'='*60}\n")
+
+            return response
+
+        except urllib.error.HTTPError as e:
+            result = {"error": f"HTTP {e.code}: {e.read().decode()[:500]}"}
+        except Exception as e:
+            result = {"error": str(e)}
+
+        if json_output:
+            print(json.dumps(result, indent=2))
+        else:
+            print(f"❌ Error getting job status: {result['error']}")
+        return result
+
     def get_endpoint_status(self, endpoint_id: str, json_output: bool = False) -> Dict[str, Any]:
         """Get endpoint status and metrics."""
         try:
@@ -447,8 +491,9 @@ Examples:
     invoke_parser.add_argument("--timeout", type=int, default=300, help="Timeout in seconds (default: 300)")
     
     # Status command
-    status_parser = subparsers.add_parser("status", help="Get endpoint status")
+    status_parser = subparsers.add_parser("status", help="Get endpoint status, or job status with --job-id")
     status_parser.add_argument("--endpoint-id", required=True, help="Endpoint ID")
+    status_parser.add_argument("--job-id", help="Job ID (returns job status instead of endpoint status)")
     
     # List command
     list_parser = subparsers.add_parser("list", help="List all endpoints")
@@ -507,7 +552,10 @@ Examples:
         )
     
     elif args.command == "status":
-        manager.get_endpoint_status(args.endpoint_id, json_output=args.json)
+        if getattr(args, "job_id", None):
+            manager.get_job_status(args.endpoint_id, args.job_id, json_output=args.json)
+        else:
+            manager.get_endpoint_status(args.endpoint_id, json_output=args.json)
     
     elif args.command == "list":
         manager.list_endpoints(json_output=args.json)
