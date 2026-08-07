@@ -1,5 +1,26 @@
 # ComfyUI WebUI Access - Always Available
 
+## Remote Access Matrix (RunPod)
+
+| Where ComfyUI runs | Inbound? | How to reach the WebUI | Script |
+|---|---|---|---|
+| **Pod** | Public SSH (IP:port from Connect panel) | `ssh -L 8188:127.0.0.1:8188 root@<ip> -p <port>` → http://localhost:8188 | [`scripts/tunnel_webui.sh`](../scripts/tunnel_webui.sh) / [`.ps1`](../scripts/tunnel_webui.ps1) |
+| **Serverless worker** | ❌ outbound-only | OpenZiti overlay (worker dials out) → http://comfyui-http.ziti | same scripts, `ziti` mode |
+| **Local docker** | direct | http://localhost:8188 | — |
+
+**Serverless + ziti without rebuild or endpoint edits:** drop two files on the
+network volume (via a seed pod) — `ziti-identity.json` at
+`/runpod-volume/ziti-identity.json` and a `/runpod-volume/.env` containing
+`OPENZITI_IDENTITY=/runpod-volume/ziti-identity.json` plus the service names.
+[`entrypoint.sh`](../entrypoint.sh) sources `/runpod-volume/.env` at every
+worker boot, so every worker joins the overlay automatically.
+
+**Uptime caveat:** a serverless worker's tunnel lives only as long as the
+worker — job duration + idle timeout (300s default). A FlashBoot-paused
+worker's tunnel is frozen too. For interactive WebUI sessions use a Pod
+(billed only while it runs); `workersMin=1` keeps a serverless worker (and its
+tunnel) always on but bills 24/7.
+
 ## Core Principle
 
 **The ComfyUI WebUI is ALWAYS running and accessible in ALL modes.**
