@@ -35,6 +35,7 @@ services:
       - ${COMFY_DATA_DIR:-./.local}/user:/comfyui/user
       - ./.env:/workspace/.env:ro  # Configuration file (optional features)
       - ./entrypoint.sh:/workspace/entrypoint.sh:ro  # Mount entrypoint for live changes
+      - ./.local/ziti:/workspace/ziti:ro  # OpenZiti enrolled identity (comfy-host.json) for the in-container tunnel
     environment:
       - MODE=local
       - COMFYUI_PORT=8188
@@ -43,24 +44,28 @@ services:
       - COMFYUI_ARGS=${COMFYUI_ARGS:---lowvram --disable-smart-memory}
       - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:256
       - CUDA_LAUNCH_BLOCKING=1
-      - PYTHONWARNINGS=ignore::UserWarning
+      - PYTHONWARNINGS=ignore::UserWarning,ignore::FutureWarning,ignore::SyntaxWarning,ignore::DeprecationWarning
       - NO_ALBUMENTATIONS_UPDATE=1
       - COMFYUI_MANAGER_DISABLE_UPDATE_CHECK=true
       - TORCH_CUDNN_V8_API_ENABLED=0
-    # GPU access via CDI (Podman-compatible). Docker Desktop/Engine users can instead use:
-    #   deploy:
-    #     resources:
-    #       reservations:
-    #         devices:
-    #           - driver: nvidia
-    #             count: 1
-    #             capabilities: [gpu]
-    # This environment's `docker` CLI is a Podman shim, which does not support the
-    # Swarm-style `deploy.resources.reservations.devices` GPU block - it needs the CDI
-    # device syntax below instead. Requires ./scripts/fix_local_gpu_cdi.sh to have been
-    # run first (see README "Local Development Setup" / Troubleshooting).
+    # GPU access: The external Docker Compose provider (v5.x) does NOT correctly
+    # resolve CDI device strings (nvidia.com/gpu=all) when `docker` is a Podman
+    # shim — it mangles them into path-based source:target syntax. The
+    # deploy.resources GPU block is also silently ignored.
+    #
+    # Instead, run ./scripts/setup_local_gpu.sh which:
+    #   1. Patches the CDI spec for Podman 4.9.x (fix_local_gpu_cdi.sh)
+    #   2. Generates docker-compose.gpu.yml with explicit device + library mounts
+    #   3. Restarts the container with both compose files
+    #
+    # Or add to .env:  COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml
+    # Then just:       docker compose up -d
+    #
+    # The tun device is always needed (OpenZiti tunnel):
     devices:
-      - nvidia.com/gpu=all
+      - /dev/net/tun:/dev/net/tun  # tun device required by ziti-edge-tunnel (OpenZiti)
+    cap_add:
+      - NET_ADMIN  # ziti-edge-tunnel needs this to create its tun interface
     restart: unless-stopped
     network_mode: host  # Use host networking to fix DNS issues
 

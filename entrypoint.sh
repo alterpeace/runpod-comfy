@@ -343,6 +343,166 @@ esac
 log_success "Storage backend setup complete: $STORAGE_BACKEND"
 
 # ============================================================================
+# NVIDIA LIBRARY SYMLINKS (local dev with explicit GPU passthrough)
+# ============================================================================
+# When GPU passthrough is done via explicit volume mounts (instead of CDI or
+# the NVIDIA Container Toolkit runtime), only the versioned .so files are
+# mounted (e.g. libcuda.so.580.173.02). The unversioned symlinks that the
+# dynamic linker resolves (libcuda.so.1, libcuda.so) are missing, causing
+# torch.cuda to fail with "Found no NVIDIA driver". This function creates
+# those symlinks and refreshes ldconfig so the libraries are discoverable.
+setup_nvidia_symlinks() {
+    local lib_dir="/usr/lib/x86_64-linux-gnu"
+    local found=0
+
+    if [ ! -d "$lib_dir" ]; then
+        return 0
+    fi
+
+    # For each versioned NVIDIA .so file, create the .so.1 and .so symlinks
+    for so_file in "$lib_dir"/libcuda.so.* "$lib_dir"/libnvidia-ml.so.* \
+                   "$lib_dir"/libnvidia-cfg.so.* "$lib_dir"/libnvcuvid.so.* \
+                   "$lib_dir"/libnvidia-encode.so.* "$lib_dir"/libnvidia-fbc.so.* \
+                   "$lib_dir"/libnvidia-opticalflow.so.* "$lib_dir"/libnvidia-opencl.so.* \
+                   "$lib_dir"/libnvidia-gpucomp.so.* "$lib_dir"/libnvidia-allocator.so.* \
+                   "$lib_dir"/libnvidia-tls.so.* "$lib_dir"/libnvidia-ptxjitcompiler.so.* \
+                   "$lib_dir"/libnvidia-nvvm.so.* "$lib_dir"/libnvidia-ngx.so.* \
+                   "$lib_dir"/libnvidia-glcore.so.* "$lib_dir"/libnvidia-glsi.so.* \
+                   "$lib_dir"/libnvidia-glvkspirv.so.* "$lib_dir"/libnvidia-eglcore.so.* \
+                   "$lib_dir"/libnvidia-rtcore.so.* "$lib_dir"/libnvoptix.so.* \
+                   "$lib_dir"/libEGL_nvidia.so.* "$lib_dir"/libGLESv1_CM_nvidia.so.* \
+                   "$lib_dir"/libGLESv2_nvidia.so.* "$lib_dir"/libGLX_nvidia.so.* \
+                   "$lib_dir"/libvdpau_nvidia.so.*; do
+
+        [ -e "$so_file" ] || continue
+        [ -L "$so_file" ] && continue  # Skip if already a symlink
+
+        local base="${so_file%.so.*}"   # e.g. /usr/lib/.../libcuda
+        local major="${so_file#*.so.}"  # e.g. 580.173.02
+        local major_ver="${major%%.*}"  # e.g. 580
+
+        # Create libfoo.so.<major> -> libfoo.so.<full>
+        local link_major="${base}.so.${major_ver}"
+        if [ ! -e "$link_major" ]; then
+            ln -sf "$(basename "$so_file")" "$link_major" 2>/dev/null && found=$((found + 1))
+        fi
+
+        # Create libfoo.so -> libfoo.so.<major>
+        local link_base="${base}.so"
+        if [ ! -e "$link_base" ]; then
+            ln -sf "$(basename "$link_major")" "$link_base" 2>/dev/null && found=$((found + 1))
+        fi
+    done
+
+    if [ "$found" -gt 0 ]; then
+        log_info "Created $found NVIDIA library symlinks"
+        # Refresh the dynamic linker cache
+        if command -v ldconfig &>/dev/null; then
+            ldconfig "$lib_dir" 2>/dev/null || true
+            log_info "Refreshed ldconfig cache for NVIDIA libraries"
+        fi
+    fi
+}
+setup_nvidia_symlinks
+
+# ============================================================================
+# CUSTOM NODE DEPENDENCY AUTO-INSTALL
+# ============================================================================
+# Scans all custom_nodes/*/requirements.txt files and installs missing
+# dependencies using uv pip install with torch lock constraints to prevent
+# torch/torchvision/xformers from being upgraded.
+#
+# Controlled by env var: AUTO_INSTALL_CUSTOM_NODE_DEPS (default: true)
+# Set to "false" to skip (useful for faster restarts when deps are stable).
+install_custom_node_deps() {
+    if [ "${AUTO_INSTALL_CUSTOM_NODE_DEPS:-true}" = "false" ]; then
+        log_info "Custom node dependency auto-install skipped (AUTO_INSTALL_CUSTOM_NODE_DEPS=false)"
+        return 0
+    fi
+
+    local custom_nodes_dir="/comfyui/custom_nodes"
+    local constraint_file="/comfyui/venv/constraints/torch_lock.txt"
+    local marker_file="/comfyui/venv/.custom_node_deps_installed"
+    local count=0
+    local installed=0
+
+    if [ ! -d "$custom_nodes_dir" ]; then
+        log_info "No custom_nodes directory found — skipping dependency install"
+        return 0
+    fi
+
+    # Count requirements.txt files
+    for req in "$custom_nodes_dir"/*/requirements.txt; do
+        [ -f "$req" ] && count=$((count + 1))
+    done
+
+    if [ "$count" -eq 0 ]; then
+        log_info "No custom node requirements.txt files found"
+        return 0
+    fi
+
+    log_info "Scanning $count custom node(s) for missing dependencies..."
+
+    # Build uv pip install command with constraints.
+    # --no-deps: Only install exact packages from requirements.txt, NOT their
+    # transitive dependencies. This prevents pulling in incompatible packages
+    # (e.g. wheels compiled against NumPy 1.x) that break already-working nodes.
+    # Transitive deps should already be in the image via extra-requirements.txt.
+    local uv_cmd="uv pip install --no-deps"
+    if [ -f "$constraint_file" ]; then
+        uv_cmd="$uv_cmd --constraint $constraint_file"
+    fi
+    uv_cmd="$uv_cmd --python /comfyui/venv/bin/python"
+
+    # Some custom nodes have complex dependency trees that need transitive deps
+    # installed (not just the top-level packages). These are installed WITH deps
+    # (using constraints to protect torch). Add node directory names here.
+    local full_deps_nodes="ComfyUI_FL-MCP"
+
+    # Install each requirements.txt
+    for req in "$custom_nodes_dir"/*/requirements.txt; do
+        [ -f "$req" ] || continue
+        local node_name
+        node_name=$(basename "$(dirname "$req")")
+
+        # Determine whether to use --no-deps or full deps install
+        local use_full_deps=false
+        for fdn in $full_deps_nodes; do
+            if [ "$node_name" = "$fdn" ]; then
+                use_full_deps=true
+                break
+            fi
+        done
+
+        local install_cmd
+        if [ "$use_full_deps" = true ]; then
+            # Full deps install (with torch lock constraints to prevent torch upgrades)
+            install_cmd="uv pip install"
+            if [ -f "$constraint_file" ]; then
+                install_cmd="$install_cmd --constraint $constraint_file"
+            fi
+            install_cmd="$install_cmd --python /comfyui/venv/bin/python"
+        else
+            install_cmd="$uv_cmd"
+        fi
+
+        if eval "$install_cmd -r \"$req\"" 2>&1 | grep -q "Installed\|Downloaded"; then
+            installed=$((installed + 1))
+            log_info "  Installed deps for: $node_name$( [ "$use_full_deps" = true ] && echo " (full deps)" )"
+        fi
+    done
+
+    if [ "$installed" -gt 0 ]; then
+        log_success "Installed dependencies for $installed custom node(s)"
+        # Write marker so we know deps were installed this session
+        date -u +"%Y-%m-%dT%H:%M:%SZ" > "$marker_file" 2>/dev/null || true
+    else
+        log_info "All custom node dependencies already satisfied"
+    fi
+}
+install_custom_node_deps
+
+# ============================================================================
 # TORCH_LOCK & USERSCRIPTS
 # ============================================================================
 verify_torch_lock

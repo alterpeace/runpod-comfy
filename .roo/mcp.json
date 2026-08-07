@@ -1,0 +1,24 @@
+{
+	"mcpServers": {
+		"comfyui": {
+			"command": "docker",
+			"args": [
+				"exec",
+				"-i",
+				"comfy",
+				"/comfyui/venv/bin/python",
+				"/comfyui/custom_nodes/ComfyUI_FL-MCP/backend/mcp_server.py"
+			],
+			"env": {
+				"COMFYUI_SERVER_URL": "http://127.0.0.1:8188",
+				"COMFYUI_PATH": "/comfyui",
+				"FL_MCP_ENABLE_WORKFLOW_WRITES": "true",
+				"FL_MCP_ENABLE_CUSTOM_NODE_WRITES": "true",
+				"FL_MCP_ENABLE_MANAGER_MUTATIONS": "true",
+				"FL_MCP_ENABLE_COMFY_PROCESS_CONTROL": "true"
+			},
+			"disabled": false,
+			"alwaysAllow": []
+		}
+	}
+}

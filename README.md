@@ -151,24 +151,38 @@ runpod-serverless/
 - 50GB+ free disk space
 
 > **Using Podman instead of Docker?** (e.g. Linux Mint 22 / Ubuntu 24.04 "noble", where
-> `docker` is a Podman/crun shim.) Two Podman-specific issues to know about:
+> `docker` is a Podman/crun shim.) There are three Podman-specific issues that prevent
+> GPU passthrough through `docker compose up`:
 >
 > 1. Podman 4.9.x ships a CDI parser that doesn't support the CDI v0.7.0 spec generated
 >    by recent NVIDIA Container Toolkit releases, so GPU access fails with
->    `unresolvable CDI devices nvidia.com/gpu=all`. Run this once per boot / driver
->    update before starting the stack:
->    ```bash
->    ./scripts/fix_local_gpu_cdi.sh
->    ```
-> 2. `docker compose` here resolves to Podman's Docker-API emulation
->    (`podman system service`), which silently drops the `devices:` GPU entry - the
->    container starts but never gets the GPU. Use `podman-compose` instead, which talks
->    to the Podman CLI directly and correctly resolves the CDI device:
->    ```bash
->    podman-compose up
->    ```
+>    `unresolvable CDI devices nvidia.com/gpu=all`.
+> 2. The external Docker Compose provider (v5.x) mangles the CDI device string
+>    `nvidia.com/gpu=all` into path-based `source:target` syntax, which Podman no
+>    longer recognizes as CDI. The `deploy.resources` GPU block is also silently
+>    ignored.
+> 3. The CDI spec only mounts versioned `.so` files (e.g. `libcuda.so.580.173.02`),
+>    not the unversioned symlinks (`libcuda.so.1`) that the dynamic linker resolves.
 >
-> Neither of these affects the built image or RunPod deployments - they're purely about
+> **One-command fix** — run this after every reboot or driver update:
+> ```bash
+> ./scripts/setup_local_gpu.sh
+> ```
+> This patches the CDI spec, generates a `docker-compose.gpu.yml` override with
+> explicit device + library mounts, creates NVIDIA `.so` symlinks inside the
+> container at startup (via `entrypoint.sh`), and restarts the container.
+>
+> After the first run, you can start normally with:
+> ```bash
+> docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+> ```
+> Or add to `.env`:
+> ```bash
+> COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml
+> ```
+> Then just `docker compose up -d`.
+>
+> None of this affects the built image or RunPod deployments - they're purely about
 > how this local container runtime is invoked.
 
 ### Reusing an Existing ComfyUI Install (models, custom_nodes, etc.)
@@ -224,10 +238,24 @@ wget https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/v1-5-pru
 ### Step 3: Start ComfyUI
 
 ```bash
-docker-compose up
+./scripts/run_local.sh
 ```
 
-Access WebUI at http://localhost:8188
+This automatically handles GPU passthrough (patches CDI spec if needed, generates
+the GPU compose override) and starts the container. Access WebUI at
+http://localhost:8188.
+
+Other options:
+```bash
+./scripts/run_local.sh --build   # rebuild image first
+./scripts/run_local.sh --logs    # start + follow logs
+```
+
+For RunPod deployments:
+```bash
+./scripts/run_runpod.sh serverless deploy    # deploy serverless endpoint
+./scripts/run_runpod.sh pods create --gpu "RTX 4090" --name "comfy-prod"
+```
 
 ## RunPod Deployment with Backblaze B2
 
@@ -378,32 +406,43 @@ docker-compose logs comfyui
 docker run --gpus all nvidia/cuda:11.8-base nvidia-smi
 ```
 
-### GPU not visible / "unresolvable CDI devices nvidia.com/gpu=all"
+### GPU not visible / "Found no NVIDIA driver on your system"
 
-This happens on Podman-based local setups (Podman 4.9.x doesn't support the CDI v0.7.0
-schema NVIDIA Container Toolkit now generates by default). Fix it with:
+This happens on Podman-based local setups (where `docker` is a Podman/crun shim).
+There are three separate issues:
+
+1. **CDI v0.7.0 incompatibility** — Podman 4.9.x doesn't support the CDI v0.7.0
+   schema NVIDIA Container Toolkit generates by default.
+2. **Compose CDI mangling** — The external Docker Compose provider (v5.x) converts
+   `nvidia.com/gpu=all` into path-based `source:target` syntax, which Podman no
+   longer recognizes as CDI. The `deploy.resources` GPU block is also silently
+   ignored.
+3. **Missing library symlinks** — The CDI spec only mounts versioned `.so` files
+   (e.g. `libcuda.so.580.173.02`), not the unversioned symlinks (`libcuda.so.1`)
+   that the dynamic linker resolves.
+
+**One-command fix** for all three:
 
 ```bash
-./scripts/fix_local_gpu_cdi.sh
+./scripts/setup_local_gpu.sh
 ```
 
-Re-run this after a reboot, NVIDIA driver update, or `nvidia-container-toolkit` update —
-the patched spec lives partly on tmpfs and gets regenerated (unpatched) by those events.
+This patches the CDI spec, generates `docker-compose.gpu.yml` with explicit
+device + library mounts, creates NVIDIA `.so` symlinks at container startup,
+and restarts the container. Re-run after every reboot or driver update (the
+CDI spec on `/var/run/cdi` is tmpfs and resets on reboot).
+
+After the first run, start normally with:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+```
+
+Or add to `.env`:
+```bash
+COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml
+```
+
 This is a local-only workaround; it does not need to be applied on RunPod.
-
-### Container starts but GPU still isn't used (no CDI error, just no CUDA)
-
-If `docker` on your machine is a Podman shim, `docker compose up` talks to Podman's
-Docker-API emulation layer, which drops the Compose `devices:` GPU entry without
-erroring — ComfyUI starts but logs `Found no NVIDIA driver on your system`. Use
-`podman-compose` instead, which resolves the CDI device correctly:
-
-```bash
-podman-compose up
-```
-
-Verify which one you have with `readlink -f "$(which docker)"` — if it points at
-`podman`, use `podman-compose` for this project.
 
 ### Models not loading
 
