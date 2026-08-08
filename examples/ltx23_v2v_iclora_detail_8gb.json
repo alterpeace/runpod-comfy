@@ -9,7 +9,7 @@
     "inputs": {
       "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
       "ckpt_name": "ltx-video-2b-v0.9.safetensors",
-      "device": "default"
+      "device": "cpu"
     },
     "class_type": "LTXAVTextEncoderLoader"
   },
