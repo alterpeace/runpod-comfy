@@ -3,8 +3,16 @@
 
 # Custom node specific deps (not in base)
 aichat==0.0.5
-albucore==0.0.16
-albumentations==1.4.15
+# NOTE: albucore & albumentations MUST be a matched pair.
+# albumentations 1.4.15 declared albucore>=0.0.15 but its code imports
+# float32_io, which was only added in albucore 0.0.20.  Using the loose
+# constraint with an old albucore (0.0.16) caused:
+#   ImportError: cannot import name 'float32_io' from 'albucore'
+# breaking comfyui_instantid, comfyui-inspyrenet-rembg, and pulid_comfyui
+# (all transitively import albumentations via insightface/transparent_background).
+# 1.4.24 pins albucore==0.0.23 exactly — a tested, compatible pair.
+albucore==0.0.23
+albumentations==1.4.24
 antlr4-python3-runtime==4.9.3
 av>=16.0.0
 bchlib==2.1.3
