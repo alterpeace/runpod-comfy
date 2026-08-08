@@ -118,9 +118,10 @@ any output resolution.
   (24GB only, artifact removal) + `omninft_rl_lora` (quality boost)
 - Two-pass pipeline (24GB): 768×432 → 1536×864 via `LTXVLatentUpsampler`
 - Single-pass (8GB): 512×288 GGUF Q4, CPU text encoder offload
-- FL-DiffVSR (Stream-DiffVSR) 4x super-resolution with temporal coherence
-- Bypassable stages: DiffVSR 4x, Lanczos 1080p, Pass 2 latent upscale
-- Output modes: preview / default / 3K / 1080p / 4K (24GB) — all @ 24fps
+- SeedVR2 (ByteDance) diffusion-based video super-resolution with built-in
+  color correction (`lab` mode) and temporal overlap blending
+- Bypassable stages: SeedVR2 upscale, Pass 2 latent upscale (24GB)
+- Output modes: preview / default / 1080p / 4K (24GB) — all @ 24fps
 - API format for RunPod serverless, UI format for ComfyUI web interface
 
 **Also includes:**
@@ -148,7 +149,8 @@ IMAGE_NAME=comfyui-serverless:local ./scripts/test_local.sh \
 
 See [`ltx23_v2v_animatediff_cleanup_README.md`](ltx23_v2v_animatediff_cleanup_README.md)
 for full mode tables, stage-toggle JSON patches, HF gating steps, VRAM
-fallbacks, ReTake section-repair guide, and cost estimates.
+fallbacks, SeedVR2 color correction guide, ReTake section-repair guide,
+and cost estimates.
 
 ## Creating Custom Workflows
 

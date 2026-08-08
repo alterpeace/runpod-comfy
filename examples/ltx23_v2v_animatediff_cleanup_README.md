@@ -4,6 +4,10 @@ Re-detail and clean up ~15-second AnimateDiff renders (24fps, 1080p source):
 remove undescribable detail, fix blur, smooth jittery motion. Every post-LTX
 stage is **bypassable** so you can test at any output resolution.
 
+Uses **SeedVR2** (ByteDance) for diffusion-based video super-resolution with
+built-in color correction and temporal coherence — replaces the need for
+separate DiffVSR + Lanczos stages.
+
 ## Files
 
 | File | Format | GPU | Use Case |
@@ -23,9 +27,8 @@ graph LR
     C --> D["Pass 1: 8 steps<br/>euler, linear_quadratic"]
     D --> E{"Stage B: Pass 2<br/>x2 latent upscale"}
     E --> F["Tiled VAE Decode"]
-    F --> G{"Stage C: DiffVSR 4x"}
-    G --> H{"Stage D: Lanczos 1080p"}
-    H --> I["Output MP4 @ 24fps"]
+    F --> G{"Stage C: SeedVR2<br/>target resolution + color correction"}
+    G --> H["Output MP4 @ 24fps"]
 ```
 
 ### What Each Piece Fixes
@@ -33,10 +36,11 @@ graph LR
 | Problem | Solution |
 |---|---|
 | Undescribable detail / artifacts | IC-LoRA deblur + decompression + negative prompt |
-| Blur | IC-LoRA deblur (trained to sharpen out-of-focus video) + DiffVSR detail reconstruction |
-| Jittery / flickering motion | LTX-2.3 native temporal DiT (22B model, not bolt-on motion module) |
+| Blur | IC-LoRA deblur (trained to sharpen out-of-focus video) + SeedVR2 detail reconstruction |
+| Jittery / flickering motion | LTX-2.3 native temporal DiT (22B model) + SeedVR2 temporal_overlap blending |
 | Compression artifacts | IC-LoRA decompression (24GB only) |
-| Low resolution | DiffVSR 4x super-resolution with temporal coherence |
+| Low resolution | SeedVR2 diffusion-based super-resolution to target resolution |
+| Color drift | SeedVR2 built-in `lab` color correction (perceptual matching to source) |
 | Specific frame range still bad | ReTake workflow (LTXVAudioVideoMask section repair) |
 
 ## Prerequisites
@@ -81,16 +85,19 @@ Installed by [`scripts/add-dependancies.sh`](../scripts/add-dependancies.sh):
 - **ComfyUI-GGUF** — `UnetLoaderGGUF` (8GB workflow only)
 - **ComfyUI-KJNodes** — `LTXVAudioVideoMask` (ReTake workflow),
   `LTX2_NAG`, `LTXVEnhanceAVideoKJ` (optional enhancement nodes)
-- **ComfyUI-FL-DiffVSR** — `FL_DiffVSR_LoadModel`, `FL_DiffVSR_Upscale`
+- **ComfyUI-SeedVR2_VideoUpscaler** — `SeedVR2LoadDiTModel`,
+  `SeedVR2LoadVAEModel`, `SeedVR2TorchCompileSettings` (optional),
+  `SeedVR2VideoUpscaler`
 - **VHS (VideoHelperSuite)** — `VHS_LoadVideo`, `VHS_VideoCombine`
 
-### DiffVSR Model
+### SeedVR2 Models
 
-The Stream-DiffVSR model (~2GB) auto-downloads from
-`Jamichsu/Stream-DiffVSR` on HuggingFace to `models/stream_diffvsr/` on first
-use. It's a multi-component model (unet, controlnet, vae, text_encoder,
-tokenizer, scheduler) — not a single safetensors file, so it's not in the
-model manifest.
+SeedVR2 models auto-download on first use to `models/seedvr2/`:
+
+| Model | File | Size | Used By |
+|---|---|---|---|
+| DiT (3B fp8) | `seedvr2_ema_3b_fp8_e4m3fn.safetensors` | ~6GB | Both workflows |
+| VAE (fp16) | `ema_vae_fp16.safetensors` | ~500MB | Both workflows |
 
 **For RunPod serverless**: pre-download to a network volume to avoid
 cold-start delay:
@@ -98,30 +105,18 @@ cold-start delay:
 ```bash
 # On a pod with the image running:
 cd /comfyui/models
-python -c "
-from huggingface_hub import snapshot_download
-snapshot_download(
-    repo_id='Jamichsu/Stream-DiffVSR',
-    local_dir='stream_diffvsr',
-    ignore_patterns=['*.md', '*.txt', '.git*', '*.py', '*.yml', '*.yaml']
-)
-"
-# Then sync to S3/B2 network volume
+mkdir -p seedvr2
+# SeedVR2 auto-downloads on first use — run a quick test upscale
+# to trigger the download, then sync the models/seedvr2/ folder to S3/B2
 ```
-
-### xformers
-
-DiffVSR defaults to `enable_xformers: false` in these workflows because
-xformers availability varies by image build. If your image has xformers
-installed (check `pip show xformers`), set it to `true` in the
-`FL_DiffVSR_LoadModel` node for better memory efficiency.
 
 ## 8GB Workflow (RTX 2070 SUPER, Local)
 
 ### Architecture
 
 Single-pass V2V with GGUF Q4 quantized checkpoint. No latent upscale pass
-(too VRAM-intensive). DiffVSR 4x provides the resolution boost.
+(too VRAM-intensive). SeedVR2 3B fp8 with BlockSwap provides the resolution
+boost to 1080p.
 
 ### IC-LoRA Stack
 
@@ -138,29 +133,40 @@ Single-pass V2V with GGUF Q4 quantized checkpoint. No latent upscale pass
 - Tiled VAE encode: `tile_size=256, tile_overlap=64`
 - Tiled VAE decode: 2×2 tiles, overlap=2
 - Text encoder: CPU offload (`device: cpu`)
-- DiffVSR: fp16, `chunk_size=4`, `inference_steps=4`, `guidance=0.0`
+- SeedVR2: 3B fp8, BlockSwap=16, CPU offload, tiled VAE (512px tiles)
+
+### SeedVR2 Settings (8GB)
+
+| Parameter | Value | Why |
+|---|---|---|
+| `model` | `seedvr2_ema_3b_fp8_e4m3fn.safetensors` | 3B fp8 — fits 8GB with BlockSwap |
+| `blocks_to_swap` | 16 | Offload 16 transformer blocks to CPU |
+| `offload_device` | `cpu` | CPU offload for BlockSwap |
+| `encode_tiled` | `true` | Tiled encoding (512px) to reduce VRAM |
+| `decode_tiled` | `true` | Tiled decoding (512px) to reduce VRAM |
+| `batch_size` | 5 | 4n+1 pattern, low VRAM |
+| `temporal_overlap` | 2 | Blend 2 frames between batches |
+| `color_correction` | `lab` | Perceptual color matching |
+| `resolution` | 1080 | Target shortest edge → 1920×1080 |
 
 ### Output Modes
 
-| Mode | DiffVSR (Stage C) | Lanczos 1080p (Stage D) | Output |
-|---|---|---|---|
-| Preview | OFF | OFF | 512×288 @ 24fps |
-| ~2K | ON | OFF | 2048×1152 @ 24fps |
-| 1080p | ON | ON | 1920×1080 @ 24fps |
+| Mode | SeedVR2 (Stage C) | Output |
+|---|---|---|
+| Preview | OFF | 512×288 @ 24fps |
+| 1080p | ON | 1920×1080 @ 24fps |
 
 ### Brave Variant
 
-Base res 640×352 → DiffVSR → 2560×1408. May OOM on 8GB. If it does:
-- Reduce `chunk_size` to 2
-- Reduce `frame_load_cap` to 241 (10s)
-- Use `COMFYUI_ARGS=--lowvram`
+Set `resolution=2160` for 4K output (may be slow on 8GB). Or increase
+`batch_size` to 9 for better temporal coherence (needs more VRAM).
 
 ## 24GB Workflow (RTX 4090, RunPod)
 
 ### Architecture
 
 Two-pass V2V with fp8 checkpoint + full IC-LoRA stack + latent upscale +
-optional DiffVSR 4x detailing.
+SeedVR2 super-resolution to 4K with color correction.
 
 ### IC-LoRA Stack
 
@@ -178,25 +184,41 @@ optional DiffVSR 4x detailing.
 - Pass 1: 8 steps, `linear_quadratic`, `euler`, `cfg=1.0`, `denoise=1.0`
 - Pass 2: 3 steps, `ManualSigmas` `0.85, 0.725, 0.4219, 0.0`, `euler`
 - Tiled VAE decode: 1×1 tiles (default), 2×2 for brave variant
-- DiffVSR: fp16, `chunk_size=8`, `inference_steps=4`, `guidance=0.0`
+- SeedVR2: 3B fp8, no BlockSwap, model cached, no tiling
+
+### SeedVR2 Settings (24GB)
+
+| Parameter | Value | Why |
+|---|---|---|
+| `model` | `seedvr2_ema_3b_fp8_e4m3fn.safetensors` | 3B fp8 — fits 24GB without BlockSwap |
+| `blocks_to_swap` | 0 | No offloading needed |
+| `offload_device` | `none` | Keep model on GPU |
+| `encode_tiled` | `false` | No tiling needed on 24GB |
+| `decode_tiled` | `false` | No tiling needed on 24GB |
+| `cache_model` | `true` | Keep loaded between runs |
+| `batch_size` | 9 | 4n+1 pattern, better temporal coherence |
+| `temporal_overlap` | 4 | Blend 4 frames between batches |
+| `color_correction` | `lab` | Perceptual color matching — fixes drift |
+| `resolution` | 2160 | Target shortest edge → ~4K from 768×432 |
 
 ### Output Modes
 
-| Mode | Base Res | Pass 2 (Stage B) | DiffVSR (Stage C) | Lanczos (Stage D) | Output |
+| Mode | Base Res | Pass 2 (Stage B) | SeedVR2 (Stage C) | SeedVR2 resolution | Output |
 |---|---|---|---|---|---|
-| Preview | 768×432 | OFF | OFF | OFF | 768×432 @ 24fps |
-| Default | 768×432 | ON | OFF | OFF | 1536×864 @ 24fps |
-| 3K | 768×432 | OFF | ON | OFF | 3072×1728 @ 24fps |
-| 1080p exact | 960×544 | ON | OFF | OFF | 1920×1088 @ 24fps |
-| 4K | 960×544 | OFF | ON | ON | 3840×2176 @ 24fps |
+| Preview | 768×432 | OFF | OFF | — | 768×432 @ 24fps |
+| Default | 768×432 | ON | OFF | — | 1536×864 @ 24fps |
+| 1080p | 768×432 | ON | ON | 1080 | 1920×1080 @ 24fps |
+| 4K | 768×432 | OFF | ON | 2160 | 3072×1728 @ 24fps |
 
-> **Never run Pass 2 + DiffVSR together at 960×544 base** — that produces
-> 7680×4352, which is pointless and will OOM.
+> For 1080p: set SeedVR2 `resolution=1080`. For 4K: set `resolution=2160`.
+> The `resolution` parameter sets the target shortest edge — SeedVR2
+> maintains aspect ratio automatically.
 
 ### Brave Variant: True 1080p Base
 
 Change `ImageScale` node to 960×544:
-- Pass 2 → 1920×1088 (exact 1080p, no DiffVSR needed)
+- Pass 2 → 1920×1088 (exact 1080p)
+- SeedVR2 `resolution=1080` to clean up at native resolution
 - Risk: OOM at 361 frames. Mitigations:
   - Set `use_tiled_encode=true` on `LTXAddVideoICLoRAGuide`
   - Set `LTXVTiledVAEDecode` to 2×2 tiles
@@ -210,8 +232,7 @@ Change `ImageScale` node to 960×544:
 Load the `_ui.json` file. Stages are grouped with colored bounding boxes:
 
 - **Stage B** (24GB only): Pass 2 Latent Upscale — green group
-- **Stage C**: DiffVSR 4x Upscale — green group
-- **Stage D**: Lanczos 1080p — green group
+- **Stage C**: SeedVR2 Upscale — green group
 
 Right-click any node in a stage → **Bypass** (or select all nodes in the
 group with Ctrl+A inside the bounding box, then right-click → Bypass).
@@ -222,24 +243,18 @@ ComfyUI auto-reroutes the signal through the bypassed node unchanged.
 API format has no bypass flag. Toggle stages by rewiring the `images` input
 on `VHS_VideoCombine` (node `"21"`):
 
-**8GB — Preview mode (bypass DiffVSR + Lanczos):**
+**8GB — Preview mode (bypass SeedVR2):**
 ```python
 # Point VideoCombine directly at VAE decode output
 workflow["21"]["inputs"]["images"] = ["20", 0]  # was ["32", 0]
 ```
 
-**8GB — ~2K mode (DiffVSR on, Lanczos off):**
-```python
-# Point VideoCombine at DiffVSR output (skip Lanczos)
-workflow["21"]["inputs"]["images"] = ["31", 0]  # was ["32", 0]
-```
-
-**8GB — 1080p mode (default, all stages on):**
+**8GB — 1080p mode (default, SeedVR2 on):**
 ```python
 # No changes needed — workflow ships in this mode
 ```
 
-**24GB — Preview mode (bypass Pass 2 + DiffVSR + Lanczos):**
+**24GB — Preview mode (bypass Pass 2 + SeedVR2):**
 ```python
 # Point VideoCombine at Pass 1 VAE decode
 workflow["21"]["inputs"]["images"] = ["20", 0]  # was ["32", 0]
@@ -247,26 +262,39 @@ workflow["21"]["inputs"]["images"] = ["20", 0]  # was ["32", 0]
 workflow["20"]["inputs"]["latents"] = ["15", 0]  # was ["19", 0]
 ```
 
-**24GB — Default mode (Pass 2 on, DiffVSR + Lanczos off):**
+**24GB — Default mode (Pass 2 on, SeedVR2 off):**
 ```python
 # Point VideoCombine at Pass 2 VAE decode
 workflow["21"]["inputs"]["images"] = ["20", 0]  # was ["32", 0]
 ```
 
-**24GB — 3K mode (Pass 2 off, DiffVSR on, Lanczos off):**
+**24GB — 4K mode (Pass 2 off, SeedVR2 on):**
 ```python
 # Rewire VAE decode to Pass 1 output (skip Pass 2)
 workflow["20"]["inputs"]["latents"] = ["15", 0]  # was ["19", 0]
-# Point VideoCombine at DiffVSR output (skip Lanczos)
-workflow["21"]["inputs"]["images"] = ["31", 0]  # was ["32", 0]
+# SeedVR2 stays on (default wiring), set resolution to 2160
+workflow["32"]["inputs"]["resolution"] = 2160
 ```
 
-**24GB — 4K mode (Pass 2 off, DiffVSR + Lanczos on):**
+**24GB — 1080p mode (Pass 2 + SeedVR2 on):**
 ```python
-# Rewire VAE decode to Pass 1 output (skip Pass 2)
-workflow["20"]["inputs"]["latents"] = ["15", 0]  # was ["19", 0]
-# DiffVSR + Lanczos stay on (default wiring)
+# Pass 2 + SeedVR2 both on (default wiring)
+workflow["32"]["inputs"]["resolution"] = 1080  # was 2160
 ```
+
+## SeedVR2 Color Correction Modes
+
+SeedVR2's built-in color correction fixes color shifts introduced by the
+upscaling process. Available modes:
+
+| Mode | Description | Best For |
+|---|---|---|
+| `lab` | Perceptual color matching with detail preservation | **Default** — most cases |
+| `wavelet` | Frequency-based natural colors, preserves fine details | Detailed textures |
+| `wavelet_adaptive` | Wavelet base with targeted saturation correction | Oversaturated output |
+| `hsv` | Hue-conditional saturation matching | Hue-shifted output |
+| `adain` | Statistical style transfer approach | Dramatic restyling |
+| `none` | No color correction | When source is already correct |
 
 ## ReTake: Section Repair
 
@@ -333,8 +361,9 @@ cumulative drift becomes visible.
 2. Update the `VHS_LoadVideo` node with your input video path
 3. Adjust prompts in the `CLIPTextEncode` nodes
 4. Adjust IC-LoRA strengths in the `LTXICLoRALoaderModelOnly` nodes
-5. Bypass stages as needed for your target output resolution
-6. Queue prompt
+5. Adjust SeedVR2 `resolution` parameter for target output size
+6. Bypass stages as needed for your target output resolution
+7. Queue prompt
 
 ### Via RunPod Serverless Handler
 
@@ -351,7 +380,10 @@ workflow["9"]["inputs"]["video"] = "my_animatediff_clip.mp4"
 workflow["7"]["inputs"]["text"] = "cinematic, sharp focus, smooth motion, detailed, high quality"
 workflow["8"]["inputs"]["text"] = "blurry, artifacts, noise, flickering, jittery motion, distorted, low quality"
 
-# For preview mode (bypass DiffVSR + Lanczos):
+# Set SeedVR2 target resolution (1080 for 1080p, 2160 for 4K)
+workflow["32"]["inputs"]["resolution"] = 1080
+
+# For preview mode (bypass SeedVR2):
 workflow["21"]["inputs"]["images"] = ["20", 0]
 
 job_input = {'workflow': workflow}
@@ -371,65 +403,70 @@ IMAGE_NAME=comfyui-serverless:local ./scripts/test_local.sh \
 
 ## VRAM
 
-| GPU | VRAM | Workflow | Notes |
-|---|---|---|---|
-| RTX 2070 SUPER | 8GB | `_8gb` | GGUF Q4, CPU text encoder, 2×2 VAE tiles, DiffVSR chunk_size=4 |
-| RTX 4090 / 3090 | 24GB | `_24gb` | fp8, full LoRA stack, 1×1 VAE tiles, DiffVSR chunk_size=8 |
-| RTX 5090 | 32GB | `_24gb` | Comfortable — can use 960×544 base + brave 1080p variant |
+| GPU | VRAM | Workflow | SeedVR2 Config | Notes |
+|---|---|---|---|---|
+| RTX 2070 SUPER | 8GB | `_8gb` | 3B fp8, BlockSwap=16, tiled VAE | CPU offload, batch_size=5 |
+| RTX 4090 / 3090 | 24GB | `_24gb` | 3B fp8, no BlockSwap, no tiling | Model cached, batch_size=9 |
+| RTX 5090 | 32GB | `_24gb` | 3B fp8, no BlockSwap | Can use 7B model if available |
 
 ### OOM Troubleshooting
 
 **8GB:**
-- Reduce `chunk_size` on DiffVSR to 2
+- Increase `blocks_to_swap` on SeedVR2 DiT loader (up to 32 for 3B model)
+- Reduce `batch_size` to 1 (minimum, no temporal coherence)
+- Enable `encode_tiled` and `decode_tiled` on SeedVR2 VAE loader
+- Reduce `encode_tile_size` / `decode_tile_size` to 256
 - Reduce `frame_load_cap` to 241 (10s)
 - Use `COMFYUI_ARGS=--lowvram`
-- Bypass DiffVSR entirely (preview mode)
+- Bypass SeedVR2 entirely (preview mode)
 
 **24GB:**
 - Bypass Pass 2 (use preview mode)
 - Set `use_tiled_encode=true` on `LTXAddVideoICLoRAGuide`
 - Set `LTXVTiledVAEDecode` to 2×2 tiles
+- Enable SeedVR2 VAE tiling (`encode_tiled=true`, `decode_tiled=true`)
 - Reduce `frame_load_cap` to 241 (10s)
 - Use `COMFYUI_ARGS=--lowvram`
 - Drop `iclora_decompression` (keep `iclora_deblur` + `omninft_rl_lora`)
 
 ## Cost Estimate (RunPod, 24GB)
 
-For a 15-second clip at default settings (Pass 2 on, DiffVSR on):
+For a 15-second clip at 4K settings (Pass 2 on, SeedVR2 resolution=2160):
 
 | Step | GPU | Time | Cost |
 |---|---|---|---|
 | Pass 1 (8 steps, 768×432, 361f) | RTX 4090 | ~3 min | $0.01 |
 | Pass 2 (3 steps, 1536×864, 361f) | RTX 4090 | ~2 min | $0.01 |
-| DiffVSR 4x (1536×864 → 6144×3456, 361f, chunk=8) | RTX 4090 | ~15 min | $0.07 |
-| Lanczos 1080p | RTX 4090 | <1 min | <$0.01 |
-| **Total per clip** | **RTX 4090** | **~21 min** | **~$0.10** |
+| SeedVR2 3B (1536×864 → 3072×1728, 361f, batch=9) | RTX 4090 | ~8 min | $0.04 |
+| **Total per clip** | **RTX 4090** | **~13 min** | **~$0.06** |
 
 Preview mode (Pass 1 only): ~3 min, ~$0.01 per clip.
+1080p mode (Pass 2 + SeedVR2 resolution=1080): ~10 min, ~$0.05 per clip.
 
 ## Troubleshooting
 
-### DiffVSR model download fails
+### SeedVR2 model download fails
 
-The Stream-DiffVSR model downloads from `Jamichsu/Stream-DiffVSR` on
-HuggingFace. If the download fails:
+SeedVR2 models auto-download on first use. If the download fails:
 
 1. Check internet connectivity
-2. Ensure `huggingface_hub` is installed (`pip install huggingface_hub`)
-3. Manually download:
+2. Manually download to `models/seedvr2/`:
    ```bash
    cd /comfyui/models
-   git clone https://huggingface.co/Jamichsu/Stream-DiffVSR stream_diffvsr
+   mkdir -p seedvr2
+   # Download from HuggingFace (check SeedVR2 repo for exact URLs)
+   huggingface-cli download numz/seedvr2 --local-dir seedvr2
    ```
-4. For RunPod: pre-download to network volume (see Prerequisites above)
+3. For RunPod: pre-download to network volume
 
 ### Color drift on Pass 2
 
 The 2× upscaled latent runs outside the model's trained spatial-token-count
-range. Options:
-- Accept minor drift (usually subtle for abstract content)
+range. SeedVR2's `lab` color correction should handle this automatically.
+If drift persists:
+- Try `wavelet_adaptive` color correction mode
 - Use 768×432 base (default) instead of 960×544
-- Bypass Pass 2 and rely on DiffVSR for resolution boost
+- Bypass Pass 2 and rely on SeedVR2 for resolution boost
 
 ### Edges not landing (model ignoring prompt)
 
@@ -437,8 +474,19 @@ Raise CFG from 1.0 to 3-6. This requires dropping `distilled_lora` and
 increasing steps from 8 to 20-30. See
 [`docs/LTX_2.3_WORKFLOW_ENHANCEMENTS.md`](../docs/LTX_2.3_WORKFLOW_ENHANCEMENTS.md:217).
 
-### DiffVSR too slow
+### SeedVR2 too slow
 
-- Reduce `inference_steps` from 4 to 2 (lower quality, faster)
-- Reduce `chunk_size` (less VRAM but more chunks = slower)
-- Bypass DiffVSR and use Lanczos-only scaling (fastest, no AI detail)
+- Reduce `batch_size` (fewer frames per batch = less compute but more batches)
+- Reduce `resolution` (1080 instead of 2160)
+- Add `SeedVR2TorchCompileSettings` node with `mode=max-autotune` for 20-40%
+  speedup (requires PyTorch 2.0+ and Triton)
+- Use `attention_mode: flash_attn_2` if flash-attn is installed
+- Bypass SeedVR2 and use LTX output directly (preview mode)
+
+### SeedVR2 OOM
+
+- Increase `blocks_to_swap` (offloads more transformer blocks to CPU)
+- Enable VAE tiling (`encode_tiled=true`, `decode_tiled=true`)
+- Reduce tile sizes to 256
+- Reduce `batch_size` to 1
+- Reduce `frame_load_cap` (shorter video)

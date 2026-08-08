@@ -208,34 +208,47 @@
   },
   "30": {
     "inputs": {
-      "precision": "fp16",
-      "device": "auto",
-      "enable_xformers": false
+      "model": "seedvr2_ema_3b_fp8_e4m3fn.safetensors",
+      "device": "cuda",
+      "blocks_to_swap": 0,
+      "swap_io_components": false,
+      "offload_device": "none",
+      "cache_model": true,
+      "attention_mode": "sdpa"
     },
-    "class_type": "FL_DiffVSR_LoadModel"
+    "class_type": "SeedVR2LoadDiTModel"
   },
   "31": {
     "inputs": {
-      "model": ["30", 0],
-      "images": ["20", 0],
-      "inference_steps": 4,
-      "guidance_scale": 0.0,
-      "chunk_size": 8,
-      "prompt": "",
-      "negative_prompt": "",
-      "seed": -1
+      "model": "ema_vae_fp16.safetensors",
+      "device": "cuda",
+      "encode_tiled": false,
+      "encode_tile_size": 1024,
+      "encode_tile_overlap": 128,
+      "decode_tiled": false,
+      "decode_tile_size": 1024,
+      "decode_tile_overlap": 128,
+      "tile_debug": "false",
+      "offload_device": "none"
     },
-    "class_type": "FL_DiffVSR_Upscale"
+    "class_type": "SeedVR2LoadVAEModel"
   },
   "32": {
     "inputs": {
-      "image": ["31", 0],
-      "width": 1920,
-      "height": 1080,
-      "upscale_method": "lanczos",
-      "crop": "disabled"
+      "image": ["20", 0],
+      "dit": ["30", 0],
+      "vae": ["31", 0],
+      "seed": 42,
+      "resolution": 2160,
+      "max_resolution": 0,
+      "batch_size": 9,
+      "uniform_batch_size": true,
+      "temporal_overlap": 4,
+      "prepend_frames": 0,
+      "color_correction": "lab",
+      "input_noise_scale": 0.0
     },
-    "class_type": "ImageScale"
+    "class_type": "SeedVR2VideoUpscaler"
   },
   "21": {
     "inputs": {
