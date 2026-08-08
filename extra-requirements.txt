@@ -64,6 +64,10 @@ manifold3d==3.0.1
 mapbox_earcut==1.0.3
 mediapipe==0.10.21
 midi2audio==0.1.1
+# opentelemetry-sdk >=1.28.0 required for pydantic_ai (used by FL-MCP backend).
+# The _events module was added in 1.28.0; older versions cause:
+#   ModuleNotFoundError: No module named 'opentelemetry._events'
+opentelemetry-sdk>=1.28.0
 mido==1.3.3
 modelscope==1.23.1
 moderngl==5.12.0
