@@ -106,6 +106,50 @@ IMAGE_NAME=comfyui-serverless:local ./scripts/test_local.sh \
 See [`ltx23_v2v_music_visuals_patch_README.md`](ltx23_v2v_music_visuals_patch_README.md)
 for full parameter guide, LoRA swap table, and troubleshooting.
 
+### ltx23_v2v_animatediff_cleanup_{8gb,24gb}.json / _ui.json
+
+V2V cleanup workflows for re-detailing ~15-second AnimateDiff renders
+(24fps, 1080p source): remove undescribable detail, fix blur, smooth
+jittery motion. Every post-LTX stage is **bypassable** for testing at
+any output resolution.
+
+**Features:**
+- IC-LoRA stack: `iclora_deblur` (blur fix) + `iclora_decompression`
+  (24GB only, artifact removal) + `omninft_rl_lora` (quality boost)
+- Two-pass pipeline (24GB): 768×432 → 1536×864 via `LTXVLatentUpsampler`
+- Single-pass (8GB): 512×288 GGUF Q4, CPU text encoder offload
+- FL-DiffVSR (Stream-DiffVSR) 4x super-resolution with temporal coherence
+- Bypassable stages: DiffVSR 4x, Lanczos 1080p, Pass 2 latent upscale
+- Output modes: preview / default / 3K / 1080p / 4K (24GB) — all @ 24fps
+- API format for RunPod serverless, UI format for ComfyUI web interface
+
+**Also includes:**
+- [`ltx23_v2v_animatediff_retake_24gb.json`](ltx23_v2v_animatediff_retake_24gb.json) —
+  Section-repair workflow using KJNodes' `LTXVAudioVideoMask` to regenerate
+  specific frame ranges while leaving the rest untouched
+
+**Usage:**
+```bash
+# Download required models (8GB)
+python scripts/download_ltx23_models.py --ids \
+  gguf_distilled_q4 text_encoder video_vae \
+  iclora_deblur omninft_rl_lora
+
+# Download required models (24GB)
+python scripts/download_ltx23_models.py --ids \
+  checkpoint_fp8 distilled_lora \
+  iclora_deblur iclora_decompression omninft_rl_lora \
+  spatial_upscaler
+
+# Test locally
+IMAGE_NAME=comfyui-serverless:local ./scripts/test_local.sh \
+  examples/ltx23_v2v_animatediff_cleanup_8gb.json
+```
+
+See [`ltx23_v2v_animatediff_cleanup_README.md`](ltx23_v2v_animatediff_cleanup_README.md)
+for full mode tables, stage-toggle JSON patches, HF gating steps, VRAM
+fallbacks, ReTake section-repair guide, and cost estimates.
+
 ## Creating Custom Workflows
 
 1. Design your workflow in ComfyUI WebUI

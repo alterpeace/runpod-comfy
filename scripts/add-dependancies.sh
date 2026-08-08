@@ -33,7 +33,9 @@ for repo in \
     "https://github.com/city96/ComfyUI-GGUF.git" \
     "https://github.com/alisson-anjos/ComfyUI-BFSNodes.git" \
     "https://github.com/Rogala/ComfyUI-rogala.git" \
-    "https://github.com/kijai/ComfyUI-MemoryVisualization.git"; do
+    "https://github.com/kijai/ComfyUI-MemoryVisualization.git" \
+    "https://github.com/kijai/ComfyUI-KJNodes.git" \
+    "https://github.com/filliptm/ComfyUI-FL-DiffVSR.git"; do
   name="$(basename "$repo" .git)"
   target="${ROOT_DIR}/custom_nodes/${name}"
   if [ -d "$target/.git" ]; then
