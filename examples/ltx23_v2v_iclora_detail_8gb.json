@@ -7,10 +7,11 @@
   },
   "2": {
     "inputs": {
-      "clip_name": "gemma_3_12B_it_fp4_mixed.safetensors",
-      "type": "ltxv"
+      "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
+      "ckpt_name": "ltx-video-2b-v0.9.safetensors",
+      "device": "default"
     },
-    "class_type": "CLIPLoader"
+    "class_type": "LTXAVTextEncoderLoader"
   },
   "3": {
     "inputs": {
@@ -40,6 +41,14 @@
     },
     "class_type": "CLIPTextEncode"
   },
+  "7c": {
+    "inputs": {
+      "positive": ["7", 0],
+      "negative": ["8", 0],
+      "frame_rate": 24
+    },
+    "class_type": "LTXVConditioning"
+  },
   "9": {
     "inputs": {
       "video": "a_black_video.mp4",
@@ -64,8 +73,8 @@
   },
   "11": {
     "inputs": {
-      "positive": ["7", 0],
-      "negative": ["8", 0],
+      "positive": ["7c", 0],
+      "negative": ["7c", 1],
       "vae": ["3", 0],
       "latent": ["12", 0],
       "image": ["10", 0],

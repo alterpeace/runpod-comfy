@@ -7,10 +7,11 @@
   },
   "2": {
     "inputs": {
-      "clip_name": "gemma_3_12B_it_fp4_mixed.safetensors",
-      "type": "ltxv"
+      "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
+      "ckpt_name": "ltx-video-2b-v0.9.safetensors",
+      "device": "default"
     },
-    "class_type": "CLIPLoader"
+    "class_type": "LTXAVTextEncoderLoader"
   },
   "3": {
     "inputs": {
