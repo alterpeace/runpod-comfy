@@ -266,6 +266,11 @@ torchaudio==2.10.0+${TORCH_FLAVOR}\n" > /comfyui/venv/constraints/torch_lock.txt
 # Create userscripts directory
 RUN mkdir -p /userscripts_dir && chmod 755 /userscripts_dir
 
+# Ensure /comfyui/user is writable by the comfy user (UID 1024).
+# ComfyUI creates comfyui.db here; without write permission it fails with
+# [Errno 13] Permission denied: '/comfyui/user/comfyui.db.bkp'
+RUN mkdir -p /comfyui/user && chown -R 1024:1024 /comfyui/user
+
 # Store build config for runtime inspection
 RUN printf "TORCH_VERSION=${TORCH_VERSION}\n\
 TORCH_FLAVOR=${TORCH_FLAVOR}\n\
@@ -339,7 +344,8 @@ RUN . /comfyui/venv/bin/activate && \
 
 # Install additional dependencies for custom nodes
 RUN . /comfyui/venv/bin/activate && \
-    uv pip install rotary-embedding-torch evalidate fal-client google-genai
+    uv pip install rotary-embedding-torch evalidate fal-client google-genai && \
+    uv pip install "taehv @ git+https://github.com/deinferno/taehv.git"
 
 # Install WAS Node Suite dependencies
 # numba>=0.63.1 required for NumPy 2.4 compatibility
