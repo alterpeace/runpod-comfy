@@ -42,7 +42,9 @@ ComfyUI args for your card — e.g. for an 8GB card:
 ```env
 MODE=local
 COMFYUI_PORT=8188
-COMFYUI_ARGS=--lowvram --disable-smart-memory
+# NOTE: --disable-smart-memory crashes with fp4 quantized text encoders
+# (gemma_3_12B_it_fp4_mixed). Use --lowvram alone — smart memory is required.
+COMFYUI_ARGS=--lowvram
 ```
 
 ### Build with the correct arch

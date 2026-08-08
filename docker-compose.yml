@@ -40,8 +40,11 @@ services:
       - MODE=local
       - COMFYUI_PORT=8188
       # 7.8GB VRAM - AnimateDiff + IPAdapter together won't fit
-      # --novram keeps a in workflow, or use these conservative settings:
-      - COMFYUI_ARGS=${COMFYUI_ARGS:---lowvram --disable-smart-memory}
+      # --lowvram without --disable-smart-memory: smart memory management is
+      # REQUIRED for fp4 quantized text encoders (gemma_3_12B_it_fp4_mixed).
+      # --disable-smart-memory forces partially_load which crashes on quantized
+      # Linear layers that don't expose .weight (AttributeError).
+      - COMFYUI_ARGS=${COMFYUI_ARGS:---lowvram}
       - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:256
       - CUDA_LAUNCH_BLOCKING=1
       - PYTHONWARNINGS=ignore::UserWarning,ignore::FutureWarning,ignore::SyntaxWarning,ignore::DeprecationWarning

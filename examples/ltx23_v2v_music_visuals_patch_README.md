@@ -213,7 +213,7 @@ For a 5-minute music video (~40% of clips need patching):
 
 - Disable audio (bypass `LTXVAudioVAELoader` and downstream audio nodes)
 - Reduce to one IC-LoRA (drop `omninft_rl_lora`, keep `distilled_lora` + one fix LoRA)
-- Use `COMFYUI_ARGS=--lowvram --disable-smart-memory`
+- Use `COMFYUI_ARGS=--lowvram` (do NOT use `--disable-smart-memory` with fp4 text encoders)
 - Reduce frame count (e.g., 257 frames instead of 385)
 - Switch to GGUF Q4 quantized checkpoint (`gguf_distilled_q4`)
 

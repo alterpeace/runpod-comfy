@@ -48,8 +48,11 @@ descriptions.
 
 - **8GB and under**: use `gguf_distilled_q4` (`ltx-2.3-22b-distilled-1.1-Q4_K_M.gguf`)
   with the GGUF Unet Loader node, low resolution (e.g. 512x512), short clips
-  (~2-3s), and `COMFYUI_ARGS=--lowvram --disable-smart-memory`. Expect to trade
+  (~2-3s), and `COMFYUI_ARGS=--lowvram`. Expect to trade
   quality for headroom — this is genuinely tight for a 22B model.
+  NOTE: Do NOT use `--disable-smart-memory` with fp4 quantized text encoders
+  (gemma_3_12B_it_fp4_mixed) — it crashes with AttributeError on quantized
+  Linear layers that don't expose `.weight`.
 - **12GB**: `gguf_dev_q4` or `gguf_distilled_q4` GGUF quants are the
   realistic path. fp8 checkpoints (~24GB VRAM target) will likely OOM without
   aggressive offloading.
@@ -160,8 +163,10 @@ process itself, only the optional handler/entrypoint mode switching
 For low-VRAM cards, stack these:
 - Use a GGUF-quantized checkpoint (`gguf_distilled_q4` at minimum) via
   ComfyUI-GGUF.
-- Set `COMFYUI_ARGS=--lowvram --disable-smart-memory` (already the
-  docker-compose.yml default).
+- Set `COMFYUI_ARGS=--lowvram` (already the docker-compose.yml default).
+  Do NOT add `--disable-smart-memory` — it crashes with fp4 quantized text
+  encoders (gemma_3_12B_it_fp4_mixed) due to AttributeError on quantized
+  Linear layers that don't expose `.weight`.
 - ComfyUI's built-in **Dynamic VRAM** system (`comfy-aimdo`, bundled since
   ComfyUI ~v0.24) automatically offloads model weights between VRAM/RAM
   under pressure — it's on by default on Nvidia + Linux/Windows and generally
