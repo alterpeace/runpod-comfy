@@ -18,7 +18,12 @@
 				"FL_MCP_ENABLE_COMFY_PROCESS_CONTROL": "true"
 			},
 			"disabled": false,
-			"alwaysAllow": []
+			"alwaysAllow": [
+				"comfy_status",
+				"comfy_read_file",
+				"comfy_search_resources",
+				"custom_nodes_search"
+			]
 		}
 	}
 }

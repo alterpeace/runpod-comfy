@@ -8,7 +8,7 @@
   "2": {
     "inputs": {
       "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
-      "ckpt_name": "ltx-video-2b-v0.9.safetensors",
+      "ckpt_name": "ltx-2.3-22b-dev.safetensors",
       "device": "default"
     },
     "class_type": "LTXAVTextEncoderLoader"
