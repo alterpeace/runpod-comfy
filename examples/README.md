@@ -106,6 +106,46 @@ IMAGE_NAME=comfyui-serverless:local ./scripts/test_local.sh \
 See [`ltx23_v2v_music_visuals_patch_README.md`](ltx23_v2v_music_visuals_patch_README.md)
 for full parameter guide, LoRA swap table, and troubleshooting.
 
+### ltx23_v2v_iclora_detail_{8gb,24gb}.json
+
+Two V2V IC-LoRA detailer workflows for re-detailing and upscaling video using
+LTX-2.3 IC-LoRA conditioning. The 24GB variant adds a spatial latent upscale
+pass for higher resolution output.
+
+**Features:**
+- IC-LoRA stack: `distilled_lora` (speed, 24GB only) +
+  `iclora_decompression` (artifact removal, 24GB only) +
+  `omninft_rl_lora` (quality boost, strength 2.0)
+- Two-pass pipeline (24GB): 768×432 → 1536×864 via `LTXVLatentUpsampler` ×2
+  with `ManualSigmas` `0.85, 0.725, 0.4219, 0.0` (official Lightricks Pass 2)
+- Single-pass (8GB): 512×288 GGUF Q4, CPU text encoder offload, 2×2 tiled VAE
+- `euler` sampler with `linear_quadratic` scheduler, 8 steps, cfg 1.0
+- Tiled VAE decode to manage VRAM (1×1 on 24GB, 2×2 on 8GB)
+- API format for RunPod serverless / programmatic use
+
+| Workflow | GPU | Loader | Base res | Frames | Pass 2 | Output |
+|---|---|---|---|---|---|---|
+| `ltx23_v2v_iclora_detail_8gb.json` | 8GB local | `UnetLoaderGGUF` Q4 | 512×288 | 97 (~4s) | No | 512×288 |
+| `ltx23_v2v_iclora_detail_upscale_24gb.json` | 24GB cloud | `CheckpointLoaderSimple` | 768×432 | 193 (~8s) | Yes | 1536×864 |
+
+**Usage:**
+```bash
+# Download required models (8GB)
+python scripts/download_ltx23_models.py --ids \
+  gguf_distilled_q4 text_encoder video_vae \
+  omninft_rl_lora
+
+# Download required models (24GB)
+python scripts/download_ltx23_models.py --ids \
+  checkpoint_fp8 distilled_lora \
+  iclora_decompression omninft_rl_lora \
+  spatial_upscaler
+
+# Test locally
+IMAGE_NAME=comfyui-serverless:local ./scripts/test_local.sh \
+  examples/ltx23_v2v_iclora_detail_8gb.json
+```
+
 ### ltx23_v2v_animatediff_cleanup_{8gb,24gb}.json / _ui.json
 
 V2V cleanup workflows for re-detailing ~15-second AnimateDiff renders

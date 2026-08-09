@@ -338,7 +338,15 @@ class ServerlessManager:
     def get_endpoint_status(self, endpoint_id: str, json_output: bool = False) -> Dict[str, Any]:
         """Get endpoint status and metrics."""
         try:
-            response = runpod.get_endpoint(endpoint_id)
+            # runpod SDK v1.7+ only has get_endpoints() (plural), not get_endpoint()
+            all_endpoints = runpod.get_endpoints()
+            response = None
+            for ep in all_endpoints:
+                if ep.get("id") == endpoint_id:
+                    response = ep
+                    break
+            if response is None:
+                response = {"error": f"Endpoint {endpoint_id} not found"}
             
             if json_output:
                 print(json.dumps(response, indent=2))

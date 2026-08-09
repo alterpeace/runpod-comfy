@@ -38,6 +38,13 @@ if [ -z "${RUNPOD_API_KEY:-}" ]; then
     exit 1
 fi
 
+# Use the project venv if available (runpod SDK is installed there, not system Python)
+if [ -f "$PROJECT_DIR/.venv/bin/python" ]; then
+    PYTHON="$PROJECT_DIR/.venv/bin/python"
+else
+    PYTHON="python"
+fi
+
 MODE="${1:-}"
 shift || true
 
@@ -47,19 +54,27 @@ case "$MODE" in
         case "$ACTION" in
             deploy)
                 echo "[run_runpod] Deploying serverless endpoint..."
-                python lifecycle/runpod_serverless.py deploy "${@:2}"
+                "$PYTHON" lifecycle/runpod_serverless.py create "${@:2}"
                 ;;
             status)
                 echo "[run_runpod] Checking serverless endpoint status..."
-                python lifecycle/runpod_serverless.py status "${@:2}"
+                "$PYTHON" lifecycle/runpod_serverless.py status "${@:2}"
+                ;;
+            list)
+                echo "[run_runpod] Listing serverless endpoints..."
+                "$PYTHON" lifecycle/runpod_serverless.py list "${@:2}"
+                ;;
+            invoke)
+                echo "[run_runpod] Invoking serverless endpoint..."
+                "$PYTHON" lifecycle/runpod_serverless.py invoke "${@:2}"
                 ;;
             logs)
                 echo "[run_runpod] Tailing serverless logs..."
-                python lifecycle/runpod_serverless.py logs "${@:2}"
+                "$PYTHON" lifecycle/runpod_serverless.py logs "${@:2}"
                 ;;
             *)
                 echo "[run_runpod] Unknown serverless action: $ACTION"
-                echo "  Usage: $0 serverless [deploy|status|logs]"
+                echo "  Usage: $0 serverless [deploy|status|list|invoke|logs]"
                 exit 1
                 ;;
         esac
@@ -69,11 +84,11 @@ case "$MODE" in
         case "$ACTION" in
             create)
                 echo "[run_runpod] Creating GPU pod..."
-                python lifecycle/runpod_pods.py create "${@:2}"
+                "$PYTHON" lifecycle/runpod_pods.py create "${@:2}"
                 ;;
             list)
                 echo "[run_runpod] Listing active pods..."
-                python lifecycle/runpod_pods.py list "${@:2}"
+                "$PYTHON" lifecycle/runpod_pods.py list "${@:2}"
                 ;;
             terminate)
                 POD_ID="${2:-}"
@@ -83,7 +98,7 @@ case "$MODE" in
                     exit 1
                 fi
                 echo "[run_runpod] Terminating pod $POD_ID..."
-                python lifecycle/runpod_pods.py terminate "$POD_ID"
+                "$PYTHON" lifecycle/runpod_pods.py terminate "$POD_ID"
                 ;;
             *)
                 echo "[run_runpod] Unknown pods action: $ACTION"
