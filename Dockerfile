@@ -222,8 +222,19 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     rm -rf /var/lib/apt/lists/* && \
     node --version && npm --version
 
+# Install rclone and ziti-edge-tunnel in parallel.
+# NOTE: The old URL https://get.openziti.io/tunnel/install.bash now 404s
+# (OpenZiti reorganized their install URLs). We download the binary
+# directly from the ziti-tunnel-sdk-c GitHub releases instead.
+# Version pinned to match sanctuary/ansible/vars/network.yml.
+ARG ZITI_TUNNEL_VERSION=1.18.5
 RUN curl https://rclone.org/install.sh | bash & \
-    curl -sSLf https://get.openziti.io/tunnel/install.bash | bash & \
+    ZET_URL="https://github.com/openziti/ziti-tunnel-sdk-c/releases/download/v${ZITI_TUNNEL_VERSION}/ziti-edge-tunnel-Linux_x86_64.zip" && \
+    curl -sSLf -o /tmp/zet.zip "$ZET_URL" && \
+    unzip -o /tmp/zet.zip -d /tmp/zet && \
+    mv /tmp/zet/ziti-edge-tunnel /usr/local/bin/ziti-edge-tunnel && \
+    chmod +x /usr/local/bin/ziti-edge-tunnel && \
+    rm -rf /tmp/zet /tmp/zet.zip && \
     wait
 
 RUN mkdir -p /var/run/sshd /root/.ssh /runpod-volume && chmod 700 /root/.ssh
