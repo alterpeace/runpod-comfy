@@ -300,7 +300,33 @@ case "$STORAGE_BACKEND" in
     "network-volume")
         log_success "Using network volume storage (default)"
         log_info "Models will be loaded from /runpod-volume/models"
-        # No additional setup needed
+        # Symlink network volume model dirs into /comfyui/models so ComfyUI
+        # can discover them. Without this, CheckpointLoaderSimple and other
+        # model loaders see empty directories and reject workflows with
+        # "Value not in list" validation errors.
+        if [ -d "/runpod-volume/models" ]; then
+            for subdir in /runpod-volume/models/*/; do
+                [ -d "$subdir" ] || continue
+                name="$(basename "$subdir")"
+                target="/comfyui/models/$name"
+                if [ ! -e "$target" ]; then
+                    ln -sf "$subdir" "$target" 2>/dev/null && \
+                        log_info "  Linked: /comfyui/models/$name -> /runpod-volume/models/$name"
+                fi
+            done
+            log_success "Network volume models linked to /comfyui/models/"
+        else
+            log_warning "No /runpod-volume/models directory found — models will be empty"
+        fi
+        # Also link custom_nodes, input, output, user if they exist on the volume
+        for dirpair in "custom_nodes:/comfyui/custom_nodes" "input:/comfyui/input" "output:/comfyui/output" "user:/comfyui/user"; do
+            volname="${dirpair%%:*}"
+            target="${dirpair##*:}"
+            if [ -d "/runpod-volume/$volname" ] && [ ! -e "$target" ]; then
+                ln -sf "/runpod-volume/$volname" "$target" 2>/dev/null && \
+                    log_info "  Linked: $target -> /runpod-volume/$volname"
+            fi
+        done
         ;;
     "b2-mount")
         log_info "Setting up B2 mount with rclone..."
