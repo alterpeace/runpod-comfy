@@ -333,7 +333,7 @@ elif [ "$MODE" = "pods" ]; then
     "COMFYUI_PORT": "8188",
     "COMFYUI_ARGS": "${COMFYUI_ARGS}"
   },
-  "docker_args": "",
+  "docker_args": "--device /dev/net/tun --cap-add NET_ADMIN",
   "ports": "8188/http,22/tcp",
   "bid_per_gpu": $([ "$SPOT_INSTANCE" = true ] && echo "null" || echo "null")
 }
