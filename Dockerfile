@@ -343,9 +343,10 @@ RUN . /comfyui/venv/bin/activate && \
     fi
 
 # Install additional dependencies for custom nodes
+# NOTE: taehv (git+https://github.com/deinferno/taehv.git) was removed —
+# the repo has been deleted (404) and no custom node requires it.
 RUN . /comfyui/venv/bin/activate && \
-    uv pip install rotary-embedding-torch evalidate fal-client google-genai && \
-    uv pip install "taehv @ git+https://github.com/deinferno/taehv.git"
+    uv pip install rotary-embedding-torch evalidate fal-client google-genai
 
 # Install WAS Node Suite dependencies
 # numba>=0.63.1 required for NumPy 2.4 compatibility
