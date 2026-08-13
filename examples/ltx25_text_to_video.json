@@ -14,8 +14,14 @@
   },
   "3": {
     "inputs": {
-      "model": ["1", 0],
-      "clip": ["2", 0],
+      "model": [
+        "1",
+        0
+      ],
+      "clip": [
+        "2",
+        0
+      ],
       "lora_name": "ltx-2.5-22b-distilled-lora-450-bf16.safetensors",
       "strength_model": 1.0,
       "strength_clip": 1.0
@@ -24,14 +30,20 @@
   },
   "4": {
     "inputs": {
-      "clip": ["3", 1],
+      "clip": [
+        "3",
+        1
+      ],
       "text": "cinematic drone shot over a misty mountain range at sunrise, golden light breaking through clouds, highly detailed, 4k, professional cinematography"
     },
     "class_type": "CLIPTextEncode"
   },
   "5": {
     "inputs": {
-      "clip": ["3", 1],
+      "clip": [
+        "3",
+        1
+      ],
       "text": "blurry, low quality, distorted, glitch, artifacts, flickering, jerky motion, watermark, noisy, grainy, washed out, banding"
     },
     "class_type": "CLIPTextEncode"
@@ -47,7 +59,10 @@
   },
   "7": {
     "inputs": {
-      "model": ["3", 0],
+      "model": [
+        "3",
+        0
+      ],
       "scheduler": "linear_quadratic",
       "steps": 8,
       "denoise": 1.0
@@ -62,25 +77,52 @@
   },
   "9": {
     "inputs": {
-      "model": ["3", 0],
-      "positive": ["4", 0],
-      "negative": ["5", 0],
-      "sampler": ["8", 0],
-      "sigmas": ["7", 0],
-      "latent_image": ["6", 0]
+      "model": [
+        "3",
+        0
+      ],
+      "positive": [
+        "4",
+        0
+      ],
+      "negative": [
+        "5",
+        0
+      ],
+      "sampler": [
+        "8",
+        0
+      ],
+      "sigmas": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "6",
+        0
+      ]
     },
     "class_type": "SamplerCustomAdvanced"
   },
   "10": {
     "inputs": {
-      "samples": ["9", 0],
-      "vae": ["1", 2]
+      "latents": [
+        "9",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
     },
     "class_type": "LTXVTiledVAEDecode"
   },
   "11": {
     "inputs": {
-      "images": ["10", 0],
+      "images": [
+        "10",
+        0
+      ],
       "frame_rate": 24,
       "loop_count": 0,
       "filename_prefix": "ltx25_t2v",

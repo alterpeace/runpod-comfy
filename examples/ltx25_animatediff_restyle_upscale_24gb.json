@@ -14,8 +14,14 @@
   },
   "3": {
     "inputs": {
-      "model": ["1", 0],
-      "clip": ["2", 0],
+      "model": [
+        "1",
+        0
+      ],
+      "clip": [
+        "2",
+        0
+      ],
       "lora_name": "ltx-2.5-22b-distilled-lora-450-bf16.safetensors",
       "strength_model": 1.0,
       "strength_clip": 1.0
@@ -24,7 +30,10 @@
   },
   "4": {
     "inputs": {
-      "model": ["3", 0],
+      "model": [
+        "3",
+        0
+      ],
       "lora_name": "ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors",
       "strength": 0.6
     },
@@ -32,14 +41,20 @@
   },
   "5": {
     "inputs": {
-      "clip": ["3", 1],
+      "clip": [
+        "3",
+        1
+      ],
       "text": "cinematic restyle, dreamlike atmosphere, volumetric lighting, rich color grading, film grain, anamorphic lens flare, high detail textures, professional color science, moody shadows, enhanced depth"
     },
     "class_type": "CLIPTextEncode"
   },
   "6": {
     "inputs": {
-      "clip": ["3", 1],
+      "clip": [
+        "3",
+        1
+      ],
       "text": "blurry, low quality, distorted, glitch, artifacts, flickering, jerky motion, compression artifacts, watermark, noisy, grainy, washed out, banding, flat lighting"
     },
     "class_type": "CLIPTextEncode"
@@ -56,7 +71,10 @@
   },
   "8": {
     "inputs": {
-      "image": ["7", 0],
+      "image": [
+        "7",
+        0
+      ],
       "width": 768,
       "height": 448,
       "upscale_method": "lanczos",
@@ -66,10 +84,22 @@
   },
   "9": {
     "inputs": {
-      "positive": ["5", 0],
-      "negative": ["6", 0],
-      "images": ["8", 0],
-      "vae": ["1", 2],
+      "positive": [
+        "5",
+        0
+      ],
+      "negative": [
+        "6",
+        0
+      ],
+      "images": [
+        "8",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ],
       "width": 768,
       "height": 448,
       "num_frames": 385
@@ -78,24 +108,45 @@
   },
   "10": {
     "inputs": {
-      "positive": ["9", 0],
-      "negative": ["9", 1],
-      "model": ["4", 0],
-      "guide_images": ["8", 0],
+      "positive": [
+        "9",
+        0
+      ],
+      "negative": [
+        "9",
+        1
+      ],
+      "model": [
+        "4",
+        0
+      ],
+      "guide_images": [
+        "8",
+        0
+      ],
       "strength": 0.75
     },
     "class_type": "LTXAddVideoICLoRAGuide"
   },
   "11": {
     "inputs": {
-      "pixels": ["8", 0],
-      "vae": ["1", 2]
+      "pixels": [
+        "8",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
     },
     "class_type": "VAEEncode"
   },
   "12": {
     "inputs": {
-      "model": ["4", 0],
+      "model": [
+        "4",
+        0
+      ],
       "scheduler": "linear_quadratic",
       "steps": 8,
       "denoise": 0.85
@@ -110,12 +161,30 @@
   },
   "14": {
     "inputs": {
-      "model": ["4", 0],
-      "positive": ["10", 0],
-      "negative": ["10", 1],
-      "sampler": ["13", 0],
-      "sigmas": ["12", 0],
-      "latent_image": ["11", 0]
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "10",
+        0
+      ],
+      "negative": [
+        "10",
+        1
+      ],
+      "sampler": [
+        "13",
+        0
+      ],
+      "sigmas": [
+        "12",
+        0
+      ],
+      "latent_image": [
+        "11",
+        0
+      ]
     },
     "class_type": "SamplerCustomAdvanced"
   },
@@ -127,9 +196,18 @@
   },
   "16": {
     "inputs": {
-      "model": ["4", 0],
-      "latent_upscaler": ["15", 0],
-      "samples": ["14", 0]
+      "model": [
+        "4",
+        0
+      ],
+      "latent_upscaler": [
+        "15",
+        0
+      ],
+      "samples": [
+        "14",
+        0
+      ]
     },
     "class_type": "LTXVLatentUpscale"
   },
@@ -147,12 +225,30 @@
   },
   "19": {
     "inputs": {
-      "model": ["4", 0],
-      "positive": ["10", 0],
-      "negative": ["10", 1],
-      "sampler": ["18", 0],
-      "sigmas": ["17", 0],
-      "latent_image": ["16", 0]
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "10",
+        0
+      ],
+      "negative": [
+        "10",
+        1
+      ],
+      "sampler": [
+        "18",
+        0
+      ],
+      "sigmas": [
+        "17",
+        0
+      ],
+      "latent_image": [
+        "16",
+        0
+      ]
     },
     "class_type": "SamplerCustomAdvanced"
   },
@@ -164,9 +260,18 @@
   },
   "21": {
     "inputs": {
-      "model": ["4", 0],
-      "latent_upscaler": ["20", 0],
-      "samples": ["19", 0]
+      "model": [
+        "4",
+        0
+      ],
+      "latent_upscaler": [
+        "20",
+        0
+      ],
+      "samples": [
+        "19",
+        0
+      ]
     },
     "class_type": "LTXVLatentTemporalUpscale"
   },
@@ -184,25 +289,52 @@
   },
   "24": {
     "inputs": {
-      "model": ["4", 0],
-      "positive": ["10", 0],
-      "negative": ["10", 1],
-      "sampler": ["23", 0],
-      "sigmas": ["22", 0],
-      "latent_image": ["21", 0]
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "10",
+        0
+      ],
+      "negative": [
+        "10",
+        1
+      ],
+      "sampler": [
+        "23",
+        0
+      ],
+      "sigmas": [
+        "22",
+        0
+      ],
+      "latent_image": [
+        "21",
+        0
+      ]
     },
     "class_type": "SamplerCustomAdvanced"
   },
   "25": {
     "inputs": {
-      "samples": ["24", 0],
-      "vae": ["1", 2]
+      "vae": [
+        "1",
+        2
+      ],
+      "latents": [
+        "24",
+        0
+      ]
     },
     "class_type": "LTXVTiledVAEDecode"
   },
   "26": {
     "inputs": {
-      "images": ["25", 0],
+      "images": [
+        "25",
+        0
+      ],
       "frame_rate": 48,
       "loop_count": 0,
       "filename_prefix": "ltx25_restyle_upscaled",
