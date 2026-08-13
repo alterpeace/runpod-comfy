@@ -60,13 +60,28 @@ fi
 # Ensure directories exist
 mkdir -p "$MODELS_DIR" /workspace/scripts /workspace/config
 
+# Remove old script + pycache to force fresh download
+rm -f /workspace/scripts/download_ltx25_models.py
+rm -rf /workspace/scripts/__pycache__
+
 # Always download latest scripts (overwrite old versions)
 log_info "Downloading latest download_ltx25_models.py..."
-curl -sL https://raw.githubusercontent.com/alterpeace/runpod-comfy/main/scripts/download_ltx25_models.py \
+curl -fsSL https://raw.githubusercontent.com/alterpeace/runpod-comfy/main/scripts/download_ltx25_models.py \
     -o /workspace/scripts/download_ltx25_models.py
+chmod +x /workspace/scripts/download_ltx25_models.py
+
+# Verify the downloaded script has --copy support
+if ! grep -q '"--copy"' /workspace/scripts/download_ltx25_models.py; then
+    log_error "Downloaded script does not have --copy support (GitHub CDN cache?)"
+    log_error "File size: $(wc -c < /workspace/scripts/download_ltx25_models.py) bytes"
+    log_error "First 5 lines:"
+    head -5 /workspace/scripts/download_ltx25_models.py
+    exit 1
+fi
+log_success "Verified: downloaded script has --copy support"
 
 log_info "Downloading latest ltx-2.5-models.json..."
-curl -sL https://raw.githubusercontent.com/alterpeace/runpod-comfy/main/config/ltx-2.5-models.json \
+curl -fsSL https://raw.githubusercontent.com/alterpeace/runpod-comfy/main/config/ltx-2.5-models.json \
     -o /workspace/config/ltx-2.5-models.json
 
 # Remove broken symlinks from previous runs (symlinks pointing to deleted HF cache)
@@ -78,6 +93,10 @@ if [ -f /comfyui/venv/bin/activate ]; then
     log_info "Activating ComfyUI venv..."
     source /comfyui/venv/bin/activate
 fi
+
+# Prevent Python from using cached bytecode
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONUNBUFFERED=1
 
 # Download models with --copy (real files, not symlinks) and --force (re-download broken ones)
 # The script skips files that already exist as real files (not symlinks), so this is resumable.
