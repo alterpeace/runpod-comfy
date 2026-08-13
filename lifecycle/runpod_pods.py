@@ -87,35 +87,30 @@ class PodManager:
                 return {"status": "cancelled"}
         
         # Prepare pod configuration
+        # NOTE: runpod SDK uses snake_case params (image_name, gpu_type_id, etc.)
+        # not camelCase (imageName, gpuTypeId) — the dict keys must match the
+        # function signature exactly.
         pod_config = {
             "name": name,
-            "imageName": image,
-            "gpuTypeId": gpu_type,
-            "cloudType": "SECURE" if spot else "COMMUNITY",
-            "volumeInGb": 50,  # Container disk size
+            "image_name": image,
+            "gpu_type_id": gpu_type,
+            "cloud_type": "SECURE" if spot else "COMMUNITY",
+            "container_disk_in_gb": 50,
+            "start_ssh": True,
         }
         
         # Add network volume if specified
         if volume_id:
-            pod_config["volumeMountPath"] = volume_mount_path
-            pod_config["networkVolumeId"] = volume_id
+            pod_config["volume_mount_path"] = volume_mount_path
+            pod_config["network_volume_id"] = volume_id
         
         # Add environment variables
         if env_vars:
-            pod_config["env"] = [{"key": k, "value": v} for k, v in env_vars.items()]
+            pod_config["env"] = {k: v for k, v in env_vars.items()}
         
-        # Add ports
+        # Add ports (SDK accepts comma-separated string)
         if ports:
-            port_list = []
-            for port_spec in ports.split(","):
-                port_spec = port_spec.strip()
-                if "/" in port_spec:
-                    port, protocol = port_spec.split("/")
-                    port_list.append({
-                        "port": int(port),
-                        "protocol": protocol.upper()
-                    })
-            pod_config["ports"] = port_list
+            pod_config["ports"] = ports
         
         try:
             # Create pod using RunPod API
