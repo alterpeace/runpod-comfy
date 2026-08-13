@@ -6,7 +6,7 @@ services:
       shm_size: '2gb'
       network: host
       args:
-        COMFYUI_VERSION: ${COMFYUI_VERSION:-v0.27.0}
+        COMFYUI_VERSION: ${COMFYUI_VERSION:-v0.32.0}
         TORCH_VERSION: ${TORCH_VERSION:-2.10.0}
         TORCH_FLAVOR: ${TORCH_FLAVOR:-cu129}
         XFORMERS_VERSION: ${XFORMERS_VERSION:-0.0.34}
@@ -21,7 +21,6 @@ services:
     ports:
       - "8188:8188"  # ComfyUI HTTP
       - "2222:22"    # SSH
-      - "8765:8765"  # Comfy MCP server (optional, ENABLE_MCP=true)
     volumes:
       # Local dev data mounts. Defaults to ./.local/* (repo-local, gitignored placeholders).
       # Point COMFY_DATA_DIR at an existing ComfyUI install to reuse its models/custom_nodes/etc,

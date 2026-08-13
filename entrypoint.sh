@@ -223,7 +223,6 @@ setup_user
 log_info "Detecting enabled features..."
 
 SSH_ENABLED=false
-MCP_ENABLED=false
 CLOUDFLARED_ENABLED=false
 
 # Check SSH configuration
@@ -247,20 +246,6 @@ if [ -n "$CLOUDFLARED_TUNNEL_ID" ] && [ -n "$CLOUDFLARED_CREDENTIALS_PATH" ]; th
     log_info "  Credentials: $CLOUDFLARED_CREDENTIALS_PATH"
 else
     log_info "✗ Cloudflare Tunnel: DISABLED (set CLOUDFLARED_TUNNEL_ID + CLOUDFLARED_CREDENTIALS_PATH to enable)"
-fi
-
-# Check MCP (Comfy MCP server) configuration
-# ENABLE_MCP=true installs comfyui-mcp (npm) + comfyui-mcp-panel (custom node)
-# via userscripts_dir/install_comfy_mcp.sh, then starts the MCP server after
-# ComfyUI is ready. Agents (Claude Code, Cursor, ChatGPT) connect to drive ComfyUI.
-if [ "$ENABLE_MCP" = "true" ]; then
-    MCP_ENABLED=true
-    log_success "✓ Comfy MCP server: ENABLED"
-    log_info "  MCP_PORT: ${MCP_PORT:-8765}"
-    log_info "  MCP_TRANSPORT: ${MCP_TRANSPORT:-http}"
-    log_info "  MCP_COMFYUI_URL: ${MCP_COMFYUI_URL:-http://127.0.0.1:8188}"
-else
-    log_info "✗ Comfy MCP server: DISABLED (set ENABLE_MCP=true to enable)"
 fi
 
 # ============================================================================
@@ -639,77 +624,6 @@ EOF
 fi
 
 # ============================================================================
-# COMFY MCP SERVER STARTUP (optional — agent-driven control of ComfyUI)
-# ============================================================================
-# Starts the comfyui-mcp MCP server in the background so AI agents
-# (Claude Code, Cursor, ChatGPT) can drive this ComfyUI instance.
-# Requires ENABLE_MCP=true and the userscript to have installed comfyui-mcp.
-if [ "$MCP_ENABLED" = true ]; then
-    log_info "Starting Comfy MCP server..."
-
-    # Set defaults for MCP configuration
-    MCP_PORT=${MCP_PORT:-8765}
-    MCP_TRANSPORT=${MCP_TRANSPORT:-http}
-    MCP_COMFYUI_URL=${MCP_COMFYUI_URL:-http://127.0.0.1:8188}
-
-    # Verify comfyui-mcp is installed (should have been done by userscript)
-    if ! command -v comfyui-mcp &>/dev/null; then
-        log_error "comfyui-mcp not found — userscript install may have failed"
-        log_warning "Continuing without MCP server. Check userscripts logs."
-    else
-        # Build the MCP server command based on transport mode
-        # - http: Streamable-HTTP on loopback (agents connect via tunnel/proxy)
-        # - tunnel: cloudflared public HTTPS tunnel (auto-generated URL + token)
-        # - stdio: local pipe (for agents running on the same host)
-        MCP_CMD="COMFYUI_URL=${MCP_COMFYUI_URL} comfyui-mcp"
-
-        case "$MCP_TRANSPORT" in
-            http)
-                # Set auth token if provided, otherwise open (loopback only)
-                if [ -n "$MCP_HTTP_TOKEN" ]; then
-                    MCP_CMD="COMFYUI_MCP_HTTP_TOKEN=${MCP_HTTP_TOKEN} ${MCP_CMD} --http --port ${MCP_PORT}"
-                else
-                    MCP_CMD="${MCP_CMD} --http --port ${MCP_PORT}"
-                fi
-                ;;
-            tunnel)
-                # --tunnel forces HTTP transport + cloudflared quick tunnel
-                # Generates a public https://... URL + auth token, printed to logs
-                MCP_CMD="${MCP_CMD} --tunnel"
-                ;;
-            stdio)
-                # stdio transport — for agents on the same host (no port needed)
-                MCP_CMD="${MCP_CMD}"
-                ;;
-            *)
-                log_warning "Unknown MCP_TRANSPORT: '$MCP_TRANSPORT' (valid: http, tunnel, stdio)"
-                log_warning "Defaulting to http"
-                MCP_CMD="${MCP_CMD} --http --port ${MCP_PORT}"
-                MCP_TRANSPORT="http"
-                ;;
-        esac
-
-        log_info "MCP command: $MCP_CMD"
-        log_info "MCP transport: $MCP_TRANSPORT"
-        log_info "MCP targeting ComfyUI at: $MCP_COMFYUI_URL"
-
-        # Start MCP server in background
-        eval "$MCP_CMD" &
-        MCP_PID=$!
-        log_success "Comfy MCP server started (PID: $MCP_PID)"
-
-        if [ "$MCP_TRANSPORT" = "http" ]; then
-            log_info "MCP endpoint: http://0.0.0.0:${MCP_PORT}/mcp"
-            if [ -z "$MCP_HTTP_TOKEN" ]; then
-                log_warning "MCP HTTP server has NO auth token — restrict network access!"
-            fi
-        elif [ "$MCP_TRANSPORT" = "tunnel" ]; then
-            log_info "MCP tunnel URL will be printed above — check logs for https://... URL"
-        fi
-    fi
-fi
-
-# ============================================================================
 # MODE-SPECIFIC BEHAVIOR
 # ============================================================================
 log_info "Executing mode-specific behavior..."
@@ -740,11 +654,6 @@ elif [ "$MODE" = "pods" ]; then
         log_success "Cloudflare Tunnel active: https://${CLOUDFLARED_HOSTNAME}"
     fi
     
-    if [ "$MCP_ENABLED" = true ]; then
-        log_success "Comfy MCP server is running on port ${MCP_PORT:-8765}"
-        log_info "Agent Panel tab (💬) available in ComfyUI sidebar"
-    fi
-    
     log_warning "REMINDER: This pod will continue billing until TERMINATED"
     log_warning "Stopping the pod does NOT stop billing - you must TERMINATE it"
     log_info "Container will keep running. Use RunPod UI/API to terminate."
@@ -767,11 +676,6 @@ elif [ "$MODE" = "local" ]; then
 
     if [ "$CLOUDFLARED_ENABLED" = true ] && [ -n "$CLOUDFLARED_HOSTNAME" ]; then
         log_success "Cloudflare Tunnel active: https://${CLOUDFLARED_HOSTNAME}"
-    fi
-    
-    if [ "$MCP_ENABLED" = true ]; then
-        log_success "Comfy MCP server is running on port ${MCP_PORT:-8765}"
-        log_info "Agent Panel tab (💬) available in ComfyUI sidebar"
     fi
     
     log_info "Container will keep running. Press Ctrl+C to stop."

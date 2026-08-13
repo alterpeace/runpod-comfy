@@ -381,29 +381,6 @@ can `comfy install`/`comfy launch` a local ComfyUI, or route `comfy run` /
 for Claude Code/Cursor/AGENTS.md-aware tools via `comfy skills install`.
 Worth knowing about for scripting/CI, but separate from MCP.
 
-**Now installed (opt-in): `artokun/comfyui-mcp` + ComfyUI Agent Panel.**
-Comfy Partner MCP doesn't apply (it doesn't talk to our ComfyUI instance at
-all), but the community local-ComfyUI MCP server
-[`artokun/comfyui-mcp`](https://github.com/artokun/comfyui-mcp) is now
-integrated as an **opt-in feature** — disabled by default, enabled by setting
-`ENABLE_MCP=true` in `.env`. When enabled:
-
-- The [`userscripts_dir/install_comfy_mcp.sh`](../userscripts_dir/install_comfy_mcp.sh)
-  userscript runs at container startup, installing the `comfyui-mcp` npm package
-  globally and cloning the
-  [`comfyui-mcp-panel`](https://github.com/artokun/comfyui-mcp-panel) custom
-  node (sidebar UI) into `/comfyui/custom_nodes/`.
-- [`entrypoint.sh`](../entrypoint.sh) starts the MCP server as a background
-  process after ComfyUI is ready, using the configured transport (`http`,
-  `tunnel`, or `stdio`).
-- Node.js 22 LTS is baked into the Docker image `runtime-base` stage to
-  satisfy the `comfyui-mcp` runtime requirement.
-- Port 8765 is exposed in the Dockerfile, docker-compose.yml, and
-  `config/runpod-config-pods.json` for HTTP transport.
-
-See the [Agent / MCP Access](../README.md#agent--mcp-access) section in the
-README for connection instructions.
-
 ## Third-Party Node Pack Reviewed (Not Installed)
 
 [`TenStrip/10S-Comfy-nodes`](https://github.com/TenStrip/10S-Comfy-nodes) —

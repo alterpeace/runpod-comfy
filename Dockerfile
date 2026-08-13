@@ -9,10 +9,11 @@ FROM nvidia/cuda:12.9.0-devel-ubuntu24.04 AS base
 ARG TORCH_VERSION=2.10.0
 ARG TORCH_FLAVOR=cu129
 ARG XFORMERS_VERSION=0.0.34
-# LTX-2.3 native support landed in ComfyUI ~v0.16.1 (Mar 2026). Pin to a
-# recent tagged release rather than v0.10.0 so LTX-2.3 nodes (LTXAVTextEncoderLoader,
-# LTXVConcatAVLatent, CreateVideo, etc.) are available out of the box.
-ARG COMFYUI_VERSION=v0.27.0
+# LTX-2.3 native support landed in ComfyUI ~v0.16.1 (Mar 2026). LTX-2.5 Gemma 4
+# text encoder support (GEMMA_4_12B detection + ltxav_te routing) landed in
+# v0.32.0 (Aug 2026). Pin to the latest tagged release so both LTX-2.3 and
+# LTX-2.5 nodes/encoders work out of the box.
+ARG COMFYUI_VERSION=v0.32.0
 
 # =============================================================================
 # BUILD CONFIGURATION - Optional attention mechanisms (set to "true" to enable)
@@ -214,13 +215,6 @@ RUN apt-get update && \
     && ln -sf /usr/bin/python3.12 /usr/bin/python \
     && ln -sf /usr/bin/python3.12 /usr/bin/python3 \
     && rm -rf /var/lib/apt/lists/*
-
-# Node.js 22 LTS — required by comfyui-mcp (MCP server for agent-driven control)
-# Installed via NodeSource to get v22 (Ubuntu 24.04 ships Node 18 in apt, too old)
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get install -y --no-install-recommends nodejs && \
-    rm -rf /var/lib/apt/lists/* && \
-    node --version && npm --version
 
 # Install rclone (B2/S3 storage mounting) and cloudflared (stable WebUI tunnel).
 # cloudflared is a userspace reverse tunnel — no CAP_NET_ADMIN or TUN interface
@@ -438,7 +432,7 @@ RUN dpkg-query -W --showformat='${Package}\n' 2>/dev/null | \
     rm -rf /usr/local/cuda-12.9 /usr/local/cuda /usr/local/cuda-12 /var/lib/apt/lists/* && \
     find /comfyui -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
-EXPOSE 8188 22 8765
+EXPOSE 8188 22
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8188/ || exit 1
