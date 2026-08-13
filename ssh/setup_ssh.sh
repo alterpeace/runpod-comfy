@@ -117,9 +117,6 @@ if pgrep -x sshd > /dev/null; then
     if [ -n "$RUNPOD_POD_ID" ]; then
         log_info "RunPod Environment Detected"
         log_info ""
-        log_info "Access via OpenZiti tunnel (if configured):"
-        log_info "  ssh root@comfyui-ssh.ziti"
-        log_info ""
         log_info "Access via RunPod SSH endpoint:"
         log_info "  Check RunPod dashboard for SSH connection details"
         log_info "  Typically: ssh root@<pod-id>.runpod.io -p <assigned-port>"
@@ -128,9 +125,6 @@ if pgrep -x sshd > /dev/null; then
         log_info ""
         log_info "Access via localhost:"
         log_info "  ssh root@localhost -p 2222"
-        log_info ""
-        log_info "Or via OpenZiti tunnel (if configured):"
-        log_info "  ssh root@comfyui-ssh.ziti"
     fi
     
     log_info ""

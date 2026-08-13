@@ -123,13 +123,6 @@ ENABLE_SSH = get_env_bool('ENABLE_SSH', default=False)
 SSH_PUBLIC_KEY = os.environ.get('SSH_PUBLIC_KEY', '')
 SSH_AUTHORIZED_KEYS_PATH = os.environ.get('SSH_AUTHORIZED_KEYS_PATH', '')
 
-# OpenZiti Configuration
-OPENZITI_IDENTITY = os.environ.get('OPENZITI_IDENTITY', '')
-OPENZITI_IDENTITY_JSON = os.environ.get('OPENZITI_IDENTITY_JSON', '')
-OPENZITI_CONTROLLER = os.environ.get('OPENZITI_CONTROLLER', '')
-OPENZITI_SERVICE_HTTP = os.environ.get('OPENZITI_SERVICE_HTTP', 'comfyui-http')
-OPENZITI_SERVICE_SSH = os.environ.get('OPENZITI_SERVICE_SSH', 'comfyui-ssh')
-
 # Log configuration on startup
 logger.info(f"Configuration loaded:")
 logger.info(f"  MODE: {MODE}")
@@ -146,7 +139,6 @@ elif STORAGE_TYPE == 's3':
     if S3_ENDPOINT_URL:
         logger.info(f"  S3_ENDPOINT_URL: {S3_ENDPOINT_URL}")
 logger.info(f"  ENABLE_SSH: {ENABLE_SSH}")
-logger.info(f"  OpenZiti: {'enabled' if OPENZITI_IDENTITY or OPENZITI_IDENTITY_JSON else 'disabled'}")
 
 # Global ComfyUI process and clients
 comfyui_process = None

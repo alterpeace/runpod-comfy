@@ -5,21 +5,13 @@
 | Where ComfyUI runs | Inbound? | How to reach the WebUI | Script |
 |---|---|---|---|
 | **Pod** | Public SSH (IP:port from Connect panel) | `ssh -L 8188:127.0.0.1:8188 root@<ip> -p <port>` → http://localhost:8188 | [`scripts/tunnel_webui.sh`](../scripts/tunnel_webui.sh) / [`.ps1`](../scripts/tunnel_webui.ps1) |
-| **Serverless worker** | ❌ outbound-only | OpenZiti overlay (worker dials out) → http://comfyui-http.ziti | same scripts, `ziti` mode |
+| **Serverless worker** | ❌ outbound-only | **Not accessible** — serverless workers have no inbound ports. Use the API (`/run`, `/runsync`) or a Pod for interactive access. | — |
 | **Local docker** | direct | http://localhost:8188 | — |
 
-**Serverless + ziti without rebuild or endpoint edits:** drop two files on the
-network volume (via a seed pod) — `ziti-identity.json` at
-`/runpod-volume/ziti-identity.json` and a `/runpod-volume/.env` containing
-`OPENZITI_IDENTITY=/runpod-volume/ziti-identity.json` plus the service names.
-[`entrypoint.sh`](../entrypoint.sh) sources `/runpod-volume/.env` at every
-worker boot, so every worker joins the overlay automatically.
-
-**Uptime caveat:** a serverless worker's tunnel lives only as long as the
-worker — job duration + idle timeout (300s default). A FlashBoot-paused
-worker's tunnel is frozen too. For interactive WebUI sessions use a Pod
-(billed only while it runs); `workersMin=1` keeps a serverless worker (and its
-tunnel) always on but bills 24/7.
+> **Note:** The ComfyUI WebUI runs inside serverless workers (on `127.0.0.1:8188`)
+> but is **not reachable** because RunPod serverless containers are outbound-only
+> with no exposed ports. For interactive WebUI sessions, use a **Pod** instead.
+> Serverless is designed for headless API-driven workflow execution.
 
 ## Core Principle
 
@@ -56,22 +48,15 @@ log_success "ComfyUI WebUI is running and accessible"
 ```bash
 # Direct access
 http://localhost:8188
-
-# Via OpenZiti (if configured)
-http://comfyui-http.ziti
 ```
 
 #### Serverless Mode (RunPod)
 ```bash
-# RunPod HTTP Proxy (automatic)
-https://<pod-id>-8188.proxy.runpod.net
-
-# OpenZiti Tunnel (if configured)
-http://comfyui-http.ziti
-
-# SSH Tunnel
-ssh -L 8188:localhost:8188 root@<pod-id>.runpod.io
-# Then: http://localhost:8188
+# The WebUI runs on 127.0.0.1:8188 inside the worker but is NOT reachable
+# from outside — serverless workers are outbound-only with no exposed ports.
+# Use the API instead:
+#   POST https://api.runpod.io/v2/<ENDPOINT_ID>/runsync
+# For interactive WebUI access, deploy a Pod instead.
 ```
 
 ## Mode Comparison

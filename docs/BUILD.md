@@ -24,7 +24,6 @@ the final container.
 
 ### System Dependencies
 - **OpenSSH Server**: For SSH access and debugging
-- **OpenZiti Tunnel Client**: For secure tunneling (optional)
 - **rclone**: For B2/S3-compatible model storage mounting
 - **curl/wget**: For downloading and health checks
 
@@ -51,7 +50,7 @@ The Dockerfile is structured to maximize Docker layer caching (4 stages:
 1. **System packages** (rarely change)
 2. **PyTorch + core ML deps** (only rebuild if TORCH_VERSION changes)
 3. **ComfyUI + custom-node Python deps** (extra-requirements.txt)
-4. **Runtime base** (rclone, openziti, SSH, user setup)
+4. **Runtime base** (rclone, SSH, user setup)
 5. **Application code** (handler.py, comfyui_client.py, entrypoint.sh)
 6. **Configuration files** (runpod-config-*.json, .env.example)
 
@@ -75,7 +74,6 @@ ENTRYPOINT ["/workspace/entrypoint.sh"]
 The entrypoint script handles:
 - Mode detection (local vs serverless vs pods)
 - Configuration loading from .env
-- Optional OpenZiti tunnel initialization
 - Optional SSH server startup
 - ComfyUI server startup
 - Handler launch (serverless mode only)
@@ -211,15 +209,6 @@ The uv installer adds to PATH in the same RUN command. If this fails, check:
 - Internet connectivity during build
 - Proxy settings if behind corporate firewall
 
-### Build Fails: OpenZiti installation
-
-OpenZiti installation requires internet access. If behind a firewall:
-```dockerfile
-# Add proxy settings before OpenZiti install
-ENV http_proxy=http://proxy:port
-ENV https_proxy=http://proxy:port
-```
-
 ### Image Size Too Large
 
 The base ComfyUI image is already large (~10GB). To reduce size:
@@ -269,7 +258,6 @@ docker build --build-arg BASE_IMAGE=custom/comfyui:tag \
 - `pyproject.toml`
 - `runpod-config.json`
 - `.env.example`
-- `openziti/tunnel_setup.sh`
 - `ssh/setup_ssh.sh`
 - `ssh/sshd_config`
 

@@ -222,20 +222,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     rm -rf /var/lib/apt/lists/* && \
     node --version && npm --version
 
-# Install rclone and ziti-edge-tunnel in parallel.
-# NOTE: The old URL https://get.openziti.io/tunnel/install.bash now 404s
-# (OpenZiti reorganized their install URLs). We download the binary
-# directly from the ziti-tunnel-sdk-c GitHub releases instead.
-# Version pinned to match sanctuary/ansible/vars/network.yml.
-ARG ZITI_TUNNEL_VERSION=1.18.5
-RUN curl https://rclone.org/install.sh | bash & \
-    ZET_URL="https://github.com/openziti/ziti-tunnel-sdk-c/releases/download/v${ZITI_TUNNEL_VERSION}/ziti-edge-tunnel-Linux_x86_64.zip" && \
-    curl -sSLf -o /tmp/zet.zip "$ZET_URL" && \
-    unzip -o /tmp/zet.zip -d /tmp/zet && \
-    mv /tmp/zet/ziti-edge-tunnel /usr/local/bin/ziti-edge-tunnel && \
-    chmod +x /usr/local/bin/ziti-edge-tunnel && \
-    rm -rf /tmp/zet /tmp/zet.zip && \
-    wait
+# Install rclone for B2/S3-compatible model storage mounting.
+RUN curl https://rclone.org/install.sh | bash
 
 RUN mkdir -p /var/run/sshd /root/.ssh /runpod-volume && chmod 700 /root/.ssh
 
@@ -399,10 +387,9 @@ ENV PIP_CONSTRAINT=/comfyui/venv/constraints/opencv.txt
 COPY src/handler.py src/comfyui_client.py src/storage_s3.py ./
 COPY config/runpod-config-serverless.json config/runpod-config-pods.json .env.example ./
 
-COPY openziti/ ./openziti/
 COPY ssh/ ./ssh/
 COPY storage/ ./storage/
-RUN chmod +x ./openziti/*.sh ./ssh/*.sh ./storage/*.sh 2>/dev/null || true
+RUN chmod +x ./ssh/*.sh ./storage/*.sh 2>/dev/null || true
 
 COPY src/handler.py src/comfyui_client.py src/storage_s3.py ./
 COPY entrypoint.sh ./

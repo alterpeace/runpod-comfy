@@ -199,7 +199,7 @@ time ls /comfyui/models/checkpoints/
 
 ### Access ComfyUI WebUI
 
-1. Open ComfyUI WebUI (via RunPod proxy or OpenZiti)
+1. Open ComfyUI WebUI (via RunPod proxy or SSH tunnel)
 2. Check model dropdown - should show your models
 3. Load a workflow and generate an image
 4. First generation may be slow (downloading model)

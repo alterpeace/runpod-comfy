@@ -35,7 +35,6 @@ services:
       - ${COMFY_DATA_DIR:-./.local}/user:/comfyui/user
       - ./.env:/workspace/.env:ro  # Configuration file (optional features)
       - ./entrypoint.sh:/workspace/entrypoint.sh:ro  # Mount entrypoint for live changes
-      - ./.local/ziti:/workspace/ziti:ro  # OpenZiti enrolled identity (comfy-host.json) for the in-container tunnel
     environment:
       - MODE=local
       - COMFYUI_PORT=8188
@@ -64,11 +63,6 @@ services:
     # Or add to .env:  COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml
     # Then just:       docker compose up -d
     #
-    # The tun device is always needed (OpenZiti tunnel):
-    devices:
-      - /dev/net/tun:/dev/net/tun  # tun device required by ziti-edge-tunnel (OpenZiti)
-    cap_add:
-      - NET_ADMIN  # ziti-edge-tunnel needs this to create its tun interface
     restart: unless-stopped
     network_mode: host  # Use host networking to fix DNS issues
 

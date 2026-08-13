@@ -510,7 +510,7 @@ When enabled, the container startup:
 
 | Mode | Use Case | Access |
 |------|----------|--------|
-| `http` (default) | Agent connects via SSH tunnel, OpenZiti, or RunPod proxy | `http://<host>:8765/mcp` |
+| `http` (default) | Agent connects via SSH tunnel or RunPod proxy | `http://<host>:8765/mcp` |
 | `tunnel` | Public access without exposing ports | Auto-generated `https://...` URL (printed to logs) |
 | `stdio` | Agent runs on the same host | Local pipe (no port) |
 

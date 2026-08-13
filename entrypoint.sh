@@ -220,17 +220,8 @@ fi
 # ============================================================================
 log_info "Detecting enabled features..."
 
-OPENZITI_ENABLED=false
 SSH_ENABLED=false
 MCP_ENABLED=false
-
-# Check OpenZiti configuration
-if [ -n "$OPENZITI_IDENTITY" ] || [ -n "$OPENZITI_IDENTITY_JSON" ]; then
-    OPENZITI_ENABLED=true
-    log_success "✓ OpenZiti tunnel: ENABLED"
-else
-    log_info "✗ OpenZiti tunnel: DISABLED (no OPENZITI_IDENTITY* vars)"
-fi
 
 # Check SSH configuration
 if [ "$ENABLE_SSH" = "true" ] && [ -n "$SSH_PUBLIC_KEY" ]; then
@@ -254,22 +245,6 @@ if [ "$ENABLE_MCP" = "true" ]; then
     log_info "  MCP_COMFYUI_URL: ${MCP_COMFYUI_URL:-http://127.0.0.1:8188}"
 else
     log_info "✗ Comfy MCP server: DISABLED (set ENABLE_MCP=true to enable)"
-fi
-
-# ============================================================================
-# OPENZITI TUNNEL INITIALIZATION
-# ============================================================================
-if [ "$OPENZITI_ENABLED" = true ]; then
-    log_info "Initializing OpenZiti tunnel..."
-    
-    if [ -f "/workspace/openziti/tunnel_setup.sh" ]; then
-        bash /workspace/openziti/tunnel_setup.sh &
-        ZITI_PID=$!
-        log_success "OpenZiti tunnel started (PID: $ZITI_PID)"
-    else
-        log_error "OpenZiti tunnel script not found at /workspace/openziti/tunnel_setup.sh"
-        log_warning "Continuing without OpenZiti tunnel..."
-    fi
 fi
 
 # ============================================================================
@@ -678,16 +653,12 @@ if [ "$MODE" = "serverless" ]; then
 elif [ "$MODE" = "pods" ]; then
     log_info "=== PODS MODE ==="
     log_success "ComfyUI is running at http://localhost:$COMFYUI_PORT"
-    log_info "Access via RunPod proxy, OpenZiti tunnel, or SSH tunnel"
+    log_info "Access via RunPod proxy or SSH tunnel"
     
     if [ "$SSH_ENABLED" = true ]; then
         log_success "SSH is available on port 22"
     fi
     
-    if [ "$OPENZITI_ENABLED" = true ]; then
-        log_success "OpenZiti tunnel is active"
-    fi
-
     if [ "$MCP_ENABLED" = true ]; then
         log_success "Comfy MCP server is running on port ${MCP_PORT:-8765}"
         log_info "Agent Panel tab (💬) available in ComfyUI sidebar"
@@ -713,10 +684,6 @@ elif [ "$MODE" = "local" ]; then
         log_success "SSH is available on port 22"
     fi
     
-    if [ "$OPENZITI_ENABLED" = true ]; then
-        log_success "OpenZiti tunnel is active"
-    fi
-
     if [ "$MCP_ENABLED" = true ]; then
         log_success "Comfy MCP server is running on port ${MCP_PORT:-8765}"
         log_info "Agent Panel tab (💬) available in ComfyUI sidebar"

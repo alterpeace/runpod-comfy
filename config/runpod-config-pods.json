@@ -10,9 +10,8 @@
     "COMFYUI_PORT": "8188",
     "COMFYUI_ARGS": "--use-sage-attention --lowvram"
   },
-  "docker_args": "--device /dev/net/tun --cap-add NET_ADMIN",
   "start_ssh": false,
   "ports": "8188/http,8765/http",
   "description": "ComfyUI Pods deployment - persistent server with continuous WebUI access",
-  "readme": "Configure optional features by uploading .env file to /runpod-volume/.env in network storage. MODE=pods runs ComfyUI as a persistent server without the serverless handler. WARNING: Billing continues until pod is TERMINATED (stopping is not enough). docker_args enables /dev/net/tun and NET_ADMIN for the OpenZiti ziti-edge-tunnel."
+  "readme": "Configure optional features by uploading .env file to /runpod-volume/.env in network storage. MODE=pods runs ComfyUI as a persistent server without the serverless handler. WARNING: Billing continues until pod is TERMINATED (stopping is not enough)."
 }
