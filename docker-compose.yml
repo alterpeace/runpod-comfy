@@ -51,6 +51,13 @@ services:
       - NO_ALBUMENTATIONS_UPDATE=1
       - COMFYUI_MANAGER_DISABLE_UPDATE_CHECK=true
       - TORCH_CUDNN_V8_API_ENABLED=0
+      # Ren (FL-MCP chat) API keys — the OS keyring is unavailable in Docker,
+      # so credentials set via the UI only last until backend restart.
+      # Set these in .env to persist across container restarts.
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
     # GPU access: The external Docker Compose provider (v5.x) does NOT correctly
     # resolve CDI device strings (nvidia.com/gpu=all) when `docker` is a Podman
     # shim — it mangles them into path-based source:target syntax. The

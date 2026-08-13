@@ -106,10 +106,18 @@ else
 fi
 
 # Check if node_modules exists
+# The ComfyUI Frontend uses pnpm (has pnpm-lock.yaml + pnpm-workspace.yaml)
 if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
-    echo -e "${BLUE}Installing frontend dependencies (npm install)...${NC}"
+    echo -e "${BLUE}Installing frontend dependencies...${NC}"
+
+    # Check for pnpm, install if missing
+    if ! command -v pnpm &>/dev/null; then
+        echo -e "${YELLOW}  pnpm not found, installing...${NC}"
+        npm install -g pnpm
+    fi
+
     cd "$FRONTEND_DIR"
-    npm install
+    pnpm install
     cd "$PROJECT_DIR"
     echo -e "${GREEN}✓ Dependencies installed${NC}"
 else
@@ -257,7 +265,7 @@ fi
 echo -e "\n${CYAN}=== Starting Frontend Dev Server ===${NC}"
 
 cd "$FRONTEND_DIR"
-npm run dev -- --host 0.0.0.0 &
+pnpm dev -- --host 0.0.0.0 &
 FRONTEND_PID=$!
 cd "$PROJECT_DIR"
 
