@@ -14,14 +14,17 @@ This guide covers installing LTX-2.5 alongside (not replacing) LTX-2.3.
 | Feature | LTX-2.3 | LTX-2.5 |
 |---|---|---|
 | Text encoder | Gemma 3 12B (fp4 mixed) | Gemma 4 12B (bf16 or int8-convrot) |
+| Text enhancer | ❌ None | ✅ Gemma 4 E2B IT (prompt rewriting) |
 | Audio | Audio VAE (separate) | Native audio gen (audio VAE + pipeline) |
-| Spatial upscaler | x2 (bundled) | x2 (separate file, improved) |
+| Spatial upscaler | x2 (bundled) | x2 (separate file, improved) — **2.3 upscaler also works** |
 | Temporal upscaler | ❌ None | ✅ x2 frame interpolation |
 | Duration control | Fixed context | Duration head patch (variable) |
 | Distilled LoRA | 384-step training | 450-step training |
 | Quantization | GGUF Q4/Q8 | int8-convrot, NVFP4, GGUF (community) |
 | Gated on HF | No | Yes (auto-gated) |
-| IC-LoRAs | Deblur, decompression, etc. | Pixel-Spatial-Upscaler (new) |
+| IC-LoRAs | Deblur, decompression, etc. | Pixel-Spatial-Upscaler (new) — **2.3 IC-LoRAs also work** |
+| Multishot | ❌ Single shot only | ✅ 2-4 connected shots in one generation |
+| Frame count rule | Any | Must be 1 + multiple of 8 |
 
 ## Prerequisites
 
@@ -42,6 +45,13 @@ LTX-2.5 is auto-gated on HuggingFace. You must:
 
 LTX-2.5 uses the same `ComfyUI-LTXVideo` custom node as 2.3 (updated version).
 The install script handles this automatically.
+
+New nodes in LTX-2.5 workflows (from official Lightricks examples):
+- `LTXVSetAudioRefTokens` — freezes source audio for V2V (carries through unchanged)
+- `LTXVCropGuides` — crops out IC-LoRA guide frames after sampling
+- `SaveVideo` / `LoadVideo` — LTX-native video I/O (alternative to VHS)
+- `PrimitiveStringMultiline` / `PrimitiveFloat` — input parameter nodes
+- `PreviewAny` — preview node
 
 ## Installation
 
@@ -241,4 +251,27 @@ Ensure `ComfyUI-GGUF` custom node is installed:
 
 - Verify the IC-LoRA file exists in `models/loras/`
 - Check `LTXICLoRALoaderModelOnly` node references the correct filename
-- IC-LoRAs from LTX-2.3 are **not compatible** with LTX-2.5 — use 2.5 IC-LoRAs only
+- **LTX-2.3 IC-LoRAs ARE compatible with LTX-2.5** — confirmed by official
+  Lightricks V2V workflow which uses `ltx-2.3-22b-ic-lora-instant-shave-0.9.safetensors`.
+  You can reuse 2.3 IC-LoRAs (deblur, decompression, colorization, etc.) with 2.5.
+
+## Cross-References
+
+This implementation was cross-referenced with:
+
+- **Official Lightricks workflows**: https://github.com/Lightricks/ComfyUI-LTXVideo/tree/master/example_workflows/2.5
+  - 9 official workflows: T2V/I2V (single + two-stage), V2V IC-LoRA, T2A (text-to-audio),
+    IC-LoRA ingredients/inpaint/outpaint/motion-track/union-control
+  - Confirms 2.3 IC-LoRAs + spatial upscaler work with 2.5
+  - Reveals text enhancer model (`gemma4_e2b_it_bf16.safetensors`)
+  - Frame count must be 1 + multiple of 8
+- **Kijai's model repos**: https://huggingface.co/Kijai/LTX2.3_comfy
+  - Transformer-only checkpoints (fp8, int8-convrot, mxfp8, bf16)
+  - VAEs, tiny VAE, OmniNFT RL LoRA
+  - Kijai has not yet published LTX-2.5-specific repos (as of Aug 2026)
+- **Benji's LTX-2.5 Agent Prompt Skill**: https://github.com/benjiyaya/LTX-2.5-Agent-Prompt-Skill
+  - Reveals LTX-2.5 native multishot (2-4 connected shots in one generation)
+  - 6-part prompt structure: shot → scene → action → character → camera → audio
+  - Prompting is pure natural language (no JSON/tags)
+- **Community GGUF quants**: https://huggingface.co/Abiray/LTX-2.5-Distilled-GGUF
+  - Q4_K_M and Q8_0 for low-VRAM GPUs

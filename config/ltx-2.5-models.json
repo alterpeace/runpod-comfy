@@ -1,9 +1,9 @@
 {
-  "_comment": "Model manifest for LTX-2.5 V2V / IC-LoRA / audio support. Consumed by scripts/download_ltx25_models.py. Each entry downloads a single file from a Hugging Face repo into models/<dest>/<filename>. LTX-2.5 is auto-gated on HuggingFace — visit https://huggingface.co/Lightricks/LTX-2.5 and click 'Agree and Access' once, then set HF_TOKEN. LTX-2.5 uses Gemma 4 (not Gemma 3) and has native audio generation, temporal upscaler, and duration head patch.",
+  "_comment": "Model manifest for LTX-2.5 V2V / IC-LoRA / audio support. Consumed by scripts/download_ltx25_models.py. Each entry downloads a single file from a Hugging Face repo into models/<dest>/<filename>. LTX-2.5 is auto-gated on HuggingFace — visit https://huggingface.co/Lightricks/LTX-2.5 and click 'Agree and Access' once, then set HF_TOKEN. LTX-2.5 uses Gemma 4 (not Gemma 3) and has native audio generation, temporal upscaler, and duration head patch. NOTE: LTX-2.3 IC-LoRAs and the 2.3 spatial upscaler ARE compatible with 2.5 (confirmed by official Lightricks workflows). Cross-referenced with official workflows at https://github.com/Lightricks/ComfyUI-LTXVideo/tree/master/example_workflows/2.5 and Kijai's repos.",
   "profiles": {
     "minimal": ["text_encoder_int8", "checkpoint_dev_int8", "distilled_lora"],
     "low_vram_8gb": ["text_encoder_int8", "gguf_distilled_q4", "video_vae", "audio_vae", "distilled_lora"],
-    "mid_vram_24gb": ["text_encoder_int8", "checkpoint_dev_int8", "distilled_lora", "video_vae", "audio_vae", "spatial_upscaler", "temporal_upscaler", "iclora_pixel_upscaler"],
+    "mid_vram_24gb": ["text_encoder_int8", "checkpoint_dev_int8", "distilled_lora", "video_vae", "audio_vae", "spatial_upscaler", "temporal_upscaler", "iclora_pixel_upscaler", "text_enhancer"],
     "full": ["all"]
   },
   "models": [
@@ -142,6 +142,22 @@
       "file": "ltx-2.5-22b-ic-lora-pixel-spatial-upscaler.safetensors",
       "dest": "loras",
       "gated": true
+    },
+    {
+      "id": "text_enhancer",
+      "desc": "Gemma 4 E2B IT text enhancer — second text encoder used by official LTX-2.5 workflows for prompt enhancement (rewrites short prompts into full cinematic descriptions). From Comfy-Org/gemma-4.",
+      "repo": "Comfy-Org/gemma-4",
+      "file": "text_encoders/gemma4_e2b_it_bf16.safetensors",
+      "dest": "text_encoders",
+      "gated": false
+    },
+    {
+      "id": "spatial_upscaler_23_compat",
+      "desc": "LTX-2.3 spatial upscaler x2 — confirmed compatible with LTX-2.5 by official Lightricks two-stage workflow. Use this if the 2.5 upscaler is unavailable.",
+      "repo": "Lightricks/LTX-2.3",
+      "file": "ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
+      "dest": "latent_upscale_models",
+      "gated": false
     }
   ]
 }
