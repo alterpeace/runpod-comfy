@@ -8,20 +8,14 @@
   "2": {
     "inputs": {
       "clip_name": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
-      "type": "ltx"
+      "type": "ltxv"
     },
     "class_type": "CLIPLoader"
   },
   "3": {
     "inputs": {
-      "model": [
-        "1",
-        0
-      ],
-      "clip": [
-        "2",
-        0
-      ],
+      "model": ["1", 0],
+      "clip": ["2", 0],
       "lora_name": "ltx-2.5-22b-distilled-lora-450-bf16.safetensors",
       "strength_model": 1.0,
       "strength_clip": 1.0
@@ -30,20 +24,14 @@
   },
   "4": {
     "inputs": {
-      "clip": [
-        "3",
-        1
-      ],
+      "clip": ["3", 1],
       "text": "cinematic drone shot over a misty mountain range at sunrise, golden light breaking through clouds, highly detailed, 4k, professional cinematography"
     },
     "class_type": "CLIPTextEncode"
   },
   "5": {
     "inputs": {
-      "clip": [
-        "3",
-        1
-      ],
+      "clip": ["3", 1],
       "text": "blurry, low quality, distorted, glitch, artifacts, flickering, jerky motion, watermark, noisy, grainy, washed out, banding"
     },
     "class_type": "CLIPTextEncode"
@@ -59,70 +47,29 @@
   },
   "7": {
     "inputs": {
-      "model": [
-        "3",
-        0
-      ],
-      "scheduler": "linear_quadratic",
+      "seed": 42,
       "steps": 8,
-      "denoise": 1.0
+      "cfg": 3.0,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 1.0,
+      "model": ["3", 0],
+      "positive": ["4", 0],
+      "negative": ["5", 0],
+      "latent_image": ["6", 0]
     },
-    "class_type": "BasicScheduler"
+    "class_type": "KSampler"
   },
   "8": {
     "inputs": {
-      "sampler_name": "euler"
-    },
-    "class_type": "KSamplerSelect"
-  },
-  "9": {
-    "inputs": {
-      "model": [
-        "3",
-        0
-      ],
-      "positive": [
-        "4",
-        0
-      ],
-      "negative": [
-        "5",
-        0
-      ],
-      "sampler": [
-        "8",
-        0
-      ],
-      "sigmas": [
-        "7",
-        0
-      ],
-      "latent_image": [
-        "6",
-        0
-      ]
-    },
-    "class_type": "SamplerCustomAdvanced"
-  },
-  "10": {
-    "inputs": {
-      "latents": [
-        "9",
-        0
-      ],
-      "vae": [
-        "1",
-        2
-      ]
+      "latents": ["7", 0],
+      "vae": ["1", 2]
     },
     "class_type": "LTXVTiledVAEDecode"
   },
-  "11": {
+  "9": {
     "inputs": {
-      "images": [
-        "10",
-        0
-      ],
+      "images": ["8", 0],
       "frame_rate": 24,
       "loop_count": 0,
       "filename_prefix": "ltx25_t2v",
