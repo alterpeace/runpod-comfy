@@ -222,8 +222,16 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     rm -rf /var/lib/apt/lists/* && \
     node --version && npm --version
 
-# Install rclone for B2/S3-compatible model storage mounting.
-RUN curl https://rclone.org/install.sh | bash
+# Install rclone (B2/S3 storage mounting) and cloudflared (stable WebUI tunnel).
+# cloudflared is a userspace reverse tunnel — no CAP_NET_ADMIN or TUN interface
+# needed, so it works in RunPod serverless containers (unlike OpenZiti).
+ARG CLOUDFLARED_VERSION=2025.7.0
+RUN curl https://rclone.org/install.sh | bash && \
+    curl -sSLf -o /tmp/cloudflared.deb \
+      "https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-amd64.deb" && \
+    dpkg -i /tmp/cloudflared.deb && \
+    rm -f /tmp/cloudflared.deb && \
+    cloudflared --version
 
 RUN mkdir -p /var/run/sshd /root/.ssh /runpod-volume && chmod 700 /root/.ssh
 

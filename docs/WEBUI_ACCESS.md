@@ -5,13 +5,18 @@
 | Where ComfyUI runs | Inbound? | How to reach the WebUI | Script |
 |---|---|---|---|
 | **Pod** | Public SSH (IP:port from Connect panel) | `ssh -L 8188:127.0.0.1:8188 root@<ip> -p <port>` → http://localhost:8188 | [`scripts/tunnel_webui.sh`](../scripts/tunnel_webui.sh) / [`.ps1`](../scripts/tunnel_webui.ps1) |
-| **Serverless worker** | ❌ outbound-only | **Not accessible** — serverless workers have no inbound ports. Use the API (`/run`, `/runsync`) or a Pod for interactive access. | — |
+| **Serverless worker** | ❌ outbound-only | **Cloudflare Tunnel** (userspace, outbound-only) → `https://comfyui.yourdomain.com` | See [`docs/CLOUDFLARE_TUNNEL.md`](CLOUDFLARE_TUNNEL.md) |
 | **Local docker** | direct | http://localhost:8188 | — |
 
-> **Note:** The ComfyUI WebUI runs inside serverless workers (on `127.0.0.1:8188`)
-> but is **not reachable** because RunPod serverless containers are outbound-only
-> with no exposed ports. For interactive WebUI sessions, use a **Pod** instead.
-> Serverless is designed for headless API-driven workflow execution.
+> **Serverless WebUI access via Cloudflare Tunnel:** `cloudflared` is a userspace
+> reverse tunnel that dials out to Cloudflare's edge via HTTPS — no `CAP_NET_ADMIN`
+> or TUN interface needed, so it works in RunPod serverless containers. Configure
+> a named tunnel for a stable URL, or use `cloudflared tunnel --url` for an
+> ephemeral debugging URL. See [`docs/CLOUDFLARE_TUNNEL.md`](CLOUDFLARE_TUNNEL.md)
+> for full setup instructions.
+>
+> **Uptime caveat:** the tunnel only works while a worker is running (job duration
+> + idle timeout). Set `workersMin=1` for always-on access (bills 24/7 like a Pod).
 
 ## Core Principle
 
@@ -52,11 +57,17 @@ http://localhost:8188
 
 #### Serverless Mode (RunPod)
 ```bash
-# The WebUI runs on 127.0.0.1:8188 inside the worker but is NOT reachable
-# from outside — serverless workers are outbound-only with no exposed ports.
-# Use the API instead:
+# Option 1: Cloudflare Tunnel (stable URL, recommended)
+# Requires setup — see docs/CLOUDFLARE_TUNNEL.md
+https://comfyui.yourdomain.com
+
+# Option 2: Cloudflare Quick Tunnel (ephemeral, no setup)
+# Run inside the worker:
+cloudflared tunnel --url http://127.0.0.1:8188
+# Prints a random https://<random>.trycloudflare.com URL to stderr
+
+# Option 3: API only (no WebUI)
 #   POST https://api.runpod.io/v2/<ENDPOINT_ID>/runsync
-# For interactive WebUI access, deploy a Pod instead.
 ```
 
 ## Mode Comparison

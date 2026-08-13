@@ -222,6 +222,7 @@ log_info "Detecting enabled features..."
 
 SSH_ENABLED=false
 MCP_ENABLED=false
+CLOUDFLARED_ENABLED=false
 
 # Check SSH configuration
 if [ "$ENABLE_SSH" = "true" ] && [ -n "$SSH_PUBLIC_KEY" ]; then
@@ -231,6 +232,19 @@ elif [ "$ENABLE_SSH" = "true" ] && [ -z "$SSH_PUBLIC_KEY" ]; then
     log_warning "✗ SSH server: DISABLED (ENABLE_SSH=true but SSH_PUBLIC_KEY not set)"
 else
     log_info "✗ SSH server: DISABLED"
+fi
+
+# Check Cloudflare Tunnel configuration
+# Userspace reverse tunnel — works on serverless (no CAP_NET_ADMIN needed).
+# Requires a pre-created named tunnel + credentials file on the network volume.
+if [ -n "$CLOUDFLARED_TUNNEL_ID" ] && [ -n "$CLOUDFLARED_CREDENTIALS_PATH" ]; then
+    CLOUDFLARED_ENABLED=true
+    log_success "✓ Cloudflare Tunnel: ENABLED"
+    log_info "  Tunnel ID: $CLOUDFLARED_TUNNEL_ID"
+    log_info "  Hostname: ${CLOUDFLARED_HOSTNAME:-(not set)}"
+    log_info "  Credentials: $CLOUDFLARED_CREDENTIALS_PATH"
+else
+    log_info "✗ Cloudflare Tunnel: DISABLED (set CLOUDFLARED_TUNNEL_ID + CLOUDFLARED_CREDENTIALS_PATH to enable)"
 fi
 
 # Check MCP (Comfy MCP server) configuration
@@ -246,6 +260,12 @@ if [ "$ENABLE_MCP" = "true" ]; then
 else
     log_info "✗ Comfy MCP server: DISABLED (set ENABLE_MCP=true to enable)"
 fi
+
+# ============================================================================
+# CLOUDFLARE TUNNEL INITIALIZATION
+# ============================================================================
+# Starts after ComfyUI is healthy (needs port 8188 to be listening).
+# The tunnel is started in the post-ComfyUI section below.
 
 # ============================================================================
 # SSH SERVER INITIALIZATION
@@ -566,6 +586,57 @@ if [ $WAIT_COUNT -ge $MAX_WAIT ]; then
 fi
 
 # ============================================================================
+# CLOUDFLARE TUNNEL STARTUP (optional — stable WebUI access on serverless)
+# ============================================================================
+# cloudflared is a userspace reverse tunnel: it dials out to Cloudflare's edge
+# via HTTPS, creating a stable public URL that forwards to ComfyUI on 8188.
+# No CAP_NET_ADMIN or TUN interface needed — works in RunPod serverless containers.
+#
+# Requires a pre-created named tunnel in Cloudflare Zero Trust dashboard:
+#   1. Create a tunnel at https://one.dash.cloudflare.com/ → Networks → Tunnels
+#   2. Download the credentials JSON file
+#   3. Place it on the network volume (e.g. /runpod-volume/cloudflared-credentials.json)
+#   4. Set CLOUDFLARED_TUNNEL_ID, CLOUDFLARED_CREDENTIALS_PATH, CLOUDFLARED_HOSTNAME
+#
+# See docs/CLOUDFLARE_TUNNEL.md for full setup instructions.
+if [ "$CLOUDFLARED_ENABLED" = true ]; then
+    log_info "Starting Cloudflare Tunnel..."
+
+    if ! command -v cloudflared &>/dev/null; then
+        log_error "cloudflared not found — install failed or image needs rebuild"
+        log_warning "Continuing without Cloudflare Tunnel..."
+    elif [ ! -f "$CLOUDFLARED_CREDENTIALS_PATH" ]; then
+        log_error "Cloudflare credentials file not found: $CLOUDFLARED_CREDENTIALS_PATH"
+        log_warning "Continuing without Cloudflare Tunnel..."
+    else
+        # Build the tunnel config file dynamically
+        CLOUDFLARED_CONF_DIR="/tmp/cloudflared"
+        mkdir -p "$CLOUDFLARED_CONF_DIR"
+
+        # Generate config.yml — maps the hostname to local ComfyUI
+        cat > "$CLOUDFLARED_CONF_DIR/config.yml" <<EOF
+tunnel: ${CLOUDFLARED_TUNNEL_ID}
+credentials-file: ${CLOUDFLARED_CREDENTIALS_PATH}
+protocol: http2
+
+ingress:
+  - hostname: ${CLOUDFLARED_HOSTNAME}
+    service: http://127.0.0.1:${COMFYUI_PORT}
+  - service: http_status:404
+EOF
+
+        # Start cloudflared in background
+        cloudflared tunnel --config "$CLOUDFLARED_CONF_DIR/config.yml" run "$CLOUDFLARED_TUNNEL_ID" &
+        CLOUDFLARED_PID=$!
+        log_success "Cloudflare Tunnel started (PID: $CLOUDFLARED_PID)"
+
+        if [ -n "$CLOUDFLARED_HOSTNAME" ]; then
+            log_success "WebUI accessible at: https://${CLOUDFLARED_HOSTNAME}"
+        fi
+    fi
+fi
+
+# ============================================================================
 # COMFY MCP SERVER STARTUP (optional — agent-driven control of ComfyUI)
 # ============================================================================
 # Starts the comfyui-mcp MCP server in the background so AI agents
@@ -645,6 +716,10 @@ if [ "$MODE" = "serverless" ]; then
     log_info "=== SERVERLESS MODE ==="
     log_info "ComfyUI WebUI is accessible for testing and debugging"
     log_info "Starting RunPod handler for API-driven job processing..."
+
+    if [ "$CLOUDFLARED_ENABLED" = true ] && [ -n "$CLOUDFLARED_HOSTNAME" ]; then
+        log_success "WebUI accessible at: https://${CLOUDFLARED_HOSTNAME}"
+    fi
     
     # Start the RunPod handler (this will block and process jobs)
     cd /workspace
@@ -657,6 +732,10 @@ elif [ "$MODE" = "pods" ]; then
     
     if [ "$SSH_ENABLED" = true ]; then
         log_success "SSH is available on port 22"
+    fi
+
+    if [ "$CLOUDFLARED_ENABLED" = true ] && [ -n "$CLOUDFLARED_HOSTNAME" ]; then
+        log_success "Cloudflare Tunnel active: https://${CLOUDFLARED_HOSTNAME}"
     fi
     
     if [ "$MCP_ENABLED" = true ]; then
@@ -682,6 +761,10 @@ elif [ "$MODE" = "local" ]; then
     
     if [ "$SSH_ENABLED" = true ]; then
         log_success "SSH is available on port 22"
+    fi
+
+    if [ "$CLOUDFLARED_ENABLED" = true ] && [ -n "$CLOUDFLARED_HOSTNAME" ]; then
+        log_success "Cloudflare Tunnel active: https://${CLOUDFLARED_HOSTNAME}"
     fi
     
     if [ "$MCP_ENABLED" = true ]; then

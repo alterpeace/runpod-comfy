@@ -24,6 +24,7 @@ the final container.
 
 ### System Dependencies
 - **OpenSSH Server**: For SSH access and debugging
+- **cloudflared**: For stable WebUI tunnel access on serverless (userspace, no CAP_NET_ADMIN needed)
 - **rclone**: For B2/S3-compatible model storage mounting
 - **curl/wget**: For downloading and health checks
 
@@ -50,7 +51,7 @@ The Dockerfile is structured to maximize Docker layer caching (4 stages:
 1. **System packages** (rarely change)
 2. **PyTorch + core ML deps** (only rebuild if TORCH_VERSION changes)
 3. **ComfyUI + custom-node Python deps** (extra-requirements.txt)
-4. **Runtime base** (rclone, SSH, user setup)
+4. **Runtime base** (rclone, cloudflared, SSH, user setup)
 5. **Application code** (handler.py, comfyui_client.py, entrypoint.sh)
 6. **Configuration files** (runpod-config-*.json, .env.example)
 

@@ -123,6 +123,15 @@ ENABLE_SSH = get_env_bool('ENABLE_SSH', default=False)
 SSH_PUBLIC_KEY = os.environ.get('SSH_PUBLIC_KEY', '')
 SSH_AUTHORIZED_KEYS_PATH = os.environ.get('SSH_AUTHORIZED_KEYS_PATH', '')
 
+# Cloudflare Tunnel Configuration (userspace reverse tunnel for WebUI access)
+# Works on serverless workers — no CAP_NET_ADMIN or TUN interface needed.
+# Requires a pre-created named tunnel + credentials file on the network volume.
+CLOUDFLARED_TUNNEL_ID = os.environ.get('CLOUDFLARED_TUNNEL_ID', '')
+CLOUDFLARED_CREDENTIALS_PATH = os.environ.get('CLOUDFLARED_CREDENTIALS_PATH', '')
+CLOUDFLARED_CONFIG_PATH = os.environ.get('CLOUDFLARED_CONFIG_PATH', '')
+CLOUDFLARED_HOSTNAME = os.environ.get('CLOUDFLARED_HOSTNAME', '')
+CLOUDFLARED_ENABLED = bool(CLOUDFLARED_TUNNEL_ID and CLOUDFLARED_CREDENTIALS_PATH)
+
 # Log configuration on startup
 logger.info(f"Configuration loaded:")
 logger.info(f"  MODE: {MODE}")
@@ -139,6 +148,10 @@ elif STORAGE_TYPE == 's3':
     if S3_ENDPOINT_URL:
         logger.info(f"  S3_ENDPOINT_URL: {S3_ENDPOINT_URL}")
 logger.info(f"  ENABLE_SSH: {ENABLE_SSH}")
+logger.info(f"  Cloudflare Tunnel: {'enabled' if CLOUDFLARED_ENABLED else 'disabled'}")
+if CLOUDFLARED_ENABLED:
+    logger.info(f"  CLOUDFLARED_TUNNEL_ID: {CLOUDFLARED_TUNNEL_ID}")
+    logger.info(f"  CLOUDFLARED_HOSTNAME: {CLOUDFLARED_HOSTNAME or '(not set)'}")
 
 # Global ComfyUI process and clients
 comfyui_process = None
