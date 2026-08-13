@@ -192,6 +192,29 @@ for full mode tables, stage-toggle JSON patches, HF gating steps, VRAM
 fallbacks, SeedVR2 color correction guide, ReTake section-repair guide,
 and cost estimates.
 
+## LTX-2.5 Workflows
+
+LTX-2.5 is Lightricks' latest video model (22B, Gemma 4 text encoder, native
+audio, spatial + temporal upscalers). These workflows coexist with the LTX-2.3
+workflows above — both can be installed on the same volume.
+
+See [`ltx25_README.md`](ltx25_README.md) for detailed workflow descriptions,
+VRAM tables, and customization guide. See [`docs/LTX_2.5_SETUP.md`](../docs/LTX_2.5_SETUP.md)
+for installation instructions.
+
+| Workflow | Purpose | VRAM | Format |
+|---|---|---|---|
+| [`ltx25_text_to_video.json`](ltx25_text_to_video.json) | Text-to-video generation | 24GB | API |
+| [`ltx25_v2v_redetail_24gb.json`](ltx25_v2v_redetail_24gb.json) | V2V redetail with IC-LoRA + spatial upscale | 24GB | API |
+| [`ltx25_v2v_redetail_8gb.json`](ltx25_v2v_redetail_8gb.json) | V2V redetail with GGUF Q4 (low VRAM) | 8GB | API |
+| [`ltx25_animatediff_restyle_upscale_24gb.json`](ltx25_animatediff_restyle_upscale_24gb.json) | Creative restyle + spatial + temporal upscale | 24GB | API |
+
+**Install LTX-2.5 models:**
+```bash
+export HF_TOKEN=hf_...  # required — LTX-2.5 is gated
+./scripts/install_ltx25.sh --profile mid_vram_24gb
+```
+
 ## Creating Custom Workflows
 
 1. Design your workflow in ComfyUI WebUI

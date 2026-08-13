@@ -1,0 +1,93 @@
+{
+  "1": {
+    "inputs": {
+      "ckpt_name": "ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple"
+  },
+  "2": {
+    "inputs": {
+      "clip_name": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+      "type": "ltx"
+    },
+    "class_type": "CLIPLoader"
+  },
+  "3": {
+    "inputs": {
+      "model": ["1", 0],
+      "clip": ["2", 0],
+      "lora_name": "ltx-2.5-22b-distilled-lora-450-bf16.safetensors",
+      "strength_model": 1.0,
+      "strength_clip": 1.0
+    },
+    "class_type": "LoraLoader"
+  },
+  "4": {
+    "inputs": {
+      "clip": ["3", 1],
+      "text": "cinematic drone shot over a misty mountain range at sunrise, golden light breaking through clouds, highly detailed, 4k, professional cinematography"
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "5": {
+    "inputs": {
+      "clip": ["3", 1],
+      "text": "blurry, low quality, distorted, glitch, artifacts, flickering, jerky motion, watermark, noisy, grainy, washed out, banding"
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "6": {
+    "inputs": {
+      "width": 768,
+      "height": 448,
+      "length": 97,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLTXVLatentVideo"
+  },
+  "7": {
+    "inputs": {
+      "model": ["3", 0],
+      "scheduler": "linear_quadratic",
+      "steps": 8,
+      "denoise": 1.0
+    },
+    "class_type": "BasicScheduler"
+  },
+  "8": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect"
+  },
+  "9": {
+    "inputs": {
+      "model": ["3", 0],
+      "positive": ["4", 0],
+      "negative": ["5", 0],
+      "sampler": ["8", 0],
+      "sigmas": ["7", 0],
+      "latent_image": ["6", 0]
+    },
+    "class_type": "SamplerCustomAdvanced"
+  },
+  "10": {
+    "inputs": {
+      "samples": ["9", 0],
+      "vae": ["1", 2]
+    },
+    "class_type": "LTXVTiledVAEDecode"
+  },
+  "11": {
+    "inputs": {
+      "images": ["10", 0],
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "ltx25_t2v",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true
+    },
+    "class_type": "VHS_VideoCombine"
+  }
+}

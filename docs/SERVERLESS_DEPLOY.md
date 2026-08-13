@@ -241,8 +241,10 @@ uv run python lifecycle/runpod_serverless.py delete --endpoint-id <ID>
 
 ## Choosing a GPU
 
-Match the GPU to the model profile you seeded (see
-[`config/ltx-2.3-models.json`](../config/ltx-2.3-models.json:1)):
+Match the GPU to the model profile you seeded. Both LTX-2.3 and LTX-2.5 are
+supported — they can coexist on the same volume.
+
+### LTX-2.3 (see [`config/ltx-2.3-models.json`](../config/ltx-2.3-models.json:1))
 
 | Profile | VRAM needed | RunPod GPU | Notes |
 |---|---|---|---|
@@ -250,8 +252,19 @@ Match the GPU to the model profile you seeded (see
 | `mid_vram_12_24gb` (fp8) | ~24 GB | RTX 4090 (24 GB) | Best price/perf |
 | `full` (BF16) | 32 GB+ | A100 80GB / H100 | Highest quality, $$$ |
 
+### LTX-2.5 (see [`config/ltx-2.5-models.json`](../config/ltx-2.5-models.json:1) and [`docs/LTX_2.5_SETUP.md`](LTX_2.5_SETUP.md))
+
+| Profile | VRAM needed | RunPod GPU | Notes |
+|---|---|---|---|
+| `low_vram_8gb` (GGUF Q4) | ~8–12 GB | RTX A4000 (16 GB) | Community GGUF, gated repo |
+| `mid_vram_24gb` (int8-convrot) | ~24 GB | RTX 4090 (24 GB) | Best price/perf, includes upscalers |
+| `full` (BF16) | 48 GB+ | A100 80GB / L40 | Highest quality + native audio |
+
+> **Note:** LTX-2.5 is auto-gated on HuggingFace. Set `HF_TOKEN` and click
+> "Agree and Access" at https://huggingface.co/Lightricks/LTX-2.5 before seeding.
+
 Serverless bills per GPU-second, so a faster GPU often costs *less* per job
-than a slow one. For LTX-2.3 fp8 video, `RTX 4090` is the sweet spot.
+than a slow one. For LTX-2.3 fp8 or LTX-2.5 int8 video, `RTX 4090` is the sweet spot.
 
 ---
 

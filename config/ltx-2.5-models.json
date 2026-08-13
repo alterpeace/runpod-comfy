@@ -1,0 +1,147 @@
+{
+  "_comment": "Model manifest for LTX-2.5 V2V / IC-LoRA / audio support. Consumed by scripts/download_ltx25_models.py. Each entry downloads a single file from a Hugging Face repo into models/<dest>/<filename>. LTX-2.5 is auto-gated on HuggingFace — visit https://huggingface.co/Lightricks/LTX-2.5 and click 'Agree and Access' once, then set HF_TOKEN. LTX-2.5 uses Gemma 4 (not Gemma 3) and has native audio generation, temporal upscaler, and duration head patch.",
+  "profiles": {
+    "minimal": ["text_encoder_int8", "checkpoint_dev_int8", "distilled_lora"],
+    "low_vram_8gb": ["text_encoder_int8", "gguf_distilled_q4", "video_vae", "audio_vae", "distilled_lora"],
+    "mid_vram_24gb": ["text_encoder_int8", "checkpoint_dev_int8", "distilled_lora", "video_vae", "audio_vae", "spatial_upscaler", "temporal_upscaler", "iclora_pixel_upscaler"],
+    "full": ["all"]
+  },
+  "models": [
+    {
+      "id": "text_encoder_bf16",
+      "desc": "Gemma 4 12B text encoder with projection (BF16) — full precision, ~24GB",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+      "dest": "text_encoders",
+      "gated": true
+    },
+    {
+      "id": "text_encoder_int8",
+      "desc": "Gemma 4 12B text encoder with projection (int8-convrot) — quantized, ~12GB, recommended for 24GB GPUs",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+      "dest": "text_encoders",
+      "gated": true
+    },
+    {
+      "id": "checkpoint_dev_bf16",
+      "desc": "LTX-2.5 22B dev transformer (BF16) — full precision, ~44GB, needs 48GB+ VRAM",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "diffusion_models/ltx-2.5-22b-dev-transformer-bf16.safetensors",
+      "dest": "checkpoints",
+      "gated": true
+    },
+    {
+      "id": "checkpoint_dev_int8",
+      "desc": "LTX-2.5 22B dev transformer (int8-convrot) — quantized, ~22GB, recommended for 24GB GPUs (RTX 4090)",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "diffusion_models/ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors",
+      "dest": "checkpoints",
+      "gated": true
+    },
+    {
+      "id": "checkpoint_distilled_bf16",
+      "desc": "LTX-2.5 22B distilled transformer (BF16) — fewer steps, full precision",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+      "dest": "checkpoints",
+      "gated": true
+    },
+    {
+      "id": "checkpoint_distilled_int8",
+      "desc": "LTX-2.5 22B distilled transformer (int8-convrot) — fewer steps, quantized",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+      "dest": "checkpoints",
+      "gated": true
+    },
+    {
+      "id": "checkpoint_distilled_nvfp4",
+      "desc": "LTX-2.5 22B distilled transformer (NVFP4) — Blackwell-only (sm_120+), smallest official quant",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "diffusion_models/ltx-2.5-22b-distilled-transformer-nvfp4.safetensors",
+      "dest": "checkpoints",
+      "gated": true
+    },
+    {
+      "id": "gguf_distilled_q4",
+      "desc": "LTX-2.5 distilled GGUF Q4_K_M — community quant, fits ~8-12GB VRAM with ComfyUI-GGUF UnetLoaderGGUF",
+      "repo": "Abiray/LTX-2.5-Distilled-GGUF",
+      "file": "ltx-2.5-22b-distilled-Q4_K_M.gguf",
+      "dest": "unet",
+      "gated": false
+    },
+    {
+      "id": "gguf_distilled_q8",
+      "desc": "LTX-2.5 distilled GGUF Q8_0 — community quant, higher quality, needs ~20GB VRAM",
+      "repo": "realrebelai/LTX-2.5_GGUFs",
+      "file": "ltx-2.5-22b-distilled-Q8_0.gguf",
+      "dest": "unet",
+      "gated": false
+    },
+    {
+      "id": "video_vae",
+      "desc": "LTX-2.5 video VAE (BF16) — decodes video latents to frames",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "vae/ltx-2.5-video-vae-bf16.safetensors",
+      "dest": "vae",
+      "gated": true
+    },
+    {
+      "id": "video_vae_conv",
+      "desc": "LTX-2.5 video VAE conv variant (BF16) — alternative VAE with conv architecture",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "vae/ltx-2.5-video-vae-conv-bf16.safetensors",
+      "dest": "vae",
+      "gated": true
+    },
+    {
+      "id": "audio_vae",
+      "desc": "LTX-2.5 audio VAE (BF16) — decodes audio latents to waveform, required for native audio generation",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "vae/ltx-2.5-audio-vae-bf16.safetensors",
+      "dest": "vae",
+      "gated": true
+    },
+    {
+      "id": "distilled_lora",
+      "desc": "Distilled speed-up LoRA (450-step training, enables 8-step sampling instead of ~30)",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "loras/ltx-2.5-22b-distilled-lora-450-bf16.safetensors",
+      "dest": "loras",
+      "gated": true
+    },
+    {
+      "id": "spatial_upscaler",
+      "desc": "2x latent spatial upscaler for LTX-2.5 — doubles resolution (e.g. 720p → 1440p)",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+      "dest": "latent_upscale_models",
+      "gated": true
+    },
+    {
+      "id": "temporal_upscaler",
+      "desc": "2x latent temporal upscaler for LTX-2.5 — doubles frame count (e.g. 24fps → 48fps interpolation)",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "latent_upscale_models/ltx-2.5-latent-temporal-upscaler-x2-bf16-1.0.safetensors",
+      "dest": "latent_upscale_models",
+      "gated": true
+    },
+    {
+      "id": "duration_head_patch",
+      "desc": "Duration head patch for LTX-2.5 — enables variable duration control beyond default context length",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "model_patches/ltx-2.5-duration-head-bf16.safetensors",
+      "dest": "model_patches",
+      "gated": true
+    },
+    {
+      "id": "iclora_pixel_upscaler",
+      "desc": "IC-LoRA: pixel-spatial upscaler — reference-image-guided spatial upscaling with detail enhancement",
+      "repo": "Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler",
+      "file": "ltx-2.5-22b-ic-lora-pixel-spatial-upscaler.safetensors",
+      "dest": "loras",
+      "gated": true
+    }
+  ]
+}

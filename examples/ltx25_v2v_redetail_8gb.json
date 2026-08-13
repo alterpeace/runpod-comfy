@@ -1,0 +1,129 @@
+{
+  "1": {
+    "inputs": {
+      "unet_name": "ltx-2.5-22b-distilled-Q4_K_M.gguf"
+    },
+    "class_type": "UnetLoaderGGUF"
+  },
+  "2": {
+    "inputs": {
+      "clip_name": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+      "type": "ltx"
+    },
+    "class_type": "CLIPLoader"
+  },
+  "3": {
+    "inputs": {
+      "model": ["1", 0],
+      "clip": ["2", 0],
+      "lora_name": "ltx-2.5-22b-distilled-lora-450-bf16.safetensors",
+      "strength_model": 1.0,
+      "strength_clip": 1.0
+    },
+    "class_type": "LoraLoader"
+  },
+  "4": {
+    "inputs": {
+      "clip": ["3", 1],
+      "text": "high quality video, sharp focus, clean render, detailed textures, cinematic lighting, professional post-production"
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "5": {
+    "inputs": {
+      "clip": ["3", 1],
+      "text": "blurry, low quality, distorted, glitch, artifacts, flickering, jerky motion, compression artifacts, watermark, noisy, grainy, washed out, banding"
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "6": {
+    "inputs": {
+      "video": "input_video.mp4",
+      "force_rate": 24,
+      "frame_load_cap": 193,
+      "skip_first_frames": 0,
+      "select_every_nth": 1
+    },
+    "class_type": "VHS_LoadVideo"
+  },
+  "7": {
+    "inputs": {
+      "image": ["6", 0],
+      "width": 640,
+      "height": 352,
+      "upscale_method": "lanczos",
+      "crop": "disabled"
+    },
+    "class_type": "ImageScale"
+  },
+  "8": {
+    "inputs": {
+      "vae_name": "ltx-2.5-video-vae-bf16.safetensors"
+    },
+    "class_type": "VAELoader"
+  },
+  "9": {
+    "inputs": {
+      "positive": ["4", 0],
+      "negative": ["5", 0],
+      "images": ["7", 0],
+      "vae": ["8", 0],
+      "width": 640,
+      "height": 352,
+      "num_frames": 193
+    },
+    "class_type": "LTXVImgToVideoConditionOnly"
+  },
+  "10": {
+    "inputs": {
+      "pixels": ["7", 0],
+      "vae": ["8", 0]
+    },
+    "class_type": "VAEEncode"
+  },
+  "11": {
+    "inputs": {
+      "model": ["3", 0],
+      "scheduler": "linear_quadratic",
+      "steps": 8,
+      "denoise": 1.0
+    },
+    "class_type": "BasicScheduler"
+  },
+  "12": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect"
+  },
+  "13": {
+    "inputs": {
+      "model": ["3", 0],
+      "positive": ["9", 0],
+      "negative": ["9", 1],
+      "sampler": ["12", 0],
+      "sigmas": ["11", 0],
+      "latent_image": ["10", 0]
+    },
+    "class_type": "SamplerCustomAdvanced"
+  },
+  "14": {
+    "inputs": {
+      "samples": ["13", 0],
+      "vae": ["8", 0]
+    },
+    "class_type": "LTXVTiledVAEDecode"
+  },
+  "15": {
+    "inputs": {
+      "images": ["14", 0],
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "ltx25_v2v_redetail_8gb",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true
+    },
+    "class_type": "VHS_VideoCombine"
+  }
+}

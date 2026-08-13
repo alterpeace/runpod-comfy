@@ -1,0 +1,170 @@
+{
+  "1": {
+    "inputs": {
+      "ckpt_name": "ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple"
+  },
+  "2": {
+    "inputs": {
+      "clip_name": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+      "type": "ltx"
+    },
+    "class_type": "CLIPLoader"
+  },
+  "3": {
+    "inputs": {
+      "model": ["1", 0],
+      "clip": ["2", 0],
+      "lora_name": "ltx-2.5-22b-distilled-lora-450-bf16.safetensors",
+      "strength_model": 1.0,
+      "strength_clip": 1.0
+    },
+    "class_type": "LoraLoader"
+  },
+  "4": {
+    "inputs": {
+      "model": ["3", 0],
+      "lora_name": "ltx-2.5-22b-ic-lora-pixel-spatial-upscaler.safetensors",
+      "strength": 0.7
+    },
+    "class_type": "LTXICLoRALoaderModelOnly"
+  },
+  "5": {
+    "inputs": {
+      "clip": ["3", 1],
+      "text": "high quality video, sharp focus, clean render, detailed textures, cinematic lighting, professional post-production, 4k detail"
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "6": {
+    "inputs": {
+      "clip": ["3", 1],
+      "text": "blurry, low quality, distorted, glitch, artifacts, flickering, jerky motion, compression artifacts, watermark, noisy, grainy, washed out, banding"
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "7": {
+    "inputs": {
+      "video": "input_video.mp4",
+      "force_rate": 24,
+      "frame_load_cap": 385,
+      "skip_first_frames": 0,
+      "select_every_nth": 1
+    },
+    "class_type": "VHS_LoadVideo"
+  },
+  "8": {
+    "inputs": {
+      "image": ["7", 0],
+      "width": 768,
+      "height": 448,
+      "upscale_method": "lanczos",
+      "crop": "disabled"
+    },
+    "class_type": "ImageScale"
+  },
+  "9": {
+    "inputs": {
+      "positive": ["5", 0],
+      "negative": ["6", 0],
+      "images": ["8", 0],
+      "vae": ["1", 2],
+      "width": 768,
+      "height": 448,
+      "num_frames": 385
+    },
+    "class_type": "LTXVImgToVideoConditionOnly"
+  },
+  "10": {
+    "inputs": {
+      "positive": ["9", 0],
+      "negative": ["9", 1],
+      "model": ["4", 0],
+      "guide_images": ["8", 0],
+      "strength": 0.8
+    },
+    "class_type": "LTXAddVideoICLoRAGuide"
+  },
+  "11": {
+    "inputs": {
+      "pixels": ["8", 0],
+      "vae": ["1", 2]
+    },
+    "class_type": "VAEEncode"
+  },
+  "12": {
+    "inputs": {
+      "model": ["4", 0],
+      "scheduler": "linear_quadratic",
+      "steps": 8,
+      "denoise": 1.0
+    },
+    "class_type": "BasicScheduler"
+  },
+  "13": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect"
+  },
+  "14": {
+    "inputs": {
+      "model": ["4", 0],
+      "positive": ["10", 0],
+      "negative": ["10", 1],
+      "sampler": ["13", 0],
+      "sigmas": ["12", 0],
+      "latent_image": ["11", 0]
+    },
+    "class_type": "SamplerCustomAdvanced"
+  },
+  "15": {
+    "inputs": {
+      "samples": ["14", 0]
+    },
+    "class_type": "LTXVLatentUpscaler"
+  },
+  "16": {
+    "inputs": {
+      "sigmas": "0.85, 0.725, 0.4219, 0.0"
+    },
+    "class_type": "ManualSigmas"
+  },
+  "17": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect"
+  },
+  "18": {
+    "inputs": {
+      "model": ["4", 0],
+      "positive": ["10", 0],
+      "negative": ["10", 1],
+      "sampler": ["17", 0],
+      "sigmas": ["16", 0],
+      "latent_image": ["15", 0]
+    },
+    "class_type": "SamplerCustomAdvanced"
+  },
+  "19": {
+    "inputs": {
+      "samples": ["18", 0],
+      "vae": ["1", 2]
+    },
+    "class_type": "LTXVTiledVAEDecode"
+  },
+  "20": {
+    "inputs": {
+      "images": ["19", 0],
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "ltx25_v2v_redetail",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true
+    },
+    "class_type": "VHS_VideoCombine"
+  }
+}
