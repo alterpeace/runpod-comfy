@@ -1,0 +1,120 @@
+# =============================================================================
+# Docker Compose override for the ComfyUI Frontend + Proxy + Mock Server
+#
+# This file adds three services on top of the existing docker-compose.yml:
+#   - proxy:   ComfyUI API → RunPod API translation (src/proxy_server.py)
+#   - mock:    Mock RunPod server for local testing (routes to comfy service)
+#   - frontend: Official ComfyUI Frontend dev server (Vue.js / Vite)
+#
+# Usage:
+#   # Full local stack with mock serverless (all in Docker, 0 cloud cost):
+#   docker compose -f docker-compose.yml -f docker-compose.frontend.yml \
+#       --profile mock up
+#
+#   # Frontend + proxy → real RunPod serverless (ComfyUI not needed locally):
+#   docker compose -f docker-compose.yml -f docker-compose.frontend.yml \
+#       --profile serverless up
+#
+#   # Frontend only (talks to existing ComfyUI on host :8188):
+#   docker compose -f docker-compose.yml -f docker-compose.frontend.yml \
+#       --profile frontend-only up
+#
+# Ports:
+#   - :5173  Frontend (Vite dev server)
+#   - :8188  ComfyUI (existing, from docker-compose.yml)
+#   - :8189  Proxy server (avoids conflict with ComfyUI on :8188)
+#   - :9090  Mock RunPod server
+#
+# Networking:
+#   All services share the same Docker network. Internal URLs:
+#   - frontend → proxy:  http://proxy:8188
+#   - proxy → mock:       http://mock:9090/v2  (mock mode)
+#   - proxy → RunPod:     https://api.runpod.ai/v2  (serverless mode)
+#   - mock → comfy:       http://comfy:8188
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # Proxy Server: translates ComfyUI Frontend API → RunPod Serverless API
+  # ===========================================================================
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.proxy
+    container_name: comfy-proxy
+    ports:
+      - "8189:8188"  # Host :8189 → container :8188 (avoids conflict with comfy)
+    environment:
+      # Backend configuration — set these for real RunPod serverless mode
+      - RUNPOD_ENDPOINT_ID=${RUNPOD_ENDPOINT_ID:-}
+      - RUNPOD_API_KEY=${RUNPOD_API_KEY:-}
+      # In mock mode, point at the mock container instead of real RunPod
+      - RUNPOD_API_BASE=${RUNPOD_API_BASE:-https://api.runpod.ai/v2}
+      - PROXY_PORT=8188
+      - PROXY_POLL_INTERVAL=${PROXY_POLL_INTERVAL:-2}
+      - PROXY_UPLOAD_DIR=/data/input
+      - PROXY_DEBUG=${PROXY_DEBUG:-false}
+      - OBJECT_INFO_CACHE=/data/config/object_info_cache.json
+    volumes:
+      # Mount source code for live editing during development
+      - ./src/proxy_server.py:/app/proxy_server.py:ro
+      # Mount object_info cache (shared with mock/frontend)
+      - ./.local/config:/data/config
+      # Mount upload directory (shared with comfy for img2img)
+      - ${COMFY_DATA_DIR:-./.local}/input:/data/input
+    profiles: ["mock", "serverless", "frontend-only"]
+    depends_on:
+      comfy:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Mock RunPod Server: simulates RunPod API, routes to local ComfyUI
+  # Only used in --profile mock mode
+  # ===========================================================================
+  mock:
+    build:
+      context: .
+      dockerfile: Dockerfile.proxy
+    container_name: comfy-mock
+    command: python /app/mock_runpod_server.py --port 9090 --comfyui-url http://comfy:8188
+    ports:
+      - "9090:9090"
+    environment:
+      - COMFYUI_URL=http://comfy:8188
+    volumes:
+      - ./scripts/mock_runpod_server.py:/app/mock_runpod_server.py:ro
+    profiles: ["mock"]
+    depends_on:
+      comfy:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Frontend: Official ComfyUI Frontend dev server (Vue.js / Vite)
+  # ===========================================================================
+  frontend:
+    image: node:20-slim
+    container_name: comfy-frontend
+    working_dir: /app
+    ports:
+      - "5173:5173"
+    environment:
+      # Vite dev server proxy target — points at the proxy container
+      - DEV_SERVER_COMFYUI_URL=http://proxy:8188
+      # In frontend-only mode (no proxy), point directly at comfy
+      # Override with: DEV_SERVER_COMFYUI_URL=http://comfy:8188
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    command: >
+      sh -c "if [ ! -d /app/node_modules ]; then npm install; fi &&
+             npm run dev -- --host 0.0.0.0 --port 5173"
+    profiles: ["mock", "serverless", "frontend-only"]
+    depends_on:
+      proxy:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  frontend_node_modules:

@@ -49,3 +49,17 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Frontend (cloned separately, not part of main Docker build)
+frontend/
+frontend/node_modules/
+
+# Proxy/mock Dockerfiles (not needed in main image)
+Dockerfile.proxy
+docker-compose.frontend.yml
+
+# Cached object_info (regenerated at runtime)
+config/object_info_cache.json
+
+# Debug output
+debug-output/

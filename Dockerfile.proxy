@@ -1,0 +1,62 @@
+# =============================================================================
+# Dockerfile for the ComfyUI Frontend Proxy Server
+#
+# Lightweight image with just the proxy server dependencies (FastAPI, httpx).
+# Does NOT include ComfyUI, PyTorch, or GPU drivers — it's a pure translation
+# layer that talks to either RunPod's API or the mock server.
+#
+# Build:
+#   docker build -f Dockerfile.proxy -t comfy-proxy .
+#
+# Run:
+#   docker run -p 8189:8188 -e RUNPOD_ENDPOINT_ID=xxx -e RUNPOD_API_KEY=xxx comfy-proxy
+# =============================================================================
+
+FROM python:3.12-slim AS base
+
+LABEL org.opencontainers.image.title="ComfyUI Frontend Proxy"
+LABEL org.opencontainers.image.description="Translates ComfyUI Frontend API to RunPod Serverless API"
+LABEL org.opencontainers.image.source="https://github.com/alterpeace/runpod-comfy"
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Install Python dependencies
+# We use pip directly since this is a lightweight image (no uv needed)
+RUN pip install --no-cache-dir \
+    "fastapi>=0.110.0" \
+    "uvicorn[standard]>=0.29.0" \
+    "httpx>=0.27.0" \
+    "websockets>=12.0" \
+    "aiofiles>=23.2.0" \
+    "requests>=2.31.0"
+
+# Copy proxy server and mock server
+COPY src/proxy_server.py /app/proxy_server.py
+COPY scripts/mock_runpod_server.py /app/mock_runpod_server.py
+
+# Create data directories
+RUN mkdir -p /data/input /data/config
+
+# Default environment
+ENV PROXY_PORT=8188 \
+    PROXY_UPLOAD_DIR=/data/input \
+    OBJECT_INFO_CACHE=/data/config/object_info_cache.json \
+    PROXY_POLL_INTERVAL=2 \
+    PROXY_DEBUG=false
+
+# Health check
+HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8188/health || exit 1
+
+# Expose proxy port
+EXPOSE 8188
+
+# Default: run proxy server
+CMD ["python", "/app/proxy_server.py", "--host", "0.0.0.0"]

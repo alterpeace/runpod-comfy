@@ -126,6 +126,7 @@ backend, or you can force a mode:
 | (auto) | Detects local ComfyUI on :8188, falls back to RunPod | Either | Default |
 | `--serverless` | Proxy → RunPod Serverless API | RunPod (remote) | No local GPU |
 | `--local` | Frontend → Docker ComfyUI directly | Local GPU | Want new UI with local GPU |
+| `--mock` | Proxy → Mock → Docker ComfyUI (full stack test) | Local GPU | Test serverless flow locally |
 | `--debug` | Verbose proxy logging | Either | Debugging |
 
 ### Scenario A: Full local stack (GPU available)
@@ -168,6 +169,62 @@ python scripts/debug_workflow.py --target runpod \
 python scripts/debug_workflow.py --target runpod \
     --workflow examples/text_to_image_simple.json \
     --set-input 6.text="a cat" --set-input 3.seed=999 --wait
+```
+
+### Scenario E: All-in-Docker (everything in containers)
+
+Run the full stack — ComfyUI, proxy, mock server, and frontend — all in Docker
+containers using [`docker-compose.frontend.yml`](../docker-compose.frontend.yml):
+
+```bash
+# 1. Clone the frontend (one-time)
+git clone https://github.com/Comfy-Org/ComfyUI_frontend.git frontend
+
+# 2. Fetch object_info cache (from local ComfyUI)
+./scripts/run_local.sh
+python scripts/fetch_object_info.py --source local
+./scripts/stop_frontend.sh  # stop the native frontend if running
+
+# 3. Start everything in Docker — mock serverless mode (0 cloud cost)
+docker compose -f docker-compose.yml -f docker-compose.frontend.yml \
+    --profile mock up
+
+# Open http://localhost:5173
+```
+
+**Services started:**
+
+| Service | Container | Port | Purpose |
+|---|---|---|---|
+| ComfyUI | `comfy` | :8188 | GPU backend (from `docker-compose.yml`) |
+| Mock RunPod | `comfy-mock` | :9090 | Simulates RunPod API → routes to ComfyUI |
+| Proxy | `comfy-proxy` | :8189 | Translates ComfyUI API → RunPod API format |
+| Frontend | `comfy-frontend` | :5173 | Vue.js node-based UI |
+
+**For real RunPod serverless (no local GPU needed):**
+
+```bash
+# Set RunPod credentials in .env
+echo "RUNPOD_ENDPOINT_ID=your-endpoint-id" >> .env
+echo "RUNPOD_API_KEY=your-api-key" >> .env
+
+# Start only proxy + frontend (no ComfyUI container needed)
+docker compose -f docker-compose.yml -f docker-compose.frontend.yml \
+    --profile serverless up
+```
+
+**Frontend-only (talks to existing ComfyUI on host):**
+
+```bash
+# If ComfyUI is already running on :8188 (native or Docker)
+docker compose -f docker-compose.yml -f docker-compose.frontend.yml \
+    --profile frontend-only up
+```
+
+**Stop all containers:**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.frontend.yml down
 ```
 
 ---
