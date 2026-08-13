@@ -86,6 +86,9 @@ find_dir() {
     if [ -d "/comfyui/${name}" ]; then
         echo "/comfyui/${name}"; return
     fi
+    if [ -d "$HOME/comfy/${name}" ]; then
+        echo "$HOME/comfy/${name}"; return
+    fi
     if [ -d "$PROJECT_ROOT/../${name}" ]; then
         echo "$(cd "$PROJECT_ROOT/../${name}" && pwd)"; return
     fi

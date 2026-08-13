@@ -1,7 +1,7 @@
 {
   "1": {
     "inputs": {
-      "unet_name": "ltx-2.5-22b-distilled-Q4_K_M.gguf"
+      "unet_name": "LTX-2.5-Distilled-Q4_K_M.gguf"
     },
     "class_type": "UnetLoaderGGUF"
   },
