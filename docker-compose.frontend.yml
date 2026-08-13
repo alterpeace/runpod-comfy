@@ -65,7 +65,7 @@ services:
     profiles: ["mock", "serverless", "frontend-only"]
     depends_on:
       comfy:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
 
   # ===========================================================================
@@ -87,34 +87,35 @@ services:
     profiles: ["mock"]
     depends_on:
       comfy:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
 
   # ===========================================================================
   # Frontend: Official ComfyUI Frontend dev server (Vue.js / Vite)
   # ===========================================================================
   frontend:
-    image: node:20-slim
+    image: node:22-slim
     container_name: comfy-frontend
     working_dir: /app
     ports:
       - "5173:5173"
     environment:
-      # Vite dev server proxy target — points at the proxy container
-      - DEV_SERVER_COMFYUI_URL=http://proxy:8188
-      # In frontend-only mode (no proxy), point directly at comfy
-      # Override with: DEV_SERVER_COMFYUI_URL=http://comfy:8188
+      # Vite dev server proxy target
+      # comfy uses network_mode: host, so it's not on the Docker bridge network.
+      # Use host.docker.internal to reach the host's port 8188 from the bridge network.
+      - DEV_SERVER_COMFYUI_URL=${FRONTEND_BACKEND_URL:-http://host.docker.internal:8188}
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
     command: >
-      sh -c "if [ ! -d /app/node_modules ]; then
-               corepack enable pnpm && pnpm install;
+      sh -c "corepack enable pnpm &&
+             if [ ! -d /app/node_modules ]; then
+               pnpm install;
              fi &&
-             pnpm dev -- --host 0.0.0.0 --port 5173"
+             pnpm dev --host 0.0.0.0 --port 5173"
     profiles: ["mock", "serverless", "frontend-only"]
     depends_on:
-      proxy:
+      comfy:
         condition: service_started
     restart: unless-stopped
 

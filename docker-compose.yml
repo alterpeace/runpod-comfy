@@ -17,7 +17,7 @@ services:
         # CUDA compilation settings (reduce MAX_JOBS if build crashes)
         TORCH_CUDA_ARCH_LIST: ${TORCH_CUDA_ARCH_LIST:-8.9}
         MAX_JOBS: ${MAX_JOBS:-2}
-    image: ghcr.io/${GITHUB_USERNAME:-username}/comfyui-serverless:latest
+    image: ghcr.io/${GITHUB_USERNAME:-alterpeace}/${IMAGE_NAME:-runpod-comfy}:latest
     ports:
       - "8188:8188"  # ComfyUI HTTP
       - "2222:22"    # SSH

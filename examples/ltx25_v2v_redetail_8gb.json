@@ -252,16 +252,16 @@
           "version": "7.8"
         }
       },
-      "widgets_values": {
-        "video": "clip_26-07-28_18-34-41_00001.mp4",
-        "force_rate": 24,
-        "custom_width": 0,
-        "custom_height": 0,
-        "frame_load_cap": 193,
-        "skip_first_frames": 0,
-        "select_every_nth": 1,
-        "format": "AnimateDiff",
-        "videopreview": {
+      "widgets_values": [
+        "clip_26-07-28_18-34-41_00001.mp4",
+        24,
+        0,
+        0,
+        193,
+        0,
+        1,
+        "AnimateDiff",
+        {
           "hidden": false,
           "paused": false,
           "params": {
@@ -276,7 +276,7 @@
             "select_every_nth": 1
           }
         }
-      }
+      ]
     },
     {
       "id": 7,
@@ -672,23 +672,19 @@
           "version": "7.8"
         }
       },
-      "widgets_values": {
-        "frame_rate": 24,
-        "loop_count": 0,
-        "filename_prefix": "ltx25_v2v_redetail_8gb",
-        "format": "video/h264-mp4",
-        "pix_fmt": "yuv420p",
-        "crf": 19,
-        "save_metadata": true,
-        "trim_to_audio": false,
-        "pingpong": false,
-        "save_output": true,
-        "videopreview": {
+      "widgets_values": [
+        24,
+        0,
+        "ltx25_v2v_redetail_8gb",
+        "video/h264-mp4",
+        false,
+        true,
+        {
           "hidden": false,
           "paused": false,
           "params": {}
         }
-      }
+      ]
     },
     {
       "id": 16,
@@ -815,7 +811,7 @@
         "Node name for S&R": "CLIPLoader"
       },
       "widgets_values": [
-        "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+        "gemma4-12b-ltx-2.5/model.safetensors",
         "ltxv",
         "default"
       ]
