@@ -60,18 +60,14 @@ fi
 # Ensure directories exist
 mkdir -p "$MODELS_DIR" /workspace/scripts /workspace/config
 
-# Download latest scripts if not present
-if [ ! -f /workspace/scripts/download_ltx25_models.py ]; then
-    log_info "Downloading download_ltx25_models.py..."
-    curl -sL https://raw.githubusercontent.com/alterpeace/runpod-comfy/main/scripts/download_ltx25_models.py \
-        -o /workspace/scripts/download_ltx25_models.py
-fi
+# Always download latest scripts (overwrite old versions)
+log_info "Downloading latest download_ltx25_models.py..."
+curl -sL https://raw.githubusercontent.com/alterpeace/runpod-comfy/main/scripts/download_ltx25_models.py \
+    -o /workspace/scripts/download_ltx25_models.py
 
-if [ ! -f /workspace/config/ltx-2.5-models.json ]; then
-    log_info "Downloading ltx-2.5-models.json..."
-    curl -sL https://raw.githubusercontent.com/alterpeace/runpod-comfy/main/config/ltx-2.5-models.json \
-        -o /workspace/config/ltx-2.5-models.json
-fi
+log_info "Downloading latest ltx-2.5-models.json..."
+curl -sL https://raw.githubusercontent.com/alterpeace/runpod-comfy/main/config/ltx-2.5-models.json \
+    -o /workspace/config/ltx-2.5-models.json
 
 # Remove broken symlinks from previous runs (symlinks pointing to deleted HF cache)
 log_info "Removing broken symlinks from $MODELS_DIR..."
