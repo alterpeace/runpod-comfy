@@ -139,7 +139,7 @@
       "id": "iclora_pixel_upscaler",
       "desc": "IC-LoRA: pixel-spatial upscaler — reference-image-guided spatial upscaling with detail enhancement",
       "repo": "Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler",
-      "file": "ltx-2.5-22b-ic-lora-pixel-spatial-upscaler.safetensors",
+      "file": "ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors",
       "dest": "loras",
       "gated": true
     },
