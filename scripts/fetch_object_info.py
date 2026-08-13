@@ -37,10 +37,16 @@ import time
 from pathlib import Path
 from typing import Optional
 
+# Auto-activate project venv if running with system Python
+_PROJECT_ROOT = Path(__file__).parent.parent
+_VENV_PYTHON = _PROJECT_ROOT / ".venv" / "bin" / "python"
+if _VENV_PYTHON.exists() and sys.executable != str(_VENV_PYTHON):
+    os.execv(str(_VENV_PYTHON), [str(_VENV_PYTHON)] + sys.argv)
+
 import requests
 
 # Add project root to path
-PROJECT_ROOT = Path(__file__).parent.parent
+PROJECT_ROOT = _PROJECT_ROOT
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 DEFAULT_OUTPUT = os.environ.get("OBJECT_INFO_CACHE", "config/object_info_cache.json")
