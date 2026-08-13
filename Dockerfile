@@ -325,14 +325,21 @@ RUN if [ -f add-dependancies.sh ]; then \
 
 # Install compatible xformers for PyTorch 2.10.0 + CUDA 12.9
 # Unset UV_CONSTRAINT/PIP_CONSTRAINT to avoid conflict with xformers version pin
+# Gated by ENABLE_XFORMERS — when false, xformers is not installed and ComfyUI
+# uses PyTorch's native SDPA attention instead (recommended for torch 2.10+
+# where xformers prebuilt wheels lag behind and cause ABI mismatches).
 RUN . /comfyui/venv/bin/activate && \
-    echo "Installing compatible xformers..." && \
     uv pip uninstall flash-attn xformers 2>/dev/null || true && \
     rm -rf /comfyui/venv/lib/python*/site-packages/flash_attn* && \
     rm -rf /comfyui/venv/lib/python*/site-packages/xformers* && \
-    UV_CONSTRAINT= PIP_CONSTRAINT= uv pip install xformers --index-url https://download.pytorch.org/whl/cu129 && \
-    UV_CONSTRAINT= PIP_CONSTRAINT= uv pip install 'kornia==0.7.2' --no-deps --force-reinstall && \
-    echo "xformers installation complete"
+    if [ "${ENABLE_XFORMERS}" = "true" ]; then \
+        echo ">>> Installing compatible xformers (ENABLE_XFORMERS=true)..." && \
+        UV_CONSTRAINT= PIP_CONSTRAINT= uv pip install xformers --index-url https://download.pytorch.org/whl/cu129 && \
+        echo ">>> xformers installation complete"; \
+    else \
+        echo ">>> Skipping xformers (ENABLE_XFORMERS=false, using native SDPA)"; \
+    fi && \
+    UV_CONSTRAINT= PIP_CONSTRAINT= uv pip install 'kornia==0.7.2' --no-deps --force-reinstall
 
 # Install TensorRT for depth-anything-tensorrt and other TRT nodes (optional, ~6.2GB)
 RUN . /comfyui/venv/bin/activate && \

@@ -199,6 +199,20 @@ BUILD_CMD="docker build --network host"
 for tag in "${TAGS[@]}"; do
     BUILD_CMD="$BUILD_CMD -t $tag"
 done
+
+# Pass build args (defaults match Dockerfile ARGs; override via env vars)
+BUILD_CMD="$BUILD_CMD \
+    --build-arg COMFYUI_VERSION=\${COMFYUI_VERSION:-v0.32.0} \
+    --build-arg TORCH_VERSION=\${TORCH_VERSION:-2.10.0} \
+    --build-arg TORCH_FLAVOR=\${TORCH_FLAVOR:-cu129} \
+    --build-arg XFORMERS_VERSION=\${XFORMERS_VERSION:-0.0.34} \
+    --build-arg ENABLE_XFORMERS=\${ENABLE_XFORMERS:-false} \
+    --build-arg ENABLE_SAGEATTENTION=\${ENABLE_SAGEATTENTION:-true} \
+    --build-arg ENABLE_FLASHATTENTION=\${ENABLE_FLASHATTENTION:-false} \
+    --build-arg ENABLE_TENSORRT=\${ENABLE_TENSORRT:-false} \
+    --build-arg TORCH_CUDA_ARCH_LIST=\${TORCH_CUDA_ARCH_LIST:-8.9} \
+    --build-arg MAX_JOBS=\${MAX_JOBS:-2}"
+
 BUILD_CMD="$BUILD_CMD -f $DOCKERFILE $BUILD_CONTEXT"
 
 log_info "Running: $BUILD_CMD"

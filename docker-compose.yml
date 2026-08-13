@@ -11,7 +11,7 @@ services:
         TORCH_FLAVOR: ${TORCH_FLAVOR:-cu129}
         XFORMERS_VERSION: ${XFORMERS_VERSION:-0.0.34}
         # Optional attention mechanisms (set to "true" or "false")
-        ENABLE_XFORMERS: ${ENABLE_XFORMERS:-true}
+        ENABLE_XFORMERS: ${ENABLE_XFORMERS:-false}
         ENABLE_SAGEATTENTION: ${ENABLE_SAGEATTENTION:-true}
         ENABLE_FLASHATTENTION: ${ENABLE_FLASHATTENTION:-false}
         # CUDA compilation settings (reduce MAX_JOBS if build crashes)
