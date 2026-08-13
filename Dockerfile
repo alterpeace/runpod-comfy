@@ -171,37 +171,6 @@ RUN --mount=type=cache,target=/cache/uv,sharing=locked \
 
 
 # =============================================================================
-# Stage 2: ComfyUI Download (SEPARATE - only rebuilds on version change)
-# =============================================================================
-FROM base AS comfyui
-
-# ARG declared here so changing it only invalidates THIS stage, not base
-ARG COMFYUI_VERSION=v0.3.66
-ADD https://github.com/comfyanonymous/ComfyUI/archive/refs/tags/${COMFYUI_VERSION}.tar.gz /tmp/comfyui.tar.gz
-RUN tar -xzf /tmp/comfyui.tar.gz -C /comfyui --strip-components=1 && \
-    rm -rf /tmp/comfyui.tar.gz
-
-# Install ComfyUI requirements
-RUN --mount=type=cache,target=/cache/uv,sharing=locked \
-    . venv/bin/activate && \
-    uv pip install "numpy<2.4" && \
-    uv pip install dill librosa PyPDF2 pynvml google-cloud-storage pymupdf numexpr addict yapf glitch-this && \
-    uv pip install --reinstall opencv-contrib-python
-
-# CRITICAL: Force PyTorch version consistency at the very end
-RUN --mount=type=cache,target=/cache/uv,sharing=locked \
-    . venv/bin/activate && \
-    uv pip uninstall torch torchvision torchaudio 2>/dev/null || true && \
-    uv pip install \
-    "torch==${TORCH_VERSION}+${TORCH_FLAVOR}" \
-    "torchvision==0.25.0+${TORCH_FLAVOR}" \
-    "torchaudio==2.10.0+${TORCH_FLAVOR}" \
-    --extra-index-url https://download.pytorch.org/whl/${TORCH_FLAVOR} && \
-    if [ "${ENABLE_XFORMERS}" = "true" ]; then \
-        uv pip install "xformers==${XFORMERS_VERSION}" --index-strategy unsafe-best-match --extra-index-url https://download.pytorch.org/whl/${TORCH_FLAVOR}; \
-    fi
-
-# =============================================================================
 # Stage 3: Runtime base
 # =============================================================================
 FROM nvidia/cuda:12.9.0-runtime-ubuntu24.04 AS runtime-base
@@ -317,12 +286,6 @@ RUN . /comfyui/venv/bin/activate && \
     rm -rf /comfyui/venv/lib/python*/site-packages/xformers* && \
     uv pip install 'kornia==0.7.2' --no-deps --force-reinstall
 
-# Execute additional dependency script if present
-COPY scripts/add-dependancies.sh* ./
-RUN if [ -f add-dependancies.sh ]; then \
-        chmod +x add-dependancies.sh && ./add-dependancies.sh; \
-    fi
-
 # Install compatible xformers for PyTorch 2.10.0 + CUDA 12.9
 # Unset UV_CONSTRAINT/PIP_CONSTRAINT to avoid conflict with xformers version pin
 # Gated by ENABLE_XFORMERS — when false, xformers is not installed and ComfyUI
@@ -350,35 +313,22 @@ RUN . /comfyui/venv/bin/activate && \
         echo ">>> Skipping TensorRT (ENABLE_TENSORRT=false, saves ~6.2GB)"; \
     fi
 
-# Install additional dependencies for custom nodes
-# NOTE: taehv (git+https://github.com/deinferno/taehv.git) was removed —
-# the repo has been deleted (404) and no custom node requires it.
-RUN . /comfyui/venv/bin/activate && \
-    uv pip install rotary-embedding-torch evalidate fal-client google-genai
-
-# Install WAS Node Suite dependencies
-# numba>=0.63.1 required for NumPy 2.4 compatibility
-RUN . /comfyui/venv/bin/activate && \
-    uv pip install cmake fairscale gitpython imageio joblib matplotlib 'numba>=0.63.1' \
-    pilgram rembg scikit-image scikit-learn timm \
-    git+https://github.com/WASasquatch/img2texture.git \
-    git+https://github.com/WASasquatch/cstr \
-    git+https://github.com/WASasquatch/ffmpy.git
+# NOTE: The following packages were already installed in the 'deps' stage and
+# are present in the venv copied via COPY --from=deps. These duplicate installs
+# have been removed to save build time:
+#   - rotary-embedding-torch, evalidate, fal-client, google-genai (line 120 in deps)
+#   - cmake, fairscale, gitpython, imageio, joblib, matplotlib, numba, pilgram,
+#     rembg, scikit-image, scikit-learn, timm, PyWavelets (line 121-122 in deps)
+#   - img2texture, cstr, ffmpy (line 163-165 in deps)
+#   - sam2, sam3 (line 166-167 in deps)
 
 # Install libopengl0 for OpenGL support (fixes "libOpenGL.so.0" error)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends libopengl0 && \
     rm -rf /var/lib/apt/lists/*
 
-# Install SAM2 (required by Impact Pack)
-RUN . /comfyui/venv/bin/activate && \
-    uv pip install git+https://github.com/facebookresearch/sam2.git
-
-# Install SAM3 (newest version with text prompts - experimental)
-RUN . /comfyui/venv/bin/activate && \
-    uv pip install git+https://github.com/facebookresearch/sam3.git
-
 # FINAL: Force opencv-contrib-python and prevent other opencv variants
+# Also remove CPU onnxruntime (keep only onnxruntime-gpu to save ~321MB)
 # This MUST be at the end to override any opencv installed by other packages
 # Create a persistent constraint file to prevent pip from installing conflicting opencv packages
 RUN mkdir -p /comfyui/venv/constraints && \
@@ -386,7 +336,7 @@ RUN mkdir -p /comfyui/venv/constraints && \
     echo "opencv-python < 0" >> /comfyui/venv/constraints/opencv.txt && \
     echo "opencv-python-headless < 0" >> /comfyui/venv/constraints/opencv.txt && \
     . /comfyui/venv/bin/activate && \
-    uv pip uninstall opencv-python opencv-contrib-python opencv-python-headless 2>/dev/null || true && \
+    uv pip uninstall opencv-python opencv-contrib-python opencv-python-headless onnxruntime 2>/dev/null || true && \
     uv pip install opencv-contrib-python
 
 # Set PIP_CONSTRAINT to always use the opencv constraint file
