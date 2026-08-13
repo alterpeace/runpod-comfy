@@ -1,6 +1,10 @@
 # Slim extra requirements - removed packages already in base/ComfyUI
 # This reduces dependency resolution time significantly
 
+# ComfyUI Node Manager — required by the new ComfyUI Frontend (v1.51+)
+# for the "Missing Node Packs" install dialog and pack management.
+comfyui-manager>=4.2.0
+
 # Custom node specific deps (not in base)
 aichat==0.0.5
 # NOTE: albucore & albumentations MUST be a matched pair.
