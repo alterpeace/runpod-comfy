@@ -35,6 +35,7 @@ services:
       - ${COMFY_DATA_DIR:-./.local}/user:/comfyui/user
       - ./.env:/workspace/.env:ro  # Configuration file (optional features)
       - ./entrypoint.sh:/workspace/entrypoint.sh:ro  # Mount entrypoint for live changes
+      - ~/.cache/huggingface:/home/chiral/.cache/huggingface:ro  # HF model cache (symlinks in models/ point here)
     environment:
       - MODE=local
       - COMFYUI_PORT=8188

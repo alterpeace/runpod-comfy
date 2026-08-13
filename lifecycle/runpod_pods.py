@@ -63,6 +63,9 @@ class PodManager:
         Returns:
             Pod creation response
         """
+        # Resolve GPU type ID from friendly name (e.g., "RTX 4090" -> "NVIDIA GeForce RTX 4090")
+        gpu_type = self._resolve_gpu_id(gpu_type)
+
         # Estimate costs
         instance_type = "spot" if spot else "on-demand"
         estimated_hourly = self._estimate_cost(gpu_type, spot)
@@ -306,6 +309,33 @@ class PodManager:
                 print(f"❌ Error listing pods: {e}")
             return []
     
+    def _resolve_gpu_id(self, gpu_type: str) -> str:
+        """Resolve a friendly GPU name to the full RunPod GPU type ID.
+        
+        Examples:
+            "RTX 4090" -> "NVIDIA GeForce RTX 4090"
+            "RTX A4000" -> "NVIDIA RTX A4000"
+            "A100 80GB" -> "NVIDIA A100-SXM4-80GB"
+        """
+        try:
+            gpus = runpod.get_gpus()
+            for g in gpus:
+                gpu_id = g.get("id", "")
+                display = g.get("displayName", "")
+                # Match by display name (case-insensitive)
+                if gpu_type.lower() == display.lower():
+                    return gpu_id
+                # Match by partial display name
+                if gpu_type.lower() in display.lower():
+                    return gpu_id
+                # Match if the gpu_type is already a full ID
+                if gpu_type == gpu_id:
+                    return gpu_id
+        except Exception:
+            pass
+        # Return as-is if no match (let the API error if invalid)
+        return gpu_type
+
     def _estimate_cost(self, gpu_type: str, spot: bool) -> float:
         """Estimate hourly cost for a GPU type."""
         # Rough estimates (actual prices vary)
