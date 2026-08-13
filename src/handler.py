@@ -4,6 +4,10 @@ RunPod Serverless Handler for ComfyUI
 This module provides the main serverless handler function for processing
 ComfyUI workflows on RunPod. It handles workflow validation, execution,
 output retrieval, and cleanup.
+
+It also supports a "download_models" action for downloading LTX-2.5 (or
+LTX-2.3) models to the network volume via the RunPod serverless API,
+without needing SSH access to the worker.
 """
 
 import os
@@ -157,6 +161,14 @@ if CLOUDFLARED_ENABLED:
 comfyui_process = None
 comfyui_client = None
 s3_client = None
+
+# Default model manifest paths (relative to /workspace inside the container)
+LTX25_MANIFEST = "/workspace/config/ltx-2.5-models.json"
+LTX23_MANIFEST = "/workspace/config/ltx-2.3-models.json"
+
+# Default output directory on the network volume — models downloaded here
+# are symlinked into /comfyui/models/ by entrypoint.sh on the next boot.
+DEFAULT_MODELS_OUTPUT_DIR = "/runpod-volume/models"
 
 
 class HandlerError(Exception):
@@ -583,6 +595,168 @@ def process_outputs(
     return processed
 
 
+def download_models(job_input: Dict[str, Any], job_id: str) -> Dict[str, Any]:
+    """
+    Download LTX-2.5 (or LTX-2.3) models to the network volume.
+
+    This action does NOT start ComfyUI — it runs the download script directly,
+    making it fast and lightweight. Models are saved to /runpod-volume/models/
+    so they persist across worker restarts and are shared by all workers
+    attached to the same network volume.
+
+    Expected job_input keys:
+        - action: "download_models" (required, checked by caller)
+        - manifest: "ltx-2.5" (default) or "ltx-2.3"
+        - profile: Named profile from the manifest (e.g. "low_vram_8gb",
+                   "mid_vram_24gb", "full"). Mutually exclusive with "ids".
+        - ids: List of explicit model IDs to download. Mutually exclusive
+               with "profile".
+        - output_dir: Override the output directory (default: /runpod-volume/models)
+        - force: Re-download even if the file already exists (default: false)
+        - dry_run: Show what would be downloaded without downloading (default: false)
+        - hf_token: Override HF_TOKEN env var for gated repos
+
+    Returns:
+        Dictionary with download results, including per-model status.
+    """
+    start_time = time.time()
+
+    manifest_choice = job_input.get("manifest", "ltx-2.5")
+    if manifest_choice == "ltx-2.3":
+        manifest_path = LTX23_MANIFEST
+    elif manifest_choice == "ltx-2.5":
+        manifest_path = LTX25_MANIFEST
+    else:
+        # Allow passing a custom manifest path
+        manifest_path = job_input.get("manifest_path", LTX25_MANIFEST)
+
+    if not os.path.isfile(manifest_path):
+        raise HandlerError(
+            f"Model manifest not found at {manifest_path}. "
+            f"Ensure config/ is copied into the Docker image."
+        )
+
+    output_dir = job_input.get("output_dir", DEFAULT_MODELS_OUTPUT_DIR)
+    force = job_input.get("force", False)
+    dry_run = job_input.get("dry_run", False)
+    profile = job_input.get("profile")
+    ids = job_input.get("ids")
+
+    if not profile and not ids:
+        raise ValidationError(
+            "Either 'profile' or 'ids' must be specified for download_models action"
+        )
+    if profile and ids:
+        raise ValidationError(
+            "'profile' and 'ids' are mutually exclusive — specify one or the other"
+        )
+
+    # Resolve HF token: job input > env var
+    hf_token = job_input.get("hf_token") or os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+    if not hf_token:
+        logger.warning(
+            "HF_TOKEN not set — gated LTX-2.5 repos will fail. "
+            "Visit https://huggingface.co/Lightricks/LTX-2.5 and click 'Agree and Access', "
+            "then set HF_TOKEN in the endpoint environment or pass hf_token in the job input."
+        )
+
+    # Build the download script command
+    download_script = "/workspace/scripts/download_ltx25_models.py"
+    if not os.path.isfile(download_script):
+        raise HandlerError(
+            f"Download script not found at {download_script}. "
+            f"Ensure scripts/ is copied into the Docker image."
+        )
+
+    cmd = [
+        sys.executable,
+        download_script,
+        "--manifest", manifest_path,
+        "--output-dir", output_dir,
+        "--copy",  # Copy (not symlink) so files persist on the network volume
+    ]
+
+    if ids:
+        if isinstance(ids, str):
+            ids = [ids]
+        cmd.extend(["--ids"] + ids)
+    else:
+        cmd.extend(["--profile", profile])
+
+    if dry_run:
+        cmd.append("--dry-run")
+    if force:
+        cmd.append("--force")
+
+    # Pass HF token via environment
+    env = os.environ.copy()
+    if hf_token:
+        env["HF_TOKEN"] = hf_token
+        env["HUGGING_FACE_HUB_TOKEN"] = hf_token
+
+    logger.info(f"[download_models] Running: {' '.join(cmd)}")
+    logger.info(f"[download_models] Output dir: {output_dir}")
+    logger.info(f"[download_models] Manifest: {manifest_path}")
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=3300,  # 55 min max (RunPod serverless max is ~60 min)
+        )
+    except subprocess.TimeoutExpired:
+        raise HandlerError(
+            "Model download timed out after 55 minutes. "
+            "Try a smaller profile or fewer model IDs."
+        )
+
+    stdout = result.stdout or ""
+    stderr = result.stderr or ""
+
+    # Log output for debugging
+    for line in stdout.strip().splitlines():
+        logger.info(f"[download_models] {line}")
+    if stderr.strip():
+        for line in stderr.strip().splitlines():
+            logger.warning(f"[download_models] {line}")
+
+    if result.returncode != 0:
+        raise HandlerError(
+            f"Download script exited with code {result.returncode}. "
+            f"stderr: {stderr[:2000]}"
+        )
+
+    # Parse the stdout to count successes/failures
+    ok_count = stdout.count("[ok]")
+    skip_count = stdout.count("[skip]")
+    fail_count = stdout.count("[FAIL]")
+    dry_run_count = stdout.count("[dry-run]")
+
+    execution_time = time.time() - start_time
+
+    return {
+        "status": "success" if fail_count == 0 else "partial",
+        "output": {
+            "downloaded": ok_count,
+            "skipped": skip_count,
+            "failed": fail_count,
+            "dry_run": dry_run_count,
+            "output_dir": output_dir,
+            "manifest": manifest_choice,
+            "profile": profile,
+            "ids": ids,
+            "stdout": stdout,
+        },
+        "metadata": {
+            "job_id": job_id,
+            "execution_time": round(execution_time, 2),
+            "action": "download_models",
+        },
+    }
+
+
 def handler(job: Dict[str, Any]) -> Dict[str, Any]:
     """
     Main RunPod serverless handler function.
@@ -591,7 +765,11 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
         job: Dictionary containing:
             - id: Job ID from RunPod
             - input: User-provided input data
-                - workflow: ComfyUI workflow JSON (required)
+                - action: Optional. "download_models" to download LTX models
+                          instead of running a workflow. If omitted, defaults
+                          to workflow execution.
+                - workflow: ComfyUI workflow JSON (required when action is
+                            omitted or is "run_workflow")
                 - input_images: Optional dict of base64 encoded images
                 - timeout: Optional custom timeout in seconds
                 - clear_cache: Optional bool to clear latent cache before execution
@@ -616,6 +794,20 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
         
         if not isinstance(job_input, dict):
             raise ValidationError("Job input must be a dictionary")
+
+        # ---- Action routing ----
+        action = job_input.get("action", "run_workflow")
+
+        if action == "download_models":
+            logger.info(f"Job {job_id}: action=download_models")
+            return download_models(job_input, job_id)
+
+        if action != "run_workflow":
+            raise ValidationError(
+                f"Unknown action '{action}'. Supported: 'run_workflow' (default), 'download_models'"
+            )
+
+        # ---- Default: workflow execution ----
         
         # Initialize ComfyUI
         initialize_comfyui()

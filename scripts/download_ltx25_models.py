@@ -58,14 +58,40 @@ def resolve_ids(manifest: dict, profile: str | None, ids: list[str] | None) -> l
     return resolved
 
 
-def download_one(model: dict, output_dir: Path, token: str | None, dry_run: bool, force: bool) -> bool:
+def _same_filesystem(path1: str, path2: str) -> bool:
+    """Check if two paths are on the same filesystem (for symlink vs copy decision)."""
+    try:
+        st1 = os.stat(os.path.dirname(path1))
+        st2 = os.stat(os.path.dirname(path2))
+        return st1.st_dev == st2.st_dev
+    except OSError:
+        return False
+
+
+def download_one(model: dict, output_dir: Path, token: str | None, dry_run: bool, force: bool, copy_mode: bool = False) -> bool:
     dest_dir = output_dir / model["dest"]
     filename_only = os.path.basename(model["file"])
     dest_path = dest_dir / filename_only
 
-    if dest_path.exists() and not force:
+    # In copy_mode, a real file (not symlink) that exists is a valid skip.
+    # In symlink mode, a broken symlink should be re-downloaded.
+    if dest_path.exists() and not dest_path.is_symlink() and not force:
         print(f"  [skip] {model['id']}: already exists at {dest_path}")
         return True
+    if dest_path.is_symlink() and not force:
+        # Check if the symlink target still exists
+        try:
+            target = os.readlink(dest_path)
+            if os.path.exists(target):
+                if copy_mode:
+                    print(f"  [skip] {model['id']}: symlink exists but copy_mode requested, skipping (use --force to re-copy)")
+                else:
+                    print(f"  [skip] {model['id']}: symlink already exists at {dest_path}")
+                return True
+            else:
+                print(f"  [re-dl] {model['id']}: symlink is broken (target gone), re-downloading")
+        except OSError:
+            print(f"  [re-dl] {model['id']}: symlink check failed, re-downloading")
 
     if model.get("gated") and not token:
         print(
@@ -108,17 +134,34 @@ def download_one(model: dict, output_dir: Path, token: str | None, dry_run: bool
         print(f"  [FAIL] {model['id']}: {exc}")
         return False
 
-    # Symlink into the ComfyUI models tree so files stay dedup'd in the HF cache.
-    try:
-        if dest_path.exists() or dest_path.is_symlink():
-            dest_path.unlink()
-        dest_path.symlink_to(os.path.abspath(cached_path))
-        print(f"  [ok] {model['id']}: symlinked -> {dest_path}")
-    except OSError:
-        import shutil
+    # Place the file into the ComfyUI models tree.
+    # By default we symlink (dedup's with HF cache). With --copy or when the
+    # source and destination are on different filesystems, we copy instead so
+    # the file persists on the target volume even if the HF cache is wiped.
+    import shutil
 
+    if dest_path.exists() or dest_path.is_symlink():
+        dest_path.unlink()
+
+    if copy_mode or not _same_filesystem(str(dest_path), str(cached_path)):
+        # Copy — the file becomes a real file on the output volume, independent
+        # of the HF cache. This is essential for RunPod network volumes where the
+        # HF cache lives on the ephemeral container disk.
         shutil.copy(cached_path, dest_path)
         print(f"  [ok] {model['id']}: copied -> {dest_path}")
+        # Clean up HF cache to free container disk space for the next download
+        try:
+            os.unlink(cached_path)
+        except OSError:
+            pass
+    else:
+        # Symlink — dedup's with HF cache on the same filesystem
+        try:
+            dest_path.symlink_to(os.path.abspath(cached_path))
+            print(f"  [ok] {model['id']}: symlinked -> {dest_path}")
+        except OSError:
+            shutil.copy(cached_path, dest_path)
+            print(f"  [ok] {model['id']}: copied (symlink failed) -> {dest_path}")
 
     return True
 
@@ -131,6 +174,7 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, default=Path("models"), help="ComfyUI models/ directory")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be downloaded without downloading")
     parser.add_argument("--force", action="store_true", help="Re-download even if the destination file exists")
+    parser.add_argument("--copy", action="store_true", help="Copy files instead of symlinking (use when output is on a different volume than the HF cache, e.g. RunPod network volume)")
     parser.add_argument("--list", action="store_true", help="List all model ids and profiles, then exit")
     args = parser.parse_args()
 
@@ -150,9 +194,11 @@ def main() -> int:
     models = resolve_ids(manifest, args.profile, args.ids)
 
     print(f"Resolved {len(models)} model(s) -> {args.output_dir}")
+    if args.copy:
+        print("Mode: copy (files will be copied, not symlinked)")
     ok = True
     for model in models:
-        if not download_one(model, args.output_dir, token, args.dry_run, args.force):
+        if not download_one(model, args.output_dir, token, args.dry_run, args.force, copy_mode=args.copy):
             ok = False
 
     if not ok:

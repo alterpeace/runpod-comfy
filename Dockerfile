@@ -394,6 +394,11 @@ ENV PIP_CONSTRAINT=/comfyui/venv/constraints/opencv.txt
 # Copy application files
 COPY src/handler.py src/comfyui_client.py src/storage_s3.py ./
 COPY config/runpod-config-serverless.json config/runpod-config-pods.json .env.example ./
+COPY config/ltx-2.5-models.json config/ltx-2.3-models.json ./config/
+
+# Copy download scripts (used by the "download_models" serverless action)
+COPY scripts/download_ltx25_models.py scripts/download_ltx23_models.py ./scripts/
+RUN chmod +x ./scripts/*.py 2>/dev/null || true
 
 COPY ssh/ ./ssh/
 COPY storage/ ./storage/

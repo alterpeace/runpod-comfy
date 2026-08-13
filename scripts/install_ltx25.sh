@@ -43,6 +43,7 @@ DRY_RUN=false
 SKIP_NODES=false
 SKIP_MODELS=false
 FORCE=false
+COPY_MODE=false
 
 usage() {
     sed -n '2,20p' "$0" | sed 's/^# //; s/^#//'
@@ -64,6 +65,8 @@ while [[ $# -gt 0 ]]; do
             SKIP_MODELS=true; shift ;;
         --force)
             FORCE=true; shift ;;
+        --copy)
+            COPY_MODE=true; shift ;;
         --list)
             python3 "$SCRIPT_DIR/download_ltx25_models.py" --manifest "$PROJECT_ROOT/config/ltx-2.5-models.json" --list
             exit 0 ;;
@@ -73,6 +76,21 @@ while [[ $# -gt 0 ]]; do
             log_error "Unknown option: $1"; usage ;;
     esac
 done
+
+# Auto-detect if we need copy mode: if MODELS_DIR is on a different filesystem
+# than the HF cache (default: ~/.cache/huggingface), use --copy so files persist
+# on the target volume. This is essential for RunPod network volumes.
+if [ "$COPY_MODE" = false ] && [ -n "$MODELS_DIR" ]; then
+    HF_CACHE_DIR="${HF_HOME:-$HOME/.cache/huggingface}"
+    if [ -d "$MODELS_DIR" ] && [ -d "$(dirname "$HF_CACHE_DIR")" ]; then
+        MODELS_DEV=$(stat -c %d "$MODELS_DIR" 2>/dev/null || echo "")
+        CACHE_DEV=$(stat -c %d "$(dirname "$HF_CACHE_DIR")" 2>/dev/null || echo "")
+        if [ -n "$MODELS_DEV" ] && [ -n "$CACHE_DEV" ] && [ "$MODELS_DEV" != "$CACHE_DEV" ]; then
+            log_info "Models dir and HF cache are on different filesystems — using copy mode"
+            COPY_MODE=true
+        fi
+    fi
+fi
 
 # ----------------------------------------------------------------------------
 # Locate custom_nodes/ and models/ (Docker container vs local dev checkout)
@@ -189,6 +207,7 @@ if [ "$SKIP_MODELS" = false ]; then
     fi
     [ "$DRY_RUN" = true ] && PY_ARGS+=(--dry-run)
     [ "$FORCE" = true ] && PY_ARGS+=(--force)
+    [ "$COPY_MODE" = true ] && PY_ARGS+=(--copy)
 
     python3 "$SCRIPT_DIR/download_ltx25_models.py" "${PY_ARGS[@]}"
 fi
