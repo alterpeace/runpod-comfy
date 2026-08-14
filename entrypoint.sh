@@ -301,10 +301,17 @@ case "$STORAGE_BACKEND" in
                         log_info "  Copied: $GEMMA_DEST/$fname"
                     fi
                 done
-                # Create model.safetensors symlink if not present
+                # Create model.safetensors symlink — prefer BF16, fall back to int8
                 if [ ! -e "$GEMMA_DEST/model.safetensors" ]; then
-                    ln -sf "../gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors" "$GEMMA_DEST/model.safetensors"
-                    log_info "  Symlinked: $GEMMA_DEST/model.safetensors"
+                    if [ -f "/runpod-volume/models/text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors" ]; then
+                        ln -sf "../gemma4-12b-with-proj-ltx-2.5-bf16.safetensors" "$GEMMA_DEST/model.safetensors"
+                        log_info "  Symlinked: $GEMMA_DEST/model.safetensors -> BF16"
+                    elif [ -f "/runpod-volume/models/text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors" ]; then
+                        ln -sf "../gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors" "$GEMMA_DEST/model.safetensors"
+                        log_info "  Symlinked: $GEMMA_DEST/model.safetensors -> int8-convrot"
+                    else
+                        log_warning "  No Gemma model file found for symlink"
+                    fi
                 fi
                 log_success "Gemma 4 tokenizer directory ready at $GEMMA_DEST"
             fi
