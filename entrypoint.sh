@@ -646,6 +646,40 @@ update_custom_nodes() {
 update_custom_nodes
 
 # ============================================================================
+# PATCH: Fix int8 quantization loading in ComfyUI-LTXVideo
+# ============================================================================
+# The embeddings_connector.py uses strict=True (default) when calling
+# load_state_dict, which rejects int8 quantization keys (weight_scale,
+# comfy_quant) in the gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot model.
+# This patch adds strict=False so the quantization keys are silently ignored,
+# matching the approach already used in gemma_encoder.py:154 for the main model.
+# Remove this patch once the upstream fix is merged:
+# https://github.com/Lightricks/ComfyUI-LTXVideo
+patch_ltxv_int8() {
+    local ltxv_dir="/runpod-volume/custom_nodes/ComfyUI-LTXVideo"
+    local target_file="$ltxv_dir/embeddings_connector.py"
+
+    if [ ! -f "$target_file" ]; then
+        return 0
+    fi
+
+    # Check if already patched
+    if grep -q "load_state_dict(sd_connector, strict=False)" "$target_file" 2>/dev/null; then
+        log_info "  LTXV int8 patch already applied"
+        return 0
+    fi
+
+    # Apply patch
+    if grep -q "connector.load_state_dict(sd_connector)" "$target_file" 2>/dev/null; then
+        sed -i 's/connector.load_state_dict(sd_connector)/connector.load_state_dict(sd_connector, strict=False)/' "$target_file"
+        log_success "  LTXV int8 patch applied: strict=False added to embeddings_connector.py"
+    else
+        log_warning "  LTXV int8 patch: could not find target line in embeddings_connector.py"
+    fi
+}
+patch_ltxv_int8
+
+# ============================================================================
 # TORCH_LOCK & USERSCRIPTS
 # ============================================================================
 verify_torch_lock
