@@ -31,6 +31,9 @@ htmlcov/
 *.tmp
 temp/
 
+# Stray ImageMagick PostScript screenshot dumps (extensionless `time` output)
+/time
+
 
 models/
 output/

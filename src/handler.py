@@ -769,6 +769,91 @@ def download_models(job_input: Dict[str, Any], job_id: str) -> Dict[str, Any]:
     }
 
 
+def run_diagnostic(job_input: Dict[str, Any], job_id: str) -> Dict[str, Any]:
+    """
+    Run diagnostic commands on the worker for debugging.
+
+    Executes one or more shell commands and returns their output.
+    Useful for checking file paths, verifying mounts, and inspecting
+    the worker environment without SSH access.
+
+    Expected job_input keys:
+        - action: "diagnostic" (required, checked by caller)
+        - commands: List of shell commands to run (default: basic filesystem checks)
+        - timeout: Max seconds per command (default: 30)
+
+    Returns:
+        Dictionary with command outputs.
+    """
+    start_time = time.time()
+
+    commands = job_input.get("commands")
+    cmd_timeout = job_input.get("timeout", 30)
+
+    if not commands:
+        # Default diagnostics: check input paths, volume mount, custom nodes
+        commands = [
+            "ls -la /runpod-volume/ 2>&1 | head -30",
+            "ls -la /runpod-volume/input/ 2>&1 | head -30",
+            "find /runpod-volume/input -type f 2>&1 | head -50",
+            "ls -la /comfyui/input/ 2>&1 | head -30",
+            "find /comfyui/input -type f 2>&1 | head -50",
+            "ls -la /comfyui/custom_nodes/ 2>&1 | head -30",
+            "cd /comfyui/custom_nodes/ComfyUI-LTXVideo && git log --oneline -5 2>&1",
+            "cat /comfyui/custom_nodes/ComfyUI-LTXVideo/gemma_encoder.py 2>&1 | head -10",
+            "ls -la /runpod-volume/models/ 2>&1 | head -20",
+            "df -h /runpod-volume 2>&1",
+        ]
+
+    if not isinstance(commands, list):
+        commands = [commands]
+
+    results = []
+    for cmd in commands:
+        try:
+            result = subprocess.run(
+                cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=cmd_timeout,
+            )
+            results.append({
+                "command": cmd,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "returncode": result.returncode,
+            })
+        except subprocess.TimeoutExpired:
+            results.append({
+                "command": cmd,
+                "stdout": "",
+                "stderr": f"TIMEOUT after {cmd_timeout}s",
+                "returncode": -1,
+            })
+        except Exception as e:
+            results.append({
+                "command": cmd,
+                "stdout": "",
+                "stderr": str(e),
+                "returncode": -1,
+            })
+
+    execution_time = time.time() - start_time
+
+    return {
+        "status": "success",
+        "output": {
+            "results": results,
+        },
+        "metadata": {
+            "job_id": job_id,
+            "execution_time": round(execution_time, 2),
+            "action": "diagnostic",
+        },
+    }
+
+
 def handler(job: Dict[str, Any]) -> Dict[str, Any]:
     """
     Main RunPod serverless handler function.
@@ -814,9 +899,13 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
             logger.info(f"Job {job_id}: action=download_models")
             return download_models(job_input, job_id)
 
+        if action == "diagnostic":
+            logger.info(f"Job {job_id}: action=diagnostic")
+            return run_diagnostic(job_input, job_id)
+
         if action != "run_workflow":
             raise ValidationError(
-                f"Unknown action '{action}'. Supported: 'run_workflow' (default), 'download_models'"
+                f"Unknown action '{action}'. Supported: 'run_workflow' (default), 'download_models', 'diagnostic'"
             )
 
         # ---- Default: workflow execution ----
