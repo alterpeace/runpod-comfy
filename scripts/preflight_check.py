@@ -109,10 +109,10 @@ MODEL_FIELD_NAMES = {
 GEMMA_DIR_REQUIRED_FILES = [
     "config.json",
     "tokenizer_config.json",
-    "tokenizer.model",
+    "tokenizer.json",
     "chat_template.jinja",
     "generation_config.json",
-    "model.safetensors",
+    "processor_config.json",
 ]
 
 

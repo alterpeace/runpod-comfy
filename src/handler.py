@@ -737,7 +737,7 @@ def download_models(job_input: Dict[str, Any], job_id: str) -> Dict[str, Any]:
     if result.returncode != 0:
         raise HandlerError(
             f"Download script exited with code {result.returncode}. "
-            f"stderr: {stderr[:2000]}"
+            f"stdout: {stdout[:1000]} | stderr: {stderr[:1000]}"
         )
 
     # Parse the stdout to count successes/failures

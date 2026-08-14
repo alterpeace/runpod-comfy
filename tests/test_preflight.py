@@ -54,8 +54,8 @@ REQUIRED_CUSTOM_NODES = ["ComfyUI-LTXVideo", "ComfyUI-VideoHelperSuite"]
 
 # Config files required in gemma4-12b-ltx-2.5 directory
 GEMMA_DIR_REQUIRED_FILES = [
-    "config.json", "tokenizer_config.json", "tokenizer.model",
-    "chat_template.jinja", "generation_config.json", "model.safetensors",
+    "config.json", "tokenizer_config.json", "tokenizer.json",
+    "chat_template.jinja", "generation_config.json", "processor_config.json",
 ]
 
 
