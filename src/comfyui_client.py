@@ -87,11 +87,23 @@ class ComfyUIClient:
         """
         url = urljoin(self.base_url, endpoint)
         kwargs.setdefault('timeout', self.timeout)
-        
+
         last_error = None
+        last_response_body = None
         for attempt in range(self.max_retries):
             try:
                 response = self.session.request(method, url, **kwargs)
+                # For 4xx client errors (e.g. workflow validation errors),
+                # don't retry — return the response so the caller can read
+                # the error details from the body.
+                if 400 <= response.status_code < 500:
+                    try:
+                        last_response_body = response.text
+                    except Exception:
+                        last_response_body = "<unreadable>"
+                    # Return the response for non-retryable client errors.
+                    # The caller (queue_prompt) will parse the error body.
+                    return response
                 response.raise_for_status()
                 return response
             except requests.exceptions.RequestException as e:
@@ -103,7 +115,7 @@ class ComfyUIClient:
                     time.sleep(self.retry_delay * (attempt + 1))
                 else:
                     logger.error(f"Request failed after {self.max_retries} attempts: {e}")
-        
+
         raise ComfyUIConnectionError(
             f"Failed to connect to ComfyUI at {url} after {self.max_retries} attempts: {last_error}"
         )
@@ -127,24 +139,35 @@ class ComfyUIClient:
                 "prompt": workflow,
                 "client_id": self.client_id
             }
-            
+
             response = self._make_request(
                 'POST',
                 '/prompt',
                 json=payload
             )
-            
+
+            # Handle 4xx errors — ComfyUI returns 400 with error details
+            # for invalid workflows (e.g. "Value not in list" for missing models)
+            if response.status_code >= 400:
+                try:
+                    error_detail = response.json()
+                except Exception:
+                    error_detail = response.text
+                raise ComfyUIWorkflowError(
+                    f"ComfyUI rejected workflow (HTTP {response.status_code}): {error_detail}"
+                )
+
             result = response.json()
-            
+
             if 'prompt_id' not in result:
                 raise ComfyUIWorkflowError(
                     f"Invalid response from ComfyUI: {result}"
                 )
-            
+
             prompt_id = result['prompt_id']
             logger.info(f"Workflow queued successfully with prompt_id: {prompt_id}")
             return prompt_id
-            
+
         except requests.exceptions.JSONDecodeError as e:
             raise ComfyUIWorkflowError(f"Invalid JSON response: {e}")
         except KeyError as e:

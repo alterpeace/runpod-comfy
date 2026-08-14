@@ -95,9 +95,9 @@ def create_temp_pod(volume_id: str, gpu_type: str = "NVIDIA RTX A4000") -> dict:
     
     pod = runpod.create_pod(
         name="temp-upload-volume",
-        image="ghcr.io/alterpeace/runpod-comfy:latest",
+        image_name="ghcr.io/alterpeace/runpod-comfy:latest",
         gpu_type_id=gpu_type,
-        volume_id=volume_id,
+        network_volume_id=volume_id,
         volume_mount_path="/runpod-volume",
         container_disk_in_gb=50,
         ports="22/http",

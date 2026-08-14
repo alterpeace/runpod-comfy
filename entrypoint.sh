@@ -292,21 +292,55 @@ case "$STORAGE_BACKEND" in
                 name="$(basename "$subdir")"
                 target="/comfyui/models/$name"
                 if [ ! -e "$target" ]; then
+                    # Target doesn't exist — symlink the whole subdirectory
                     ln -sf "$subdir" "$target" 2>/dev/null && \
                         log_info "  Linked: /comfyui/models/$name -> /runpod-volume/models/$name"
+                else
+                    # Target already exists (created by Dockerfile) —
+                    # symlink individual files from the volume subdirectory
+                    # into the existing target so both are accessible
+                    for item in "$subdir"/*; do
+                        [ -e "$item" ] || continue
+                        itemname="$(basename "$item")"
+                        itemtarget="$target/$itemname"
+                        if [ ! -e "$itemtarget" ]; then
+                            ln -sf "$item" "$itemtarget" 2>/dev/null && \
+                                log_info "  Linked: $itemtarget -> $item"
+                        fi
+                    done
                 fi
             done
             log_success "Network volume models linked to /comfyui/models/"
         else
             log_warning "No /runpod-volume/models directory found — models will be empty"
         fi
-        # Also link custom_nodes, input, output, user if they exist on the volume
+        # Also link custom_nodes, input, output, user if they exist on the volume.
+        # If the target already exists (created by Dockerfile), we can't symlink
+        # the whole directory. Instead, symlink individual subdirectories from
+        # the volume into the existing target so both image-baked and volume
+        # content are accessible.
         for dirpair in "custom_nodes:/comfyui/custom_nodes" "input:/comfyui/input" "output:/comfyui/output" "user:/comfyui/user"; do
             volname="${dirpair%%:*}"
             target="${dirpair##*:}"
-            if [ -d "/runpod-volume/$volname" ] && [ ! -e "$target" ]; then
-                ln -sf "/runpod-volume/$volname" "$target" 2>/dev/null && \
-                    log_info "  Linked: $target -> /runpod-volume/$volname"
+            if [ -d "/runpod-volume/$volname" ]; then
+                if [ ! -e "$target" ]; then
+                    # Target doesn't exist — symlink the whole directory
+                    ln -sf "/runpod-volume/$volname" "$target" 2>/dev/null && \
+                        log_info "  Linked: $target -> /runpod-volume/$volname"
+                else
+                    # Target already exists (e.g. created by Dockerfile) —
+                    # symlink individual subdirectories/files from the volume
+                    # into the existing target so both are accessible
+                    for item in /runpod-volume/"$volname"/*; do
+                        [ -e "$item" ] || continue
+                        itemname="$(basename "$item")"
+                        itemtarget="$target/$itemname"
+                        if [ ! -e "$itemtarget" ]; then
+                            ln -sf "$item" "$itemtarget" 2>/dev/null && \
+                                log_info "  Linked: $itemtarget -> $item"
+                        fi
+                    done
+                fi
             fi
         done
         ;;
