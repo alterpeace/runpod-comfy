@@ -580,10 +580,15 @@ update_custom_nodes() {
     local ltxv_dir="$custom_nodes_dir/ComfyUI-LTXVideo"
     if [ -d "$ltxv_dir/.git" ]; then
         log_info "Updating ComfyUI-LTXVideo to latest..."
-        cd "$ltxv_dir" && git pull --ff-only origin master 2>/dev/null && cd /workspace
+        cd "$ltxv_dir" && git fetch origin master && git reset --hard origin/master 2>/dev/null && cd /workspace
         log_success "ComfyUI-LTXVideo updated"
-    elif [ ! -d "$ltxv_dir" ]; then
-        log_info "Cloning ComfyUI-LTXVideo..."
+    else
+        # Not a git repo or doesn't exist — force clone fresh
+        if [ -d "$ltxv_dir" ]; then
+            log_warning "ComfyUI-LTXVideo exists but not a git repo — replacing..."
+            rm -rf "$ltxv_dir"
+        fi
+        log_info "Cloning ComfyUI-LTXVideo (latest master)..."
         git clone --depth 1 https://github.com/Lightricks/ComfyUI-LTXVideo.git "$ltxv_dir" 2>/dev/null
         log_success "ComfyUI-LTXVideo cloned"
     fi
