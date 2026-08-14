@@ -57,7 +57,7 @@ RUN --mount=type=cache,target=/cache/uv,sharing=locked \
     --extra-index-url https://download.pytorch.org/whl/${TORCH_FLAVOR} && \
     uv pip install \
     ninja wheel packaging setuptools \
-    'diffusers>=0.32.0' 'transformers>=4.47.0' 'peft>=0.14.0' \
+    'diffusers>=0.32.0' 'transformers>=5.0.0' 'peft>=0.14.0' \
     accelerate sentencepiece protobuf torchsde einops tokenizers \
     pyyaml pillow scipy tqdm psutil spandrel soundfile \
     huggingface_hub[cli,hf_transfer] 'kornia==0.7.2'
