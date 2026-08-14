@@ -1,28 +1,20 @@
 #!/usr/bin/env python3
 """
 Invoke the LTX-2.5 V2V redetail workflow on RunPod serverless, uploading
-the input video via the input_images mechanism.
+the input video via the input_files mechanism.
 
-Works around ComfyUI's path traversal check (is_within_directory uses
-os.path.realpath which follows symlinks). Strategy:
-
-1. Replace the existing symlink at /comfyui/input/rhizome.mp4 (which points
-   to /runpod-volume/input/rhizome.mp4 — OUTSIDE the input dir) with a
-   RELATIVE symlink: rhizome.mp4 -> rhizome_real.mp4 (within /comfyui/input/)
-   This is done via the download_models action's symlink_target feature.
-
-2. Upload the video as "rhizome_real.mp4" via input_images. The handler's
-   upload_image writes to /comfyui/input/rhizome_real.mp4 (a real file).
-
-3. The workflow references "rhizome.mp4" which is now a relative symlink to
-   "rhizome_real.mp4" within the same directory. os.path.realpath resolves
-   to /comfyui/input/rhizome_real.mp4 — WITHIN /comfyui/input/ — so the
-   path traversal check passes.
+With the content type fix in comfyui_client.py (derives MIME type from
+filename extension instead of hardcoded image/png), we can now upload
+video files directly — no symlink workaround needed. The handler uploads
+the file to ComfyUI's /upload/image endpoint, which saves it as a real
+file in /comfyui/input/. Real files pass ComfyUI's is_within_directory
+realpath check automatically.
 
 Usage:
     set -a && source .env && set +a
     uv run python scripts/invoke_v2v_with_upload.py --video rhizome.mp4
     uv run python scripts/invoke_v2v_with_upload.py --video rhizome.mp4 --local-file /path/to/rhizome.mp4
+    uv run python scripts/invoke_v2v_with_upload.py --video sample/clip_001.mp4 --prompt "cinematic"
 """
 import argparse
 import base64
@@ -93,116 +85,9 @@ def patch_workflow(workflow: dict, video: str, prompt: str = None, negative: str
     return workflow
 
 
-def create_relative_symlink(endpoint, video_filename: str) -> dict:
-    """
-    Step 1: Use download_models action to replace the existing symlink with
-    a RELATIVE symlink within /comfyui/input/.
-
-    Creates: /comfyui/input/<video_filename> -> <video_filename_stem>_real<ext>
-    e.g. /comfyui/input/rhizome.mp4 -> rhizome_real.mp4 (relative)
-    """
-    stem = Path(video_filename).stem
-    ext = Path(video_filename).suffix
-    real_name = f"{stem}_real{ext}"
-
-    inline_manifest = {
-        "models": [
-            {
-                "id": "fix_symlink",
-                "desc": f"Replace symlink with relative symlink within /comfyui/input/",
-                "dest": "input",
-                "file": video_filename,
-                "symlink_target": real_name  # RELATIVE path — within /comfyui/input/
-            }
-        ],
-        "profiles": {
-            "fix": ["fix_symlink"]
-        }
-    }
-
-    job_input = {
-        "action": "download_models",
-        "inline_manifest": inline_manifest,
-        "profile": "fix",
-        "output_dir": "/comfyui",
-        "force": True,  # Overwrite existing symlink
-    }
-
-    print(f"\n=== Step 1: Creating relative symlink ===")
-    print(f"  /comfyui/input/{video_filename} -> {real_name} (relative)")
-
-    job = endpoint.run(job_input)
-    while job.status() in ['IN_QUEUE', 'IN_PROGRESS']:
-        time.sleep(2)
-
-    output = job.output()
-    stdout = output.get("output", {}).get("stdout", "")
-    print(f"  Status: {job.status()}")
-    for line in stdout.splitlines():
-        if line.strip():
-            print(f"  {line.strip()}")
-
-    return {"real_name": real_name, "status": job.status(), "output": output}
-
-
-def upload_and_run_workflow(endpoint, workflow: dict, video_filename: str, real_name: str,
-                            video_data: bytes, timeout: int, wait: bool) -> dict:
-    """
-    Step 2: Upload the video as real_name via input_images, then run the workflow.
-    The workflow references video_filename which is a relative symlink to real_name.
-    """
-    video_b64 = base64.b64encode(video_data).decode("utf-8")
-
-    job_input = {
-        "workflow": workflow,
-        "input_images": {
-            real_name: video_b64,  # Upload as the real filename
-        },
-        "timeout": timeout,
-    }
-
-    print(f"\n=== Step 2: Upload video and run workflow ===")
-    print(f"  Uploading as: {real_name} ({len(video_data):,} bytes -> {len(video_b64):,} chars b64)")
-    print(f"  Workflow video field: {video_filename} (symlink -> {real_name})")
-
-    job = endpoint.run({"input": job_input})
-    print(f"  Job ID: {job.job_id}")
-
-    if not wait:
-        print(f"\n  Job submitted. Check status later.")
-        return {"job_id": job.job_id, "status": "SUBMITTED"}
-
-    print(f"  Waiting for completion (timeout: {timeout}s)...")
-    start = time.time()
-
-    while True:
-        status = job.status()
-
-        if status == "COMPLETED":
-            elapsed = time.time() - start
-            result = job.output()
-            print(f"\n✅ Completed in {elapsed:.0f}s")
-            print(json.dumps(result, indent=2, default=str)[:3000])
-            return result
-
-        if status == "FAILED":
-            result = job.output()
-            print(f"\n❌ Job failed")
-            print(json.dumps(result, indent=2, default=str)[:3000])
-            return result
-
-        if time.time() - start > timeout:
-            print(f"\n⏱️  Timeout after {timeout}s (job still running: {job.job_id})")
-            return {"job_id": job.job_id, "status": "TIMEOUT"}
-
-        elapsed = int(time.time() - start)
-        print(f"  [{elapsed:>4}s] {status}...", end="\r")
-        time.sleep(3)
-
-
 def main():
     parser = argparse.ArgumentParser(
-        description="Invoke V2V workflow with video upload (bypasses symlink limitation)",
+        description="Invoke V2V workflow with video upload via input_files",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--video", required=True, help="Video filename (e.g. rhizome.mp4)")
@@ -214,7 +99,7 @@ def main():
     parser.add_argument("--seed", type=int, help="Override noise seed")
     parser.add_argument("--timeout", type=int, default=600, help="Timeout in seconds (default: 600)")
     parser.add_argument("--no-wait", action="store_true", help="Submit and don't wait")
-    parser.add_argument("--dry-run", action="store_true", help="Show plan without executing")
+    parser.add_argument("--dry-run", action="store_true", help="Show payload without invoking")
 
     args = parser.parse_args()
 
@@ -227,6 +112,10 @@ def main():
 
     print(f"Video size: {len(video_data):,} bytes")
 
+    # Base64 encode
+    video_b64 = base64.b64encode(video_data).decode("utf-8")
+    print(f"Base64 encoded: {len(video_b64):,} chars")
+
     # Load and patch workflow
     workflow = load_workflow(args.workflow)
     workflow = patch_workflow(
@@ -238,39 +127,61 @@ def main():
     )
 
     if args.dry_run:
-        stem = Path(args.video).stem
-        ext = Path(args.video).suffix
-        real_name = f"{stem}_real{ext}"
-        print(f"\n=== DRY RUN ===")
-        print(f"Step 1: Create relative symlink /comfyui/input/{args.video} -> {real_name}")
-        print(f"Step 2: Upload {len(video_data):,} bytes as {real_name} via input_images")
-        print(f"Step 3: Run workflow with video={args.video}")
+        print("\n=== DRY RUN ===")
+        print(f"Upload: {args.video} ({len(video_data):,} bytes)")
         print(json.dumps({"workflow": workflow, "timeout": args.timeout}, indent=2))
         return
 
-    # Setup RunPod
+    # Submit job — use input_files (new name) which the handler accepts
+    # alongside the legacy input_images key
+    job_input = {
+        "workflow": workflow,
+        "input_files": {
+            args.video: video_b64,
+        },
+        "timeout": args.timeout,
+    }
+
     runpod.api_key = os.environ["RUNPOD_API_KEY"]
     endpoint = runpod.Endpoint(args.endpoint_id)
 
-    # Step 1: Create relative symlink
-    result = create_relative_symlink(endpoint, args.video)
-    real_name = result["real_name"]
+    print(f"\nInvoking endpoint: {args.endpoint_id}")
+    print(f"Video: {args.video} (uploaded via input_files, {len(video_data):,} bytes)")
+    print(f"Workflow: {args.workflow}")
 
-    if result["status"] != "COMPLETED":
-        print(f"\n❌ Step 1 failed. Aborting.")
-        print(json.dumps(result["output"], indent=2))
-        sys.exit(1)
+    job = endpoint.run({"input": job_input})
+    print(f"Job ID: {job.job_id}")
 
-    # Step 2: Upload video and run workflow
-    upload_and_run_workflow(
-        endpoint,
-        workflow,
-        video_filename=args.video,
-        real_name=real_name,
-        video_data=video_data,
-        timeout=args.timeout,
-        wait=not args.no_wait,
-    )
+    if args.no_wait:
+        print(f"\nJob submitted. Check status later.")
+        return
+
+    print(f"\nWaiting for completion (timeout: {args.timeout}s)...")
+    start = time.time()
+
+    while True:
+        status = job.status()
+
+        if status == "COMPLETED":
+            elapsed = time.time() - start
+            result = job.output()
+            print(f"\n✅ Completed in {elapsed:.0f}s")
+            print(json.dumps(result, indent=2, default=str)[:3000])
+            return
+
+        if status == "FAILED":
+            result = job.output()
+            print(f"\n❌ Job failed")
+            print(json.dumps(result, indent=2, default=str)[:3000])
+            return
+
+        if time.time() - start > args.timeout:
+            print(f"\n⏱️  Timeout after {args.timeout}s (job still running: {job.job_id})")
+            return
+
+        elapsed = int(time.time() - start)
+        print(f"  [{elapsed:>4}s] {status}...", end="\r")
+        time.sleep(3)
 
 
 if __name__ == "__main__":
