@@ -567,6 +567,39 @@ install_custom_node_deps() {
 install_custom_node_deps
 
 # ============================================================================
+# CUSTOM NODE UPDATES (ensure latest ComfyUI-LTXVideo for LTX-2.5 support)
+# ============================================================================
+update_custom_nodes() {
+    local custom_nodes_dir="/runpod-volume/custom_nodes"
+    
+    if [ ! -d "$custom_nodes_dir" ]; then
+        mkdir -p "$custom_nodes_dir"
+    fi
+
+    # ComfyUI-LTXVideo must be latest master for LTX-2.5 Gemma 4 support
+    local ltxv_dir="$custom_nodes_dir/ComfyUI-LTXVideo"
+    if [ -d "$ltxv_dir/.git" ]; then
+        log_info "Updating ComfyUI-LTXVideo to latest..."
+        cd "$ltxv_dir" && git pull --ff-only origin master 2>/dev/null && cd /workspace
+        log_success "ComfyUI-LTXVideo updated"
+    elif [ ! -d "$ltxv_dir" ]; then
+        log_info "Cloning ComfyUI-LTXVideo..."
+        git clone --depth 1 https://github.com/Lightricks/ComfyUI-LTXVideo.git "$ltxv_dir" 2>/dev/null
+        log_success "ComfyUI-LTXVideo cloned"
+    fi
+
+    # ComfyUI-VideoHelperSuite
+    local vhs_dir="$custom_nodes_dir/ComfyUI-VideoHelperSuite"
+    if [ -d "$vhs_dir/.git" ]; then
+        cd "$vhs_dir" && git pull --ff-only origin main 2>/dev/null && cd /workspace
+    elif [ ! -d "$vhs_dir" ]; then
+        git clone --depth 1 https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git "$vhs_dir" 2>/dev/null
+        log_success "ComfyUI-VideoHelperSuite cloned"
+    fi
+}
+update_custom_nodes
+
+# ============================================================================
 # TORCH_LOCK & USERSCRIPTS
 # ============================================================================
 verify_torch_lock
