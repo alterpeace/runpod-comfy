@@ -891,7 +891,10 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
             },
             'metadata': {
                 'job_id': job_id,
-                'execution_time': round(time.time() - start_time, 2)
+                'execution_time': round(time.time() - start_time, 2),
+                'error_code': 'VALIDATION_ERROR',
+                'error_message': str(e),
+                'error_type': 'ValidationError'
             }
         }
     
@@ -906,7 +909,10 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
             },
             'metadata': {
                 'job_id': job_id,
-                'execution_time': round(time.time() - start_time, 2)
+                'execution_time': round(time.time() - start_time, 2),
+                'error_code': 'HANDLER_ERROR',
+                'error_message': str(e),
+                'error_type': 'HandlerError'
             }
         }
     
@@ -921,7 +927,10 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
             },
             'metadata': {
                 'job_id': job_id,
-                'execution_time': round(time.time() - start_time, 2)
+                'execution_time': round(time.time() - start_time, 2),
+                'error_code': 'INTERNAL_ERROR',
+                'error_message': f"An unexpected error occurred: {str(e)}",
+                'error_type': type(e).__name__
             }
         }
     
