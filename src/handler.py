@@ -622,7 +622,19 @@ def download_models(job_input: Dict[str, Any], job_id: str) -> Dict[str, Any]:
     start_time = time.time()
 
     manifest_choice = job_input.get("manifest", "ltx-2.5")
-    if manifest_choice == "ltx-2.3":
+
+    # Support inline manifest: if the job input contains "inline_manifest",
+    # write it to a temp file and use that as the manifest path.
+    inline_manifest = job_input.get("inline_manifest")
+    if inline_manifest:
+        if not isinstance(inline_manifest, dict):
+            raise ValidationError("inline_manifest must be a JSON object")
+        import tempfile
+        fd, manifest_path = tempfile.mkstemp(suffix=".json", prefix="manifest_")
+        with os.fdopen(fd, "w") as f:
+            json.dump(inline_manifest, f)
+        logger.info(f"[download_models] Using inline manifest from job input")
+    elif manifest_choice == "ltx-2.3":
         manifest_path = LTX23_MANIFEST
     elif manifest_choice == "ltx-2.5":
         manifest_path = LTX25_MANIFEST

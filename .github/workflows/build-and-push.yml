@@ -60,7 +60,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            COMFYUI_VERSION=v0.27.0
+            COMFYUI_VERSION=v0.32.0
             TORCH_VERSION=2.10.0
             TORCH_FLAVOR=cu129
             XFORMERS_VERSION=0.0.34

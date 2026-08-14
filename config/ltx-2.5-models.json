@@ -1,9 +1,9 @@
 {
   "_comment": "Model manifest for LTX-2.5 V2V / IC-LoRA / audio support. Consumed by scripts/download_ltx25_models.py. Each entry downloads a single file from a Hugging Face repo into models/<dest>/<filename>. LTX-2.5 is auto-gated on HuggingFace — visit https://huggingface.co/Lightricks/LTX-2.5 and click 'Agree and Access' once, then set HF_TOKEN. LTX-2.5 uses Gemma 4 (not Gemma 3) and has native audio generation, temporal upscaler, and duration head patch. NOTE: LTX-2.3 IC-LoRAs and the 2.3 spatial upscaler ARE compatible with 2.5 (confirmed by official Lightricks workflows). Cross-referenced with official workflows at https://github.com/Lightricks/ComfyUI-LTXVideo/tree/master/example_workflows/2.5 and Kijai's repos.",
   "profiles": {
-    "minimal": ["text_encoder_int8", "checkpoint_dev_int8", "distilled_lora"],
-    "low_vram_8gb": ["text_encoder_int8", "gguf_distilled_q4", "video_vae", "audio_vae", "distilled_lora"],
-    "mid_vram_24gb": ["text_encoder_int8", "checkpoint_dev_int8", "distilled_lora", "video_vae", "audio_vae", "spatial_upscaler", "temporal_upscaler", "iclora_pixel_upscaler", "text_enhancer"],
+    "minimal": ["text_encoder_int8", "text_encoder_tokenizer", "text_encoder_tokenizer_config", "text_encoder_tokenizer_model", "text_encoder_chat_template", "text_encoder_generation_config", "text_encoder_processor_config", "checkpoint_dev_int8", "distilled_lora"],
+    "low_vram_8gb": ["text_encoder_int8", "text_encoder_tokenizer", "text_encoder_tokenizer_config", "text_encoder_tokenizer_model", "text_encoder_chat_template", "text_encoder_generation_config", "text_encoder_processor_config", "gguf_distilled_q4", "video_vae", "audio_vae", "distilled_lora"],
+    "mid_vram_24gb": ["text_encoder_int8", "text_encoder_tokenizer", "text_encoder_tokenizer_config", "text_encoder_tokenizer_model", "text_encoder_chat_template", "text_encoder_generation_config", "text_encoder_processor_config", "checkpoint_dev_int8", "distilled_lora", "video_vae", "audio_vae", "spatial_upscaler", "temporal_upscaler", "iclora_pixel_upscaler", "text_enhancer"],
     "full": ["all"]
   },
   "models": [
@@ -22,6 +22,63 @@
       "file": "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
       "dest": "text_encoders",
       "gated": true
+    },
+    {
+      "id": "text_encoder_tokenizer",
+      "desc": "Gemma 4 tokenizer + config files for LTXVGemmaCLIPModelLoader (directory format). Downloads config.json, tokenizer_config.json, tokenizer.model, chat_template.jinja, generation_config.json, processor_config.json into text_encoders/gemma4-12b-ltx-2.5/",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "text_encoders/gemma4-12b-ltx-2.5/config.json",
+      "dest": "text_encoders/gemma4-12b-ltx-2.5",
+      "gated": true
+    },
+    {
+      "id": "text_encoder_tokenizer_config",
+      "desc": "tokenizer_config.json for Gemma 4 directory format",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "text_encoders/gemma4-12b-ltx-2.5/tokenizer_config.json",
+      "dest": "text_encoders/gemma4-12b-ltx-2.5",
+      "gated": true
+    },
+    {
+      "id": "text_encoder_tokenizer_model",
+      "desc": "tokenizer.model (SentencePiece) for Gemma 4 directory format",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "text_encoders/gemma4-12b-ltx-2.5/tokenizer.model",
+      "dest": "text_encoders/gemma4-12b-ltx-2.5",
+      "gated": true
+    },
+    {
+      "id": "text_encoder_chat_template",
+      "desc": "chat_template.jinja for Gemma 4 directory format",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "text_encoders/gemma4-12b-ltx-2.5/chat_template.jinja",
+      "dest": "text_encoders/gemma4-12b-ltx-2.5",
+      "gated": true
+    },
+    {
+      "id": "text_encoder_generation_config",
+      "desc": "generation_config.json for Gemma 4 directory format",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "text_encoders/gemma4-12b-ltx-2.5/generation_config.json",
+      "dest": "text_encoders/gemma4-12b-ltx-2.5",
+      "gated": true
+    },
+    {
+      "id": "text_encoder_processor_config",
+      "desc": "processor_config.json for Gemma 4 directory format",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "text_encoders/gemma4-12b-ltx-2.5/processor_config.json",
+      "dest": "text_encoders/gemma4-12b-ltx-2.5",
+      "gated": true
+    },
+    {
+      "id": "text_encoder_model_symlink",
+      "desc": "Symlink model.safetensors -> ../gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors (created automatically by download script after tokenizer files are downloaded, not a real download)",
+      "repo": "Lightricks/LTX-2.5",
+      "file": "text_encoders/gemma4-12b-ltx-2.5/model.safetensors",
+      "dest": "text_encoders/gemma4-12b-ltx-2.5",
+      "gated": true,
+      "symlink_target": "../gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors"
     },
     {
       "id": "checkpoint_dev_bf16",

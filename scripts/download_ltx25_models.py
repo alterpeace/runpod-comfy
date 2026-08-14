@@ -73,6 +73,25 @@ def download_one(model: dict, output_dir: Path, token: str | None, dry_run: bool
     filename_only = os.path.basename(model["file"])
     dest_path = dest_dir / filename_only
 
+    # Handle symlink-only entries (e.g. model.safetensors -> ../flat_file.safetensors)
+    symlink_target = model.get("symlink_target")
+    if symlink_target:
+        if dest_path.is_symlink() and not force:
+            print(f"  [skip] {model['id']}: symlink already exists at {dest_path}")
+            return True
+        if dest_path.exists() and not dest_path.is_symlink() and not force:
+            print(f"  [skip] {model['id']}: already exists at {dest_path}")
+            return True
+        if dry_run:
+            print(f"  [dry-run] {model['id']}: symlink {dest_path} -> {symlink_target}")
+            return True
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        if dest_path.exists() or dest_path.is_symlink():
+            dest_path.unlink()
+        os.symlink(symlink_target, dest_path)
+        print(f"  [ok] {model['id']}: symlinked -> {dest_path} -> {symlink_target}")
+        return True
+
     # In copy_mode, a real file (not symlink) that exists is a valid skip.
     # In symlink mode, a broken symlink should be re-downloaded.
     if dest_path.exists() and not dest_path.is_symlink() and not force:

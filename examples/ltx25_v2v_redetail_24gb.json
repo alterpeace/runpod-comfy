@@ -7,10 +7,11 @@
   },
   "2": {
     "inputs": {
-      "clip_name": "gemma4-12b-ltx-2.5/model.safetensors",
-      "type": "ltxv"
+      "gemma_path": "gemma4-12b-ltx-2.5/model.safetensors",
+      "ltxv_path": "ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors",
+      "max_length": 1024
     },
-    "class_type": "CLIPLoader"
+    "class_type": "LTXVGemmaCLIPModelLoader"
   },
   "3": {
     "inputs": {
@@ -35,7 +36,7 @@
         0
       ],
       "lora_name": "ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors",
-      "strength": 0.7
+      "strength_model": 0.7
     },
     "class_type": "LTXICLoRALoaderModelOnly"
   },
@@ -63,6 +64,8 @@
     "inputs": {
       "video": "input_video.mp4",
       "force_rate": 24,
+      "custom_width": 0,
+      "custom_height": 0,
       "frame_load_cap": 385,
       "skip_first_frames": 0,
       "select_every_nth": 1
@@ -92,19 +95,21 @@
         "6",
         0
       ],
-      "images": [
-        "8",
-        0
-      ],
       "vae": [
         "1",
         2
       ],
+      "image": [
+        "8",
+        0
+      ],
       "width": 768,
       "height": 448,
-      "num_frames": 385
+      "length": 385,
+      "batch_size": 1,
+      "strength": 1.0
     },
-    "class_type": "LTXVImgToVideoConditionOnly"
+    "class_type": "LTXVImgToVideo"
   },
   "10": {
     "inputs": {
@@ -116,30 +121,27 @@
         "9",
         1
       ],
-      "model": [
-        "4",
-        0
-      ],
-      "guide_images": [
-        "8",
-        0
-      ],
-      "strength": 0.8
-    },
-    "class_type": "LTXAddVideoICLoRAGuide"
-  },
-  "11": {
-    "inputs": {
-      "pixels": [
-        "8",
-        0
-      ],
       "vae": [
         "1",
         2
-      ]
+      ],
+      "latent": [
+        "9",
+        2
+      ],
+      "image": [
+        "8",
+        0
+      ],
+      "frame_idx": 0,
+      "strength": 0.8,
+      "latent_downscale_factor": 1.0,
+      "crop": "disabled",
+      "use_tiled_encode": false,
+      "tile_size": 256,
+      "tile_overlap": 64
     },
-    "class_type": "VAEEncode"
+    "class_type": "LTXAddVideoICLoRAGuide"
   },
   "12": {
     "inputs": {
@@ -159,7 +161,13 @@
     },
     "class_type": "KSamplerSelect"
   },
-  "14": {
+  "22": {
+    "inputs": {
+      "noise_seed": 42
+    },
+    "class_type": "RandomNoise"
+  },
+  "23": {
     "inputs": {
       "model": [
         "4",
@@ -173,6 +181,20 @@
         "10",
         1
       ],
+      "cfg": 1.0
+    },
+    "class_type": "CFGGuider"
+  },
+  "14": {
+    "inputs": {
+      "noise": [
+        "22",
+        0
+      ],
+      "guider": [
+        "23",
+        0
+      ],
       "sampler": [
         "13",
         0
@@ -182,8 +204,8 @@
         0
       ],
       "latent_image": [
-        "11",
-        0
+        "10",
+        2
       ]
     },
     "class_type": "SamplerCustomAdvanced"
@@ -193,9 +215,23 @@
       "samples": [
         "14",
         0
+      ],
+      "upscale_model": [
+        "21",
+        0
+      ],
+      "vae": [
+        "1",
+        2
       ]
     },
-    "class_type": "LTXVLatentUpscaler"
+    "class_type": "LTXVLatentUpsampler"
+  },
+  "21": {
+    "inputs": {
+      "model_name": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
+    },
+    "class_type": "LatentUpscaleModelLoader"
   },
   "16": {
     "inputs": {
@@ -209,7 +245,13 @@
     },
     "class_type": "KSamplerSelect"
   },
-  "18": {
+  "24": {
+    "inputs": {
+      "noise_seed": 42
+    },
+    "class_type": "RandomNoise"
+  },
+  "25": {
     "inputs": {
       "model": [
         "4",
@@ -222,6 +264,20 @@
       "negative": [
         "10",
         1
+      ],
+      "cfg": 1.0
+    },
+    "class_type": "CFGGuider"
+  },
+  "18": {
+    "inputs": {
+      "noise": [
+        "24",
+        0
+      ],
+      "guider": [
+        "25",
+        0
       ],
       "sampler": [
         "17",

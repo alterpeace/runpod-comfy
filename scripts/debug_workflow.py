@@ -55,6 +55,25 @@ _VENV_PYTHON = _PROJECT_ROOT / ".venv" / "bin" / "python"
 if _VENV_PYTHON.exists() and sys.executable != str(_VENV_PYTHON):
     os.execv(str(_VENV_PYTHON), [str(_VENV_PYTHON)] + sys.argv)
 
+# Auto-load .env file so RUNPOD_API_KEY / RUNPOD_ENDPOINT_ID etc. are available
+# without needing an external tool like direnv or `set -a; source .env`.
+def _load_dotenv():
+    env_path = _PROJECT_ROOT / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        val = val.strip().strip("'\"")
+        # Don't override existing env vars — explicit shell exports take priority
+        if key and key not in os.environ:
+            os.environ[key] = val
+
+_load_dotenv()
+
 import requests
 
 # Colors for terminal output
