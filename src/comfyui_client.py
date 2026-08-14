@@ -225,19 +225,24 @@ class ComfyUIClient:
             history = self.get_history(prompt_id)
             
             if history:
-                # Check if execution completed
-                if 'outputs' in history:
-                    logger.info(f"Workflow {prompt_id} completed successfully")
-                    return history
-                
-                # Check for errors
+                # Check execution status first — ComfyUI returns a history entry
+                # with 'outputs': {} and 'status': {'completed': False, ...} when
+                # a workflow fails. We must check status.completed before
+                # returning, otherwise we return empty outputs as "success".
                 if 'status' in history:
                     status = history['status']
-                    if status.get('completed') is False:
+                    if status.get('completed') is True:
+                        logger.info(f"Workflow {prompt_id} completed successfully")
+                        return history
+                    elif status.get('completed') is False:
                         error_msg = status.get('messages', [])
                         raise ComfyUIWorkflowError(
                             f"Workflow execution failed: {error_msg}"
                         )
+                elif 'outputs' in history:
+                    # No status field — assume completed if outputs present
+                    logger.info(f"Workflow {prompt_id} completed (no status field)")
+                    return history
             
             # Check timeout
             if max_wait_time:
