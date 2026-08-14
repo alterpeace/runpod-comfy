@@ -289,6 +289,63 @@ class ComfyUIClient:
         logger.info(f"Downloaded image: {filename}")
         return response.content
     
+    def upload_file(
+        self,
+        file_data: bytes,
+        filename: str,
+        subfolder: str = "",
+        overwrite: bool = True,
+        content_type: str = None
+    ) -> Dict[str, Any]:
+        """
+        Upload a file to ComfyUI for use in workflows.
+
+        Works with any file type — images, videos, audio, etc. The ComfyUI
+        /upload/image endpoint accepts any file regardless of content type.
+
+        Args:
+            file_data: File data as bytes
+            filename: Name for the uploaded file
+            subfolder: Subfolder to upload to
+            overwrite: Whether to overwrite existing file
+            content_type: MIME type for the upload. If None, derived from
+                         filename extension. Defaults to application/octet-stream.
+
+        Returns:
+            Dictionary containing upload result with 'name' and 'subfolder'
+
+        Raises:
+            ComfyUIConnectionError: If upload fails
+        """
+        import mimetypes
+
+        if content_type is None:
+            # Derive content type from filename extension
+            content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+
+        files = {
+            'image': (filename, file_data, content_type)
+        }
+
+        data = {
+            'overwrite': str(overwrite).lower()
+        }
+
+        if subfolder:
+            data['subfolder'] = subfolder
+
+        response = self._make_request(
+            'POST',
+            '/upload/image',
+            files=files,
+            data=data
+        )
+
+        result = response.json()
+        logger.info(f"Uploaded file: {filename} ({content_type}, {len(file_data)} bytes)")
+        return result
+
+    # Backward-compatible alias
     def upload_image(
         self,
         image_data: bytes,
@@ -296,42 +353,13 @@ class ComfyUIClient:
         subfolder: str = "",
         overwrite: bool = True
     ) -> Dict[str, Any]:
-        """
-        Upload an image to ComfyUI for use in workflows.
-        
-        Args:
-            image_data: Image file data as bytes
-            filename: Name for the uploaded file
-            subfolder: Subfolder to upload to
-            overwrite: Whether to overwrite existing file
-            
-        Returns:
-            Dictionary containing upload result with 'name' and 'subfolder'
-            
-        Raises:
-            ComfyUIConnectionError: If upload fails
-        """
-        files = {
-            'image': (filename, image_data, 'image/png')
-        }
-        
-        data = {
-            'overwrite': str(overwrite).lower()
-        }
-        
-        if subfolder:
-            data['subfolder'] = subfolder
-        
-        response = self._make_request(
-            'POST',
-            '/upload/image',
-            files=files,
-            data=data
+        """Backward-compatible alias for upload_file."""
+        return self.upload_file(
+            file_data=image_data,
+            filename=filename,
+            subfolder=subfolder,
+            overwrite=overwrite,
         )
-        
-        result = response.json()
-        logger.info(f"Uploaded image: {filename}")
-        return result
     
     def get_outputs(self, prompt_id: str) -> List[Dict[str, Any]]:
         """

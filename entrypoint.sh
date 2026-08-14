@@ -337,11 +337,52 @@ case "$STORAGE_BACKEND" in
             log_warning "No /runpod-volume/models directory found — models will be empty"
         fi
         # Also link custom_nodes, input, output, user if they exist on the volume.
-        # If the target already exists (created by Dockerfile), we can't symlink
-        # the whole directory. Instead, symlink individual subdirectories from
-        # the volume into the existing target so both image-baked and volume
-        # content are accessible.
-        for dirpair in "custom_nodes:/comfyui/custom_nodes" "input:/comfyui/input" "output:/comfyui/output" "user:/comfyui/user"; do
+        #
+        # IMPORTANT: The input directory needs special handling. ComfyUI's
+        # is_within_directory() uses os.path.realpath() which follows symlinks.
+        # If we symlink individual files from /runpod-volume/input/ into
+        # /comfyui/input/, the realpath resolves OUTSIDE /comfyui/input/ and
+        # ComfyUI rejects them as path traversal (Invalid video file).
+        #
+        # Fix: Replace /comfyui/input entirely with a symlink to
+        # /runpod-volume/input. Then realpath resolves both the directory and
+        # files to /runpod-volume/input, and is_within_directory passes.
+        # The Dockerfile creates /comfyui/input as an empty dir, so removing
+        # it is safe.
+
+        # Handle input directory specially — replace with symlink to volume
+        if [ -d "/runpod-volume/input" ]; then
+            if [ -L "/comfyui/input" ]; then
+                log_info "  /comfyui/input already symlinked to volume"
+            elif [ -d "/comfyui/input" ]; then
+                # Remove the empty Dockerfile-created directory and replace
+                # with a symlink so realpath resolves correctly
+                rmdir "/comfyui/input" 2>/dev/null && \
+                    ln -sf "/runpod-volume/input" "/comfyui/input" && \
+                    log_info "  Replaced: /comfyui/input -> /runpod-volume/input symlink"
+                if [ ! -L "/comfyui/input" ]; then
+                    # rmdir failed (dir not empty) — fall back to copying files
+                    log_warning "  Could not replace /comfyui/input, copying files from volume"
+                    for item in /runpod-volume/input/*; do
+                        [ -e "$item" ] || continue
+                        itemname="$(basename "$item")"
+                        itemtarget="/comfyui/input/$itemname"
+                        if [ ! -e "$itemtarget" ]; then
+                            cp -r "$item" "$itemtarget" 2>/dev/null && \
+                                log_info "  Copied: $itemtarget"
+                        fi
+                    done
+                fi
+            else
+                ln -sf "/runpod-volume/input" "/comfyui/input" 2>/dev/null && \
+                    log_info "  Linked: /comfyui/input -> /runpod-volume/input"
+            fi
+        fi
+
+        # Handle other directories with symlinks (custom_nodes, output, user)
+        # These don't have the realpath issue since ComfyUI only uses
+        # is_within_directory for input file validation, not for these dirs.
+        for dirpair in "custom_nodes:/comfyui/custom_nodes" "output:/comfyui/output" "user:/comfyui/user"; do
             volname="${dirpair%%:*}"
             target="${dirpair##*:}"
             if [ -d "/runpod-volume/$volname" ]; then

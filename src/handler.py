@@ -320,59 +320,69 @@ def validate_workflow(workflow: Any) -> Dict[str, Any]:
     return workflow
 
 
-def upload_images(images: Optional[Dict[str, str]]) -> Dict[str, str]:
+def upload_files(files: Optional[Dict[str, str]]) -> Dict[str, str]:
     """
-    Upload input images to ComfyUI.
-    
+    Upload input files to ComfyUI.
+
+    Works with any file type — images, videos, audio, etc. Files are
+    base64-encoded in the job input and uploaded via ComfyUI's /upload/image
+    endpoint, which saves them as real files in /comfyui/input/.
+
     Args:
-        images: Dictionary mapping filenames to base64 encoded image data
-        
+        files: Dictionary mapping filenames to base64 encoded file data
+
     Returns:
         Dictionary mapping original filenames to uploaded filenames
-        
+
     Raises:
-        HandlerError: If image upload fails
+        HandlerError: If file upload fails
     """
-    if not images:
-        logger.info("No input images to upload")
+    if not files:
+        logger.info("No input files to upload")
         return {}
-    
-    if not isinstance(images, dict):
+
+    if not isinstance(files, dict):
         raise ValidationError(
-            f"Images must be a dictionary, got {type(images).__name__}"
+            f"Files must be a dictionary, got {type(files).__name__}"
         )
-    
+
     uploaded = {}
-    
-    for filename, image_data in images.items():
+
+    for filename, file_data in files.items():
         try:
-            # Decode base64 image
-            if isinstance(image_data, str):
+            # Decode base64 data
+            if isinstance(file_data, str):
                 # Remove data URL prefix if present
-                if image_data.startswith('data:'):
-                    image_data = image_data.split(',', 1)[1]
-                
-                image_bytes = base64.b64decode(image_data)
+                if file_data.startswith('data:'):
+                    file_data = file_data.split(',', 1)[1]
+
+                file_bytes = base64.b64decode(file_data)
             else:
                 raise ValidationError(
-                    f"Image data for {filename} must be base64 string"
+                    f"File data for {filename} must be base64 string"
                 )
-            
-            # Upload to ComfyUI
-            result = comfyui_client.upload_image(
-                image_data=image_bytes,
+
+            # Upload to ComfyUI (uses upload_file which derives content type)
+            result = comfyui_client.upload_file(
+                file_data=file_bytes,
                 filename=filename,
                 overwrite=True
             )
-            
+
             uploaded[filename] = result.get('name', filename)
-            logger.info(f"Uploaded image: {filename}")
-            
+            logger.info(f"Uploaded file: {filename} ({len(file_bytes)} bytes)")
+
         except Exception as e:
-            logger.error(f"Failed to upload image {filename}: {e}")
-            raise HandlerError(f"Failed to upload image {filename}: {e}")
-    
+            logger.error(f"Failed to upload file {filename}: {e}")
+            raise HandlerError(f"Failed to upload file {filename}: {e}")
+
     return uploaded
+
+
+# Backward-compatible alias
+def upload_images(images: Optional[Dict[str, str]]) -> Dict[str, str]:
+    """Backward-compatible alias for upload_files."""
+    return upload_files(images)
 
 
 def execute_workflow(
@@ -917,9 +927,9 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
         workflow = job_input.get('workflow')
         workflow = validate_workflow(workflow)
         
-        # Upload input images if provided
-        input_images = job_input.get('input_images')
-        uploaded_images = upload_images(input_images)
+        # Upload input files if provided (supports both input_images and input_files)
+        input_files = job_input.get('input_files') or job_input.get('input_images')
+        uploaded_images = upload_files(input_files)
         
         # Get custom timeout if provided
         custom_timeout = job_input.get('timeout')
