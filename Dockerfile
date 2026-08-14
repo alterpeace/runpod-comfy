@@ -365,6 +365,12 @@ COPY src/handler.py src/comfyui_client.py src/storage_s3.py ./
 COPY config/runpod-config-serverless.json config/runpod-config-pods.json .env.example ./
 COPY config/ltx-2.5-models.json config/ltx-2.3-models.json ./config/
 
+# Bundle Gemma 4 tokenizer/config files (text-only format compatible with
+# ComfyUI-LTXVideo's LTXVGemmaCLIPModelLoader). These are the CORRECT files
+# that work — the ones from LTX-2.5-Pre-Trained are multimodal format and
+# cause StrictDataclassFieldValidationError with use_bidirectional_attention.
+COPY config/gemma4-12b-ltx-2.5/ ./config/gemma4-12b-ltx-2.5/
+
 # Copy download scripts (used by the "download_models" serverless action)
 COPY scripts/download_ltx25_models.py scripts/download_ltx23_models.py ./scripts/
 RUN chmod +x ./scripts/*.py 2>/dev/null || true

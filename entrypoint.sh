@@ -287,6 +287,28 @@ case "$STORAGE_BACKEND" in
         # model loaders see empty directories and reject workflows with
         # "Value not in list" validation errors.
         if [ -d "/runpod-volume/models" ]; then
+            # First: ensure the gemma4-12b-ltx-2.5 tokenizer directory exists
+            # with the correct text-only config (not the multimodal one from
+            # LTX-2.5-Pre-Trained which causes StrictDataclassFieldValidationError).
+            GEMMA_DEST="/runpod-volume/models/text_encoders/gemma4-12b-ltx-2.5"
+            GEMMA_SRC="/workspace/config/gemma4-12b-ltx-2.5"
+            if [ -d "$GEMMA_SRC" ]; then
+                mkdir -p "$GEMMA_DEST"
+                for f in "$GEMMA_SRC"/*; do
+                    fname="$(basename "$f")"
+                    if [ ! -e "$GEMMA_DEST/$fname" ] || [ "$fname" = "config.json" ]; then
+                        cp -f "$f" "$GEMMA_DEST/$fname"
+                        log_info "  Copied: $GEMMA_DEST/$fname"
+                    fi
+                done
+                # Create model.safetensors symlink if not present
+                if [ ! -e "$GEMMA_DEST/model.safetensors" ]; then
+                    ln -sf "../gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors" "$GEMMA_DEST/model.safetensors"
+                    log_info "  Symlinked: $GEMMA_DEST/model.safetensors"
+                fi
+                log_success "Gemma 4 tokenizer directory ready at $GEMMA_DEST"
+            fi
+
             for subdir in /runpod-volume/models/*/; do
                 [ -d "$subdir" ] || continue
                 name="$(basename "$subdir")"
