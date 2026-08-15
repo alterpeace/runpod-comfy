@@ -26,15 +26,6 @@
     "class_type": "LoraLoader",
     "_meta": { "title": "Load Distilled LoRA" }
   },
-  "4": {
-    "inputs": {
-      "model": ["3", 0],
-      "lora_name": "ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors",
-      "strength_model": 0.7
-    },
-    "class_type": "LTXICLoRALoaderModelOnly",
-    "_meta": { "title": "Load IC-LoRA Pixel Spatial Upscaler" }
-  },
   "5": {
     "inputs": {
       "clip": ["3", 1],
@@ -53,11 +44,11 @@
   },
   "7": {
     "inputs": {
-      "video": "sample/clip_26-06-11_17-52-54_00002.mp4",
+      "video": "rhizome.mp4",
       "force_rate": 24,
       "custom_width": 0,
       "custom_height": 0,
-      "frame_load_cap": 385,
+      "frame_load_cap": 193,
       "skip_first_frames": 0,
       "select_every_nth": 1
     },
@@ -67,148 +58,68 @@
   "8": {
     "inputs": {
       "image": ["7", 0],
-      "width": 768,
-      "height": 448,
+      "width": 640,
+      "height": 352,
       "upscale_method": "lanczos",
       "crop": "disabled"
     },
     "class_type": "ImageScale",
-    "_meta": { "title": "Resize to 768x448" }
-  },
-  "9": {
-    "inputs": {
-      "positive": ["5", 0],
-      "negative": ["6", 0],
-      "vae": ["26", 0],
-      "image": ["8", 0],
-      "width": 768,
-      "height": 448,
-      "length": 385,
-      "batch_size": 1,
-      "strength": 1.0
-    },
-    "class_type": "LTXVImgToVideo",
-    "_meta": { "title": "Image to Video Conditioning" }
+    "_meta": { "title": "Resize to 640x352" }
   },
   "10": {
     "inputs": {
-      "positive": ["9", 0],
-      "negative": ["9", 1],
-      "vae": ["26", 0],
-      "latent": ["9", 2],
-      "image": ["8", 0],
-      "frame_idx": 0,
-      "strength": 0.8,
-      "latent_downscale_factor": 1.0,
-      "crop": "disabled",
-      "use_tiled_encode": false,
-      "tile_size": 256,
-      "tile_overlap": 64
+      "pixels": ["8", 0],
+      "vae": ["26", 0]
     },
-    "class_type": "LTXAddVideoICLoRAGuide",
-    "_meta": { "title": "Add IC-LoRA Guide" }
+    "class_type": "VAEEncode",
+    "_meta": { "title": "VAE Encode" }
+  },
+  "11": {
+    "inputs": {
+      "model": ["3", 0],
+      "scheduler": "linear_quadratic",
+      "steps": 8,
+      "denoise": 0.3
+    },
+    "class_type": "BasicScheduler",
+    "_meta": { "title": "Scheduler (8 steps, 0.3 denoise)" }
   },
   "12": {
     "inputs": {
-      "model": ["4", 0],
-      "scheduler": "linear_quadratic",
-      "steps": 8,
-      "denoise": 1.0
+      "sampler_name": "euler"
     },
-    "class_type": "BasicScheduler",
-    "_meta": { "title": "Pass 1 Scheduler (8 steps)" }
+    "class_type": "KSamplerSelect"
   },
   "13": {
     "inputs": {
-      "sampler_name": "euler"
-    },
-    "class_type": "KSamplerSelect"
-  },
-  "22": {
-    "inputs": {
       "noise_seed": 42
     },
     "class_type": "RandomNoise"
-  },
-  "23": {
-    "inputs": {
-      "model": ["4", 0],
-      "positive": ["10", 0],
-      "negative": ["10", 1],
-      "cfg": 1.0
-    },
-    "class_type": "CFGGuider"
   },
   "14": {
     "inputs": {
-      "noise": ["22", 0],
-      "guider": ["23", 0],
-      "sampler": ["13", 0],
-      "sigmas": ["12", 0],
-      "latent_image": ["10", 2]
-    },
-    "class_type": "SamplerCustomAdvanced",
-    "_meta": { "title": "Pass 1 Sampler (8 steps, 768x448)" }
-  },
-  "15": {
-    "inputs": {
-      "samples": ["14", 0],
-      "upscale_model": ["21", 0],
-      "vae": ["1", 2]
-    },
-    "class_type": "LTXVLatentUpsampler",
-    "_meta": { "title": "2x Latent Upscale" }
-  },
-  "21": {
-    "inputs": {
-      "model_name": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
-    },
-    "class_type": "LatentUpscaleModelLoader",
-    "_meta": { "title": "Load Latent Upscale Model" }
-  },
-  "16": {
-    "inputs": {
-      "sigmas": "0.85, 0.725, 0.4219, 0.0"
-    },
-    "class_type": "ManualSigmas",
-    "_meta": { "title": "Pass 2 Sigmas (3 steps)" }
-  },
-  "17": {
-    "inputs": {
-      "sampler_name": "euler"
-    },
-    "class_type": "KSamplerSelect"
-  },
-  "24": {
-    "inputs": {
-      "noise_seed": 42
-    },
-    "class_type": "RandomNoise"
-  },
-  "25": {
-    "inputs": {
-      "model": ["4", 0],
-      "positive": ["10", 0],
-      "negative": ["10", 1],
+      "model": ["3", 0],
+      "positive": ["5", 0],
+      "negative": ["6", 0],
       "cfg": 1.0
     },
     "class_type": "CFGGuider"
   },
-  "18": {
+  "15": {
     "inputs": {
-      "noise": ["24", 0],
-      "guider": ["25", 0],
-      "sampler": ["17", 0],
-      "sigmas": ["16", 0],
-      "latent_image": ["15", 0]
+      "noise": ["13", 0],
+      "guider": ["14", 0],
+      "sampler": ["12", 0],
+      "sigmas": ["11", 0],
+      "latent_image": ["10", 0]
     },
     "class_type": "SamplerCustomAdvanced",
-    "_meta": { "title": "Pass 2 Sampler (3 steps, 1536x896)" }
+    "_meta": { "title": "Single Pass Sampler (8 steps, 640x352)" }
   },
   "19": {
     "inputs": {
       "vae": ["26", 0],
-      "latents": ["18", 0],
+      "latents": ["15", 0],
       "horizontal_tiles": 1,
       "vertical_tiles": 1,
       "overlap": 1,
@@ -222,7 +133,7 @@
       "images": ["19", 0],
       "frame_rate": 24,
       "loop_count": 0,
-      "filename_prefix": "ltx25_v2v_redetail",
+      "filename_prefix": "ltx25_v2v_entry",
       "format": "video/h264-mp4",
       "pingpong": false,
       "save_output": true
