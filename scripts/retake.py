@@ -41,13 +41,14 @@ except ImportError:
 DEFAULT_WORKFLOW = Path(__file__).parent.parent / "examples" / "ltx25_v2v_redetail_entry_runpod.json"
 
 NEGATIVE_PROMPT = (
-    "(dots, speckles, halftone, stippling:1.5), (grain, noise, static:1.4), "
-    "(glossy skin, plastic skin:1.3), (worst quality, low quality:1.4), "
-    "(deformed, distorted:1.3), blurry, jpeg artifacts, ugly, duplicate, "
+    "dots, speckles, halftone, stippling, grain, noise, static, "
+    "glossy skin, plastic skin, worst quality, low quality, "
+    "deformed, distorted, blurry, jpeg artifacts, ugly, duplicate, "
     "mutated hands, poorly drawn hands, poorly drawn face, bad anatomy, "
     "extra limbs, extra fingers, fused fingers, missing limbs, long neck, "
-    "(text, watermark, signature), low resolution, (cgi, 3d, render, cartoon, anime), "
-    "cropped, (shaking, jittery:1.2), (oversharpened:1.3), (banding, scan lines:1.4)"
+    "text, watermark, signature, low resolution, "
+    "cgi, 3d, render, cartoon, anime, "
+    "cropped, shaking, jittery, oversharpened, banding, scan lines"
 )
 
 # 5 creative variations using categories from PROMPT_ENGINEERING_REFERENCE.md
