@@ -1,11 +1,10 @@
 {
   "1": {
     "inputs": {
-      "unet_name": "ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors",
-      "weight_dtype": "default"
+      "ckpt_name": "ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors"
     },
-    "class_type": "UNETLoader",
-    "_meta": { "title": "Load Diffusion Model" }
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": { "title": "Load Checkpoint" }
   },
   "2": {
     "inputs": {
@@ -80,7 +79,7 @@
     "inputs": {
       "positive": ["5", 0],
       "negative": ["6", 0],
-      "vae": ["26", 0],
+      "vae": ["1", 2],
       "image": ["8", 0],
       "width": 768,
       "height": 448,
@@ -95,7 +94,7 @@
     "inputs": {
       "positive": ["9", 0],
       "negative": ["9", 1],
-      "vae": ["26", 0],
+      "vae": ["1", 2],
       "latent": ["9", 2],
       "image": ["8", 0],
       "frame_idx": 0,
@@ -155,7 +154,7 @@
     "inputs": {
       "samples": ["14", 0],
       "upscale_model": ["21", 0],
-      "vae": ["26", 0]
+      "vae": ["1", 2]
     },
     "class_type": "LTXVLatentUpsampler",
     "_meta": { "title": "2x Latent Upscale" }
@@ -208,7 +207,7 @@
   },
   "19": {
     "inputs": {
-      "vae": ["26", 0],
+      "vae": ["1", 2],
       "latents": ["18", 0],
       "horizontal_tiles": 1,
       "vertical_tiles": 1,
@@ -230,12 +229,5 @@
     },
     "class_type": "VHS_VideoCombine",
     "_meta": { "title": "Save Output Video" }
-  },
-  "26": {
-    "inputs": {
-      "vae_name": "ltx-2.5-video-vae-bf16.safetensors"
-    },
-    "class_type": "VAELoader",
-    "_meta": { "title": "Load Video VAE" }
   }
 }
