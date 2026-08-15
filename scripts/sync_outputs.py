@@ -68,9 +68,11 @@ def main():
                 if local_path.exists() and local_path.stat().st_size == obj["Size"]:
                     continue
 
-                # Download
+                # Download using get_object (more reliable than download_file)
                 print(f"  ↓ {key} ({obj['Size']:,} B) → {local_path}")
-                s3.download_file(bucket, key, str(local_path))
+                resp = s3.get_object(Bucket=bucket, Key=key)
+                with open(str(local_path), 'wb') as f:
+                    f.write(resp['Body'].read())
                 downloaded += 1
 
         return downloaded
