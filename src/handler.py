@@ -101,7 +101,7 @@ MODE = validate_mode(os.environ.get('MODE', 'serverless'))
 # ComfyUI Configuration
 COMFYUI_URL = os.environ.get('COMFYUI_URL', 'http://127.0.0.1:8188')
 COMFYUI_PORT = os.environ.get('COMFYUI_PORT', '8188')
-COMFYUI_ARGS = os.environ.get('COMFYUI_ARGS', '--use-sage-attention --lowvram')
+COMFYUI_ARGS = os.environ.get('COMFYUI_ARGS', '--lowvram')
 COMFYUI_PATH = os.environ.get('COMFYUI_PATH', '/comfyui')
 
 # Timeout Configuration (5 seconds to 1 hour)
