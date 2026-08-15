@@ -1,17 +1,26 @@
 #!/usr/bin/env python3
 """
-Retake Workflow — Generate 5 creative variations of an input video.
+Alt Retake — Generate 5 creative variations for music visuals.
 
-Each variation uses different seeds, denoise levels, LoRA strengths, and
-style directions assembled from the prompt engineering reference categories.
+Designed for VJing at festivals, gigs, and altered-states experiences.
+Generates abstract, non-representational visuals with no people.
 
-Output files include metadata in the filename: _seed123_denoise0.5_lora1.0_
+Each variation uses different seeds, denoise levels (0.3-0.4 range),
+LoRA strengths, and style directions from the prompt engineering reference.
+
+Output files include metadata in the filename: _seed123_denoise0.3_lora1.0_
 and ffmpeg metadata tags embedded in the video file.
+
+Post-processing mastering chain applied after generation:
+- Color grading (contrast +10%, saturation +15%)
+- Sharpening (unsharp mask)
+- h264 all-intra output (keyframe every frame)
 
 Usage:
     set -a && source .env && set +a
-    uv run python scripts/retake.py --video rhizome.mp4
-    uv run python scripts/retake.py --video sample/clip_26-06-11_17-52-54_00002.mp4
+    uv run python scripts/alt_retake.py --video rhizome.mp4
+    uv run python scripts/alt_retake.py --video rhizome.mp4 --dry-run
+    uv run python scripts/alt_retake.py --video sample/clip_26-06-11_17-52-54_00002.mp4
 """
 import argparse
 import base64
@@ -40,77 +49,93 @@ except ImportError:
 
 DEFAULT_WORKFLOW = Path(__file__).parent.parent / "examples" / "ltx25_v2v_redetail_entry_runpod.json"
 
+# Negative prompt — no people, no CGI, no cartoon
 NEGATIVE_PROMPT = (
+    "people, faces, humans, characters, portraits, figures, persons, "
+    "crowd, audience, hands, body, skin, "
+    "cgi, render, cartoon, "
     "dots, speckles, halftone, stippling, grain, noise, static, "
     "glossy skin, plastic skin, worst quality, low quality, "
     "deformed, distorted, blurry, jpeg artifacts, ugly, duplicate, "
     "mutated hands, poorly drawn hands, poorly drawn face, bad anatomy, "
     "extra limbs, extra fingers, fused fingers, missing limbs, long neck, "
     "text, watermark, signature, low resolution, "
-    "cgi, 3d, render, cartoon, anime, "
     "cropped, shaking, jittery, oversharpened, banding, scan lines"
 )
 
-# 5 creative variations using categories from PROMPT_ENGINEERING_REFERENCE.md
+# Common visual elements for all variations
+BASE_VISUALS = (
+    "chromatic aberration, light leaks, prismatic refraction, "
+    "liquid metal, iridescent, holographic, "
+    "festival atmosphere, VJ loops, beat-synced motion, "
+    "abstract, non-representational, motion blur, depth of field, 4k detail"
+)
+
+# 5 creative variations for music visuals
 VARIATIONS = [
     {
-        "name": "cinematic_golden",
+        "name": "golden_cinematic",
         "seed": 42,
-        "denoise": 0.2,
+        "denoise": 0.3,
         "lora_strength": 1.0,
         "prompt": (
-            "cinematic, film noir, golden hour lighting, natural sunlight, "
-            "dramatic shadows, film grain, anamorphic lens flare, shallow depth of field, "
-            "smooth metal textures, vibrant color palette, expansive scale, "
-            "pushes in slowly, lingering shot, professional cinematography, 4k detail"
+            f"cinematic, film noir, golden hour lighting, natural sunlight, "
+            f"dramatic shadows, film grain, anamorphic lens flare, shallow depth of field, "
+            f"smooth metal textures, vibrant color palette, expansive scale, "
+            f"pushes in slowly, lingering shot, professional cinematography, {BASE_VISUALS}"
         ),
     },
     {
-        "name": "neon_noir",
+        "name": "neon_psychedelic",
         "seed": 1337,
-        "denoise": 0.5,
+        "denoise": 0.4,
         "lora_strength": 0.5,
         "prompt": (
-            "cinematic, film noir, neon glow, dramatic shadows, high contrast, "
-            "rain, fog, smoke, particles, glossy surfaces, rough stone textures, "
-            "claustrophobic scale, handheld movement, circles around, "
-            "motion blur, depth of field, blade runner aesthetic, 4k detail"
+            f"psychedelic, fractal patterns, morphing geometry, kaleidoscopic, "
+            f"neon glow, dramatic shadows, high contrast, "
+            f"rain, fog, smoke, particles, glossy surfaces, iridescent, "
+            f"claustrophobic scale, handheld movement, circles around, "
+            f"hypnotic, trance-inducing, flowing organic shapes, {BASE_VISUALS}"
         ),
     },
     {
-        "name": "fantasy_atmospheric",
+        "name": "sacred_geometry",
         "seed": 8080,
         "denoise": 0.3,
         "lora_strength": 1.0,
         "prompt": (
-            "cinematic, fantasy, experimental film, arthouse, volumetric fog, "
-            "dust, particles, natural sunlight, worn fabric textures, "
-            "muted color palette, epic scale, wide establishing shot, "
-            "tracks slowly, static frame, particle systems, motion blur, 4k detail"
+            f"sacred geometry, mandala, infinite zoom, "
+            f"experimental film, arthouse, volumetric fog, "
+            f"dust, particles, natural sunlight, worn fabric textures, "
+            f"muted color palette, epic scale, wide establishing shot, "
+            f"tracks slowly, static frame, particle systems, {BASE_VISUALS}"
         ),
     },
     {
-        "name": "stylized_vibrant",
+        "name": "festival_energy",
         "seed": 2718,
-        "denoise": 0.5,
+        "denoise": 0.4,
         "lora_strength": 1.0,
         "prompt": (
-            "stylized, comic book, vibrant color palette, high contrast, "
-            "neon glow, dramatic shadows, smooth metal textures, glossy surfaces, "
-            "expansive scale, overhead view, tilts upward, pushes in, "
-            "particle systems, depth of field, 4k detail"
+            f"stage lighting, laser beams, strobe effects, projection mapping, "
+            f"LED wall content, high energy, dynamic, pulsing, rhythmic, "
+            f"vibrant color palette, high contrast, neon glow, "
+            f"smooth metal textures, glossy surfaces, expansive scale, "
+            f"overhead view, tilts upward, pushes in, {BASE_VISUALS}"
         ),
     },
     {
-        "name": "intimate_documentary",
+        "name": "liquid_dreams",
         "seed": 31415,
-        "denoise": 0.2,
+        "denoise": 0.3,
         "lora_strength": 0.5,
         "prompt": (
-            "cinematic, documentary, arthouse, natural sunlight, "
-            "dramatic shadows, worn fabric textures, rough stone, "
-            "muted color palette, intimate scale, over-the-shoulder, "
-            "follows, handheld movement, film grain, motion blur, 4k detail"
+            f"liquid metal, iridescent, holographic, prismatic refraction, "
+            f"chromatic aberration, light leaks, "
+            f"flowing organic shapes, morphing, hypnotic, "
+            f"natural sunlight, dramatic shadows, worn fabric, "
+            f"muted color palette, intimate scale, over-the-shoulder, "
+            f"follows, handheld movement, film grain, {BASE_VISUALS}"
         ),
     },
 ]
@@ -146,7 +171,7 @@ def generate_variation(endpoint, workflow, video_name, video_b64, variation):
     wf["3"]["inputs"]["strength_clip"] = variation["lora_strength"]
 
     # Set filename prefix with metadata
-    prefix = f"retake_{variation['name']}_seed{variation['seed']}_denoise{variation['denoise']}_lora{variation['lora_strength']}"
+    prefix = f"altretake_{variation['name']}_seed{variation['seed']}_denoise{variation['denoise']}_lora{variation['lora_strength']}"
     wf["20"]["inputs"]["filename_prefix"] = prefix
 
     # Submit job
@@ -161,38 +186,54 @@ def generate_variation(endpoint, workflow, video_name, video_b64, variation):
     return job
 
 
-def add_ffmpeg_metadata(video_path, variation):
-    """Add metadata tags to the video file using ffmpeg."""
-    metadata = {
-        "title": f"Retake - {variation['name']}",
-        "seed": str(variation["seed"]),
-        "denoise": str(variation["denoise"]),
-        "lora_strength": str(variation["lora_strength"]),
-        "prompt": variation["prompt"][:200],
-        "negative_prompt": "standard_negative",
-        "style": variation["name"],
-    }
-
-    cmd = ["ffmpeg", "-i", str(video_path), "-y"]
-    for k, v in metadata.items():
-        cmd.extend(["-metadata", f"{k}={v}"])
-    cmd.extend(["-c", "copy", str(video_path) + ".tmp"])
+def apply_mastering_chain(input_path, output_path, variation):
+    """Apply post-processing mastering chain with ffmpeg."""
+    cmd = [
+        "ffmpeg", "-i", str(input_path), "-y",
+        # Color grading: contrast +10%, brightness +2%, saturation +15%
+        "-vf", "eq=contrast=1.1:brightness=0.02:saturation=1.15,"
+               "unsharp=5:5:0.8:3:3:0.4",
+        # h264 all-intra (keyframe every frame)
+        "-c:v", "libx264",
+        "-crf", "16",
+        "-preset", "slow",
+        "-g", "1",
+        "-bf", "0",
+        "-pix_fmt", "yuv420p",
+        # Metadata
+        "-metadata", f"title=Alt Retake - {variation['name']}",
+        "-metadata", f"seed={variation['seed']}",
+        "-metadata", f"denoise={variation['denoise']}",
+        "-metadata", f"lora_strength={variation['lora_strength']}",
+        "-metadata", f"style={variation['name']}",
+        "-metadata", f"prompt={variation['prompt'][:200]}",
+        "-metadata", "mastering=color_grade+sharpen+h264_allintra",
+        # No audio
+        "-an",
+        str(output_path),
+    ]
 
     try:
-        subprocess.run(cmd, capture_output=True, timeout=30)
-        os.replace(str(video_path) + ".tmp", str(video_path))
-        print(f"  ✅ Metadata embedded")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if result.returncode == 0:
+            print(f"  ✅ Mastered: {output_path}")
+            return True
+        else:
+            print(f"  ⚠️  Mastering failed: {result.stderr[:200]}")
+            return False
     except Exception as e:
-        print(f"  ⚠️  Metadata embedding failed: {e}")
+        print(f"  ⚠️  Mastering error: {e}")
+        return False
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate 5 creative retake variations")
+    parser = argparse.ArgumentParser(description="Generate 5 alt retake variations for music visuals")
     parser.add_argument("--video", required=True, help="Video filename (e.g. rhizome.mp4)")
     parser.add_argument("--workflow", type=Path, default=DEFAULT_WORKFLOW)
     parser.add_argument("--endpoint-id", default=os.environ.get("RUNPOD_ENDPOINT_ID", "taea2mhlwbdkuq"))
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--master", action="store_true", help="Apply mastering chain after generation")
     args = parser.parse_args()
 
     runpod.api_key = os.environ["RUNPOD_API_KEY"]
@@ -208,13 +249,13 @@ def main():
     video_b64 = base64.b64encode(video_data).decode("utf-8")
     print(f"  {len(video_data):,} bytes")
 
-    print(f"\nGenerating {len(VARIATIONS)} creative variations...\n")
+    print(f"\nGenerating {len(VARIATIONS)} alt retake variations...\n")
 
     results = []
     for i, var in enumerate(VARIATIONS):
         print(f"[{i+1}/{len(VARIATIONS)}] {var['name']}")
         print(f"  Seed: {var['seed']}, Denoise: {var['denoise']}, LoRA: {var['lora_strength']}")
-        print(f"  Prompt: {var['prompt'][:80]}...")
+        print(f"  Prompt: {var['prompt'][:100]}...")
 
         if args.dry_run:
             print("  (dry run — skipping generation)")
@@ -258,7 +299,7 @@ def main():
 
     # Summary
     print("=" * 60)
-    print("RETAKE SUMMARY")
+    print("ALT RETAKE SUMMARY")
     print("=" * 60)
     for r in results:
         status_icon = "✅" if r["status"] == "success" else "❌"
@@ -270,6 +311,10 @@ def main():
     print(f"  uv run python scripts/sync_outputs.py /media/chiral/data/comfy/output/sofaking")
     print(f"\nList outputs:")
     print(f"  uv run python scripts/list_s3.py --prefix output/")
+
+    if args.master and success_count > 0:
+        print(f"\nTo apply mastering chain, download outputs first then run:")
+        print(f"  ffmpeg -i input.mp4 -vf 'eq=contrast=1.1:brightness=0.02:saturation=1.15,unsharp=5:5:0.8:3:3:0.4' -c:v libx264 -crf 16 -preset slow -g 1 -bf 0 -an output_mastered.mp4")
 
 
 if __name__ == "__main__":
