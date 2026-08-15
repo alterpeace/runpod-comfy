@@ -7,11 +7,11 @@
   },
   "2": {
     "inputs": {
-      "gemma_path": "gemma4-12b-ltx-2.5/model.safetensors",
-      "ltxv_path": "ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors",
-      "max_length": 1024
+      "clip_name": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+      "type": "ltxv",
+      "device": "default"
     },
-    "class_type": "LTXVGemmaCLIPModelLoader"
+    "class_type": "CLIPLoader"
   },
   "3": {
     "inputs": {
@@ -96,8 +96,8 @@
         0
       ],
       "vae": [
-        "1",
-        2
+        "50",
+        0
       ],
       "image": [
         "8",
@@ -122,8 +122,8 @@
         1
       ],
       "vae": [
-        "1",
-        2
+        "50",
+        0
       ],
       "latent": [
         "9",
@@ -227,8 +227,8 @@
         0
       ],
       "vae": [
-        "1",
-        2
+        "50",
+        0
       ]
     },
     "class_type": "LTXVLatentUpsampler"
@@ -311,8 +311,8 @@
         0
       ],
       "vae": [
-        "1",
-        2
+        "50",
+        0
       ]
     },
     "class_type": "LTXVLatentUpsampler"
@@ -381,8 +381,8 @@
   "25b": {
     "inputs": {
       "vae": [
-        "1",
-        2
+        "50",
+        0
       ],
       "latents": [
         "24b",
@@ -409,5 +409,11 @@
       "save_output": true
     },
     "class_type": "VHS_VideoCombine"
+  },
+  "50": {
+    "inputs": {
+      "vae_name": "ltx-2.5-video-vae-bf16.safetensors"
+    },
+    "class_type": "VAELoader"
   }
 }
