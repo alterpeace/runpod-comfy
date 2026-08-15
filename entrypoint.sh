@@ -386,10 +386,36 @@ case "$STORAGE_BACKEND" in
             fi
         fi
 
-        # Handle other directories with symlinks (custom_nodes, output, user)
-        # These don't have the realpath issue since ComfyUI only uses
-        # is_within_directory for input file validation, not for these dirs.
-        for dirpair in "custom_nodes:/comfyui/custom_nodes" "output:/comfyui/output" "user:/comfyui/user"; do
+        # Handle output directory — replace with symlink to volume so ComfyUI
+        # writes directly to the network volume (persists across worker restarts)
+        if [ -d "/runpod-volume/output" ]; then
+            if [ -L "/comfyui/output" ]; then
+                log_info "  /comfyui/output already symlinked to volume"
+            elif [ -d "/comfyui/output" ]; then
+                rmdir "/comfyui/output" 2>/dev/null && \
+                    ln -sf "/runpod-volume/output" "/comfyui/output" && \
+                    log_info "  Replaced: /comfyui/output -> /runpod-volume/output symlink"
+                if [ ! -L "/comfyui/output" ]; then
+                    log_warning "  Could not replace /comfyui/output, copying files to volume"
+                    cp -r /comfyui/output/* /runpod-volume/output/ 2>/dev/null || true
+                    rm -rf /comfyui/output
+                    ln -sf "/runpod-volume/output" "/comfyui/output"
+                fi
+            else
+                ln -sf "/runpod-volume/output" "/comfyui/output" 2>/dev/null && \
+                    log_info "  Linked: /comfyui/output -> /runpod-volume/output"
+            fi
+        else
+            mkdir -p /runpod-volume/output 2>/dev/null
+            if [ -d "/comfyui/output" ] && [ ! -L "/comfyui/output" ]; then
+                rmdir "/comfyui/output" 2>/dev/null && \
+                    ln -sf "/runpod-volume/output" "/comfyui/output" && \
+                    log_info "  Replaced: /comfyui/output -> /runpod-volume/output (created)"
+            fi
+        fi
+
+        # Handle other directories with symlinks (custom_nodes, user)
+        for dirpair in "custom_nodes:/comfyui/custom_nodes" "user:/comfyui/user"; do
             volname="${dirpair%%:*}"
             target="${dirpair##*:}"
             if [ -d "/runpod-volume/$volname" ]; then
