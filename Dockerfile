@@ -371,6 +371,9 @@ COPY config/ltx-2.5-models.json config/ltx-2.3-models.json ./config/
 # cause StrictDataclassFieldValidationError with use_bidirectional_attention.
 COPY config/gemma4-12b-ltx-2.5/ ./config/gemma4-12b-ltx-2.5/
 
+# Copy custom video format files (h264-allintra for VJing — keyframe every frame)
+COPY config/video_formats/ ./config/video_formats/
+
 # Copy download scripts (used by the "download_models" serverless action)
 COPY scripts/download_ltx25_models.py scripts/download_ltx23_models.py ./scripts/
 RUN chmod +x ./scripts/*.py 2>/dev/null || true

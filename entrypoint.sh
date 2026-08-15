@@ -675,6 +675,13 @@ update_custom_nodes() {
         git clone --depth 1 https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git "$vhs_dir" 2>/dev/null
         log_success "ComfyUI-VideoHelperSuite cloned"
     fi
+
+    # Copy custom video format files to VHS video_formats directory
+    local vhs_formats_dir="$custom_nodes_dir/ComfyUI-VideoHelperSuite/video_formats"
+    if [ -d "$vhs_formats_dir" ] && [ -f "/workspace/config/video_formats/h264-allintra.json" ]; then
+        cp -f /workspace/config/video_formats/h264-allintra.json "$vhs_formats_dir/" 2>/dev/null && \
+            log_info "  Copied h264-allintra.json (all-intra, keyframe every frame) to VHS"
+    fi
 }
 update_custom_nodes
 

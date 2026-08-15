@@ -1,0 +1,6 @@
+{
+    "extension": "mp4",
+    "codec": "libx264",
+    "pix_fmt": "yuv420p",
+    "extra": ["-crf", "18", "-preset", "fast", "-g", "1", "-bf", "0", "-pix_fmt", "yuv420p"]
+}

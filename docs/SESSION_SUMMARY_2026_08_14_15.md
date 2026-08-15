@@ -156,7 +156,7 @@ Complete record of debugging, fixes, and improvements made during this session.
 
 - ✅ V2V redetail workflow (GGUF Q4, single-pass, 24GB) — 122s, output saved to S3
 - ✅ CLIPLoader with `type: "ltxv"` loads `comfy_quant` int8-convrot models
-- ✅ Text encoding with int8 Gemma model
+- ✅ Text encoding with int8 Gemma model-
 - ✅ KSampler with GGUF Q4 model
 - ✅ VAE decode and video output
 - ✅ Output persistence to S3 volume
@@ -177,17 +177,3 @@ Complete record of debugging, fixes, and improvements made during this session.
 4. **Create keyframe interpolation workflow** — Using `LTXVImgToVideoConditionOnly` to interpolate between keyframes for slow-motion effects
 
 5. **Create retake workflow** — Same input video, different seed/prompt for creative variations. Useful for generating multiple style options from the same footage.
-
----
-
-## HOT-Step-CPP Perceptual Analysis
-
-The [HOT-Step-CPP](https://github.com/scragnog/HOT-Step-CPP) repo contains a `perceptual_analysis.py` tool that performs perceptual quality analysis on video frames. This could be useful for:
-
-- **Quality verification** — Compare input vs output video quality metrics
-- **Consistency checking** — Verify visual signature consistency across clips
-- **A/B testing** — Compare Q4 vs FP8 vs int8 model outputs
-
-The tool uses perceptual metrics (likely SSIM, LPIPS, or similar) to score video quality. We could integrate this as a post-processing step to automatically verify output quality before delivering to VJing software.
-
-However, this is a C++ tool with Python bindings — it would need to be compiled and added to the Docker image. For now, it's a reference for future quality verification work.

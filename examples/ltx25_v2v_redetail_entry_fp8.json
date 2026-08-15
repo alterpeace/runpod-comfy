@@ -1,10 +1,21 @@
 {
+  "_metadata": {
+    "gpu_tier": "entry",
+    "vram_required": "24GB",
+    "gpu_examples": "RTX 4090",
+    "model": "FP8 safetensors (~19GB)",
+    "lora": "distilled + turbo",
+    "resolution": "640x352",
+    "passes": "single-pass (8 steps)",
+    "notes": "FP8 model for better quality than Q4. Turbo LoRA for faster generation."
+  },
   "1": {
     "inputs": {
-      "unet_name": "LTX-2.5-Distilled-Q4_K_M.gguf"
+      "unet_name": "ltx-2.5-fp8.safetensors",
+      "weight_dtype": "default"
     },
-    "class_type": "UnetLoaderGGUF",
-    "_meta": { "title": "Load GGUF Diffusion Model (Q4)" }
+    "class_type": "UNETLoader",
+    "_meta": { "title": "Load FP8 Diffusion Model" }
   },
   "2": {
     "inputs": {
@@ -29,7 +40,7 @@
   "5": {
     "inputs": {
       "clip": ["3", 1],
-      "text": "high quality video, sharp focus, clean render, detailed textures, cinematic lighting, professional post-production"
+      "text": "cinematic, film grain, shallow depth of field, golden hour lighting, professional color grading, enhanced detail, smooth motion, high contrast, neon accents, dramatic shadows, lens flares, particle systems, motion blur, 4k detail, professional post-production, pushes in slowly, lingering shot, vibrant color palette"
     },
     "class_type": "CLIPTextEncode",
     "_meta": { "title": "Positive Prompt" }
@@ -37,7 +48,7 @@
   "6": {
     "inputs": {
       "clip": ["3", 1],
-      "text": "blurry, low quality, distorted, glitch, artifacts, flickering, jerky motion, compression artifacts, watermark, noisy, grainy, washed out, banding"
+      "text": "blurry, low quality, distorted, glitch, artifacts, flickering, jerky motion, compression artifacts, watermark, noisy, grainy, washed out, banding, rapid cuts, sudden stop, pixelated edges, amateur, shaky, wobbly"
     },
     "class_type": "CLIPTextEncode",
     "_meta": { "title": "Negative Prompt" }
@@ -133,7 +144,7 @@
       "images": ["19", 0],
       "frame_rate": 24,
       "loop_count": 0,
-      "filename_prefix": "ltx25_v2v_redetail_8gb",
+      "filename_prefix": "ltx25_v2v_fp8",
       "format": "video/h264-allintra",
       "pingpong": false,
       "save_output": true
