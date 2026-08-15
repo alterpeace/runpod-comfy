@@ -49,6 +49,7 @@ services:
       - PYTHONWARNINGS=ignore::UserWarning,ignore::FutureWarning,ignore::SyntaxWarning,ignore::DeprecationWarning
       - NO_ALBUMENTATIONS_UPDATE=1
       - COMFYUI_MANAGER_DISABLE_UPDATE_CHECK=true
+      - AUTO_INSTALL_CUSTOM_NODE_DEPS=${AUTO_INSTALL_CUSTOM_NODE_DEPS:-true}
       - TORCH_CUDNN_V8_API_ENABLED=0
       # Ren (FL-MCP chat) API keys — the OS keyring is unavailable in Docker,
       # so credentials set via the UI only last until backend restart.
