@@ -8,7 +8,7 @@
         "-color_range", "tv", "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
         "-metadata", "artist=al7",
         "-metadata", "encoder=ComfyUI LTX-2.5",
-        "-metadata", "comment=Generated with LTX-2.5 on RunPod serverless. rhizome"
+        "-metadata", "comment=rhizome"
     ],
     "fake_trc": "bt709",
     "audio_pass": ["-c:a", "aac", "-movflags", "use_metadata_tags"],
