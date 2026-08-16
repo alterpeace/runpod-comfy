@@ -274,18 +274,6 @@ def generate_variation(endpoint, workflow, video_path, variation, prompt_num=1,
     # Use custom h264-al7 format with embedded artist metadata
     wf["20"]["inputs"]["format"] = "video/h264-al7"
 
-    # Add a SaveImage node for a single thumbnail (first frame of output)
-    # Uses the same prefix but in images/ subdirectory
-    image_prefix = prefix.replace("qtrtime/", "qtrtime/images/")
-    wf["21"] = {
-        "inputs": {
-            "images": ["19", 0],
-            "filename_prefix": image_prefix,
-        },
-        "class_type": "SaveImage",
-        "_meta": {"title": "Save Thumbnail"},
-    }
-
     # Add a Note node with full generation metadata as a sidecar
     # This gets saved as a text file alongside the video
     metadata = {
@@ -397,7 +385,6 @@ Communities for LTX prompt engineering:
     else:
         print(f"Frames: all (frame_load_cap=0)")
     print(f"Naming: al7/qtrtime/al7_<name>-<NN>_<params>_<timestamp>.mp4")
-    print(f"Thumbs: al7/qtrtime/images/al7_<name>-<NN>_<params>_<timestamp>.png")
     print(f"\nGenerating {len(VARIATIONS)} alt retake variations...\n")
 
     results = []
