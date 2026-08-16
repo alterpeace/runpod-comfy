@@ -99,16 +99,17 @@ VARIATIONS = [
         ),
     },
     {
-        "name": "festival_energy",
+        "name": "cosmic_drift",
         "seed": 2718,
         "denoise": 0.4,
         "lora_strength": 1.0,
         "prompt": (
-            f"stage lighting, laser beams, strobe effects, projection mapping, "
-            f"LED wall content, high energy, dynamic, pulsing, rhythmic, "
-            f"vibrant color palette, high contrast, neon glow, "
-            f"smooth metal textures, glossy surfaces, expansive scale, "
-            f"overhead view, tilts upward, pushes in, {BASE_VISUALS}"
+            f"nebula clouds, cosmic dust, gravitational lensing, "
+            f"deep space colors, ultraviolet, infrared, "
+            f"star fields, light trails, wormhole, "
+            f"vast scale, slow drift, weightless, "
+            f"dark background, glowing particles, volumetric light, "
+            f"fluid dynamics, swirling, {BASE_VISUALS}"
         ),
     },
     {
