@@ -2,31 +2,21 @@
 """
 Alt Retake — Generate 5 creative variations for music visuals.
 
+Uses direct path references (no base64 upload) so it works with ANY file size.
+Videos must already be on the RunPod volume at /runpod-volume/input/<path>.
+
 Designed for VJing at festivals, gigs, and altered-states experiences.
 Generates abstract, non-representational visuals with no people.
-
-Each variation uses different seeds, denoise levels (0.3-0.4 range),
-LoRA strengths, and style directions from the prompt engineering reference.
-
-Output files include metadata in the filename: _seed123_denoise0.3_lora1.0_
-and ffmpeg metadata tags embedded in the video file.
-
-Post-processing mastering chain applied after generation:
-- Color grading (contrast +10%, saturation +15%)
-- Sharpening (unsharp mask)
-- h264 all-intra output (keyframe every frame)
 
 Usage:
     set -a && source .env && set +a
     uv run python scripts/alt_retake.py --video rhizome.mp4
-    uv run python scripts/alt_retake.py --video rhizome.mp4 --dry-run
-    uv run python scripts/alt_retake.py --video sample/clip_26-06-11_17-52-54_00002.mp4
+    uv run python scripts/alt_retake.py --video sample/clip_26-06-11_17-52-52_00007.mp4
+    uv run python scripts/alt_retake.py --video sample/clip_26-06-11_17-52-54_00002.mp4 --dry-run
 """
 import argparse
-import base64
 import json
 import os
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -49,7 +39,6 @@ except ImportError:
 
 DEFAULT_WORKFLOW = Path(__file__).parent.parent / "examples" / "ltx25_v2v_redetail_entry_runpod.json"
 
-# Negative prompt — no people, no CGI, no cartoon
 NEGATIVE_PROMPT = (
     "people, faces, humans, characters, portraits, figures, persons, "
     "crowd, audience, hands, body, skin, "
@@ -63,7 +52,6 @@ NEGATIVE_PROMPT = (
     "cropped, shaking, jittery, oversharpened, banding, scan lines"
 )
 
-# Common visual elements for all variations
 BASE_VISUALS = (
     "chromatic aberration, light leaks, prismatic refraction, "
     "liquid metal, iridescent, holographic, "
@@ -71,7 +59,6 @@ BASE_VISUALS = (
     "abstract, non-representational, motion blur, depth of field, 4k detail"
 )
 
-# 5 creative variations for music visuals
 VARIATIONS = [
     {
         "name": "golden_cinematic",
@@ -141,28 +128,12 @@ VARIATIONS = [
 ]
 
 
-def download_from_s3(key: str) -> bytes:
-    """Download a file from the RunPod S3 volume."""
-    import boto3
-    s3 = boto3.client(
-        "s3",
-        endpoint_url=os.environ["RUNPOD_S3_ENDPOINT"],
-        region_name=os.environ["RUNPOD_S3_REGION"],
-        aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
-    )
-    bucket = os.environ["RUNPOD_S3_BUCKET"]
-    s3_key = f"input/{key}" if not key.startswith("input/") else key
-    resp = s3.get_object(Bucket=bucket, Key=s3_key)
-    return resp["Body"].read()
-
-
-def generate_variation(endpoint, workflow, video_name, video_b64, variation):
-    """Generate a single variation."""
+def generate_variation(endpoint, workflow, video_path, variation):
+    """Generate a single variation using direct path reference (no upload)."""
     wf = json.loads(json.dumps(workflow))
 
     # Patch workflow with variation parameters
-    wf["7"]["inputs"]["video"] = video_name
+    wf["7"]["inputs"]["video"] = video_path
     wf["5"]["inputs"]["text"] = variation["prompt"]
     wf["6"]["inputs"]["text"] = NEGATIVE_PROMPT
     wf["13"]["inputs"]["noise_seed"] = variation["seed"]
@@ -174,11 +145,10 @@ def generate_variation(endpoint, workflow, video_name, video_b64, variation):
     prefix = f"altretake_{variation['name']}_seed{variation['seed']}_denoise{variation['denoise']}_lora{variation['lora_strength']}"
     wf["20"]["inputs"]["filename_prefix"] = prefix
 
-    # Submit job
+    # Submit job — NO input_files, just the workflow with path reference
     job = endpoint.run({
         "input": {
             "workflow": wf,
-            "input_files": {video_name: video_b64},
             "timeout": 600,
         }
     })
@@ -186,54 +156,13 @@ def generate_variation(endpoint, workflow, video_name, video_b64, variation):
     return job
 
 
-def apply_mastering_chain(input_path, output_path, variation):
-    """Apply post-processing mastering chain with ffmpeg."""
-    cmd = [
-        "ffmpeg", "-i", str(input_path), "-y",
-        # Color grading: contrast +10%, brightness +2%, saturation +15%
-        "-vf", "eq=contrast=1.1:brightness=0.02:saturation=1.15,"
-               "unsharp=5:5:0.8:3:3:0.4",
-        # h264 all-intra (keyframe every frame)
-        "-c:v", "libx264",
-        "-crf", "16",
-        "-preset", "slow",
-        "-g", "1",
-        "-bf", "0",
-        "-pix_fmt", "yuv420p",
-        # Metadata
-        "-metadata", f"title=Alt Retake - {variation['name']}",
-        "-metadata", f"seed={variation['seed']}",
-        "-metadata", f"denoise={variation['denoise']}",
-        "-metadata", f"lora_strength={variation['lora_strength']}",
-        "-metadata", f"style={variation['name']}",
-        "-metadata", f"prompt={variation['prompt'][:200]}",
-        "-metadata", "mastering=color_grade+sharpen+h264_allintra",
-        # No audio
-        "-an",
-        str(output_path),
-    ]
-
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        if result.returncode == 0:
-            print(f"  ✅ Mastered: {output_path}")
-            return True
-        else:
-            print(f"  ⚠️  Mastering failed: {result.stderr[:200]}")
-            return False
-    except Exception as e:
-        print(f"  ⚠️  Mastering error: {e}")
-        return False
-
-
 def main():
     parser = argparse.ArgumentParser(description="Generate 5 alt retake variations for music visuals")
-    parser.add_argument("--video", required=True, help="Video filename (e.g. rhizome.mp4)")
+    parser.add_argument("--video", required=True, help="Video path on volume (e.g. rhizome.mp4 or sample/clip_001.mp4)")
     parser.add_argument("--workflow", type=Path, default=DEFAULT_WORKFLOW)
     parser.add_argument("--endpoint-id", default=os.environ.get("RUNPOD_ENDPOINT_ID", "taea2mhlwbdkuq"))
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--master", action="store_true", help="Apply mastering chain after generation")
     args = parser.parse_args()
 
     runpod.api_key = os.environ["RUNPOD_API_KEY"]
@@ -243,12 +172,9 @@ def main():
     with open(args.workflow) as f:
         workflow = json.load(f)
 
-    # Download video from S3
-    print(f"Downloading {args.video} from S3...")
-    video_data = download_from_s3(args.video)
-    video_b64 = base64.b64encode(video_data).decode("utf-8")
-    print(f"  {len(video_data):,} bytes")
-
+    print(f"Video: {args.video}")
+    print(f"Workflow: {args.workflow}")
+    print(f"Endpoint: {args.endpoint_id}")
     print(f"\nGenerating {len(VARIATIONS)} alt retake variations...\n")
 
     results = []
@@ -262,8 +188,8 @@ def main():
             results.append({"variation": var["name"], "status": "dry_run"})
             continue
 
-        # Generate
-        job = generate_variation(endpoint, workflow, args.video, video_b64, var)
+        # Generate — direct path reference, no upload
+        job = generate_variation(endpoint, workflow, args.video, var)
         print(f"  Job: {job.job_id}")
 
         start = time.time()
@@ -311,10 +237,6 @@ def main():
     print(f"  uv run python scripts/sync_outputs.py /media/chiral/data/comfy/output/sofaking")
     print(f"\nList outputs:")
     print(f"  uv run python scripts/list_s3.py --prefix output/")
-
-    if args.master and success_count > 0:
-        print(f"\nTo apply mastering chain, download outputs first then run:")
-        print(f"  ffmpeg -i input.mp4 -vf 'eq=contrast=1.1:brightness=0.02:saturation=1.15,unsharp=5:5:0.8:3:3:0.4' -c:v libx264 -crf 16 -preset slow -g 1 -bf 0 -an output_mastered.mp4")
 
 
 if __name__ == "__main__":
