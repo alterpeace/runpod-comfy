@@ -53,13 +53,26 @@ cosmic dust, nebula clouds, volumetric fog
 
 How does the camera move? This is crucial for video (not image) generation.
 
-**Terms:** follows, tracks, pans across, circles around, tilts upward,
-pushes in, pulls back, overhead view, handheld movement, over-the-shoulder,
-wide establishing shot, static frame, slow drift, weightless
+**For T2V (text-to-video):** The prompt controls camera movement.
+**For V2V (video-to-video):** The source video already defines camera
+movement. Do NOT include camera terms in V2V prompts — they conflict
+with the source footage's motion. The model re-renders existing motion
+with new visual style; it doesn't create new camera moves.
+
+**Terms (T2V only):** follows, tracks, pans across, circles around,
+tilts upward, pushes in, pulls back, overhead view, handheld movement,
+over-the-shoulder, wide establishing shot, static frame, slow drift,
+weightless
 
 ### Layer 7: Scale
 
 How much of the scene is visible?
+
+**For V2V:** Scale is inherited from the source footage. Including scale
+terms in V2V prompts has minimal effect — the model preserves the
+source's framing. Only include scale terms if you want to push the
+model toward a specific aesthetic (e.g. "expansive" encourages wider
+field of view in the re-render).
 
 **Terms:** expansive, epic, intimate, claustrophobic, vast, cosmic
 
@@ -67,9 +80,16 @@ How much of the scene is visible?
 
 How fast does motion feel?
 
-**Terms:** slow motion, time-lapse, rapid cuts, lingering shot,
-continuous shot, freeze-frame, fade-in, fade-out, seamless transition,
-sudden stop, slow drift, hypnotic, trance-inducing, pulsing, rhythmic
+**For V2V:** Pacing is entirely determined by the source video's
+frame rate and motion. The prompt cannot change pacing in V2V — the
+output has the same number of frames as the input. To control output
+duration, adjust `frame_load_cap` in VHS_LoadVideo (duration × fps =
+frame count). For example, 15 seconds at 24fps = 360 frames.
+
+**Terms (T2V only):** slow motion, time-lapse, rapid cuts, lingering
+shot, continuous shot, freeze-frame, fade-in, fade-out, seamless
+transition, sudden stop, slow drift, hypnotic, trance-inducing, pulsing,
+rhythmic
 
 ### Layer 9: Style Markers
 

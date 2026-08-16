@@ -83,11 +83,16 @@ NEGATIVE_PROMPT = (
 # ---------------------------------------------------------------------------
 # Base visual vocabulary — appended to all prompts for consistency
 # ---------------------------------------------------------------------------
+# For V2V redetail: the source video already defines camera movement, pacing,
+# and scale. The prompt should focus on texture, lighting, color, and
+# atmosphere — NOT camera language or pacing, which would conflict with
+# the source footage's motion. The model re-renders the existing motion
+# with new visual style; it doesn't create new camera moves.
 BASE_VISUALS = (
     "chromatic aberration, light leaks, prismatic refraction, "
     "liquid metal, iridescent, holographic, "
-    "festival atmosphere, VJ loops, beat-synced motion, "
-    "abstract, non-representational, motion blur, depth of field, 4k detail"
+    "high quality render, sharp focus, clean detail, "
+    "motion blur, depth of field, 4k detail"
 )
 
 # ---------------------------------------------------------------------------
@@ -133,8 +138,8 @@ VARIATIONS = [
         "prompt": (
             f"cinematic, film noir, golden hour lighting, natural sunlight, "
             f"dramatic shadows, film grain, anamorphic lens flare, shallow depth of field, "
-            f"smooth metal textures, vibrant color palette, expansive scale, "
-            f"pushes in slowly, lingering shot, professional cinematography, {BASE_VISUALS}"
+            f"smooth metal textures, vibrant color palette, "
+            f"professional cinematography, {BASE_VISUALS}"
         ),
     },
     {
@@ -146,8 +151,7 @@ VARIATIONS = [
             f"psychedelic, fractal patterns, morphing geometry, kaleidoscopic, "
             f"neon glow, dramatic shadows, high contrast, "
             f"rain, fog, smoke, particles, glossy surfaces, iridescent, "
-            f"claustrophobic scale, handheld movement, circles around, "
-            f"hypnotic, trance-inducing, flowing organic shapes, {BASE_VISUALS}"
+            f"hypnotic, flowing organic shapes, {BASE_VISUALS}"
         ),
     },
     {
@@ -159,8 +163,7 @@ VARIATIONS = [
             f"sacred geometry, mandala, infinite zoom, "
             f"experimental film, arthouse, volumetric fog, "
             f"dust, particles, natural sunlight, worn fabric textures, "
-            f"muted color palette, epic scale, wide establishing shot, "
-            f"tracks slowly, static frame, particle systems, {BASE_VISUALS}"
+            f"muted color palette, particle systems, {BASE_VISUALS}"
         ),
     },
     {
@@ -172,7 +175,6 @@ VARIATIONS = [
             f"nebula clouds, cosmic dust, gravitational lensing, "
             f"deep space colors, ultraviolet, infrared, "
             f"star fields, light trails, wormhole, "
-            f"vast scale, slow drift, weightless, "
             f"dark background, glowing particles, volumetric light, "
             f"fluid dynamics, swirling, {BASE_VISUALS}"
         ),
@@ -187,8 +189,7 @@ VARIATIONS = [
             f"chromatic aberration, light leaks, "
             f"flowing organic shapes, morphing, hypnotic, "
             f"natural sunlight, dramatic shadows, worn fabric, "
-            f"muted color palette, intimate scale, over-the-shoulder, "
-            f"follows, handheld movement, film grain, {BASE_VISUALS}"
+            f"muted color palette, film grain, {BASE_VISUALS}"
         ),
     },
 ]
@@ -236,18 +237,32 @@ def build_filename_prefix(variation: dict, prompt_num: int = 1) -> str:
     return f"al7/al7_{name}-{prompt_num:02d}_{params}_{version}"
 
 
-def generate_variation(endpoint, workflow, video_path, variation, prompt_num=1):
-    """Generate a single variation using direct path reference (no upload)."""
+def generate_variation(endpoint, workflow, video_path, variation, prompt_num=1,
+                       duration=15, fps=24):
+    """Generate a single variation using direct path reference (no upload).
+
+    Args:
+        duration: Target output duration in seconds (controls frame_load_cap)
+        fps: Frame rate for both input loading and output encoding
+    """
     wf = json.loads(json.dumps(workflow))
+
+    # Calculate frame count from desired duration
+    frame_count = int(duration * fps)
 
     # Patch workflow with variation parameters
     wf["7"]["inputs"]["video"] = video_path
+    wf["7"]["inputs"]["force_rate"] = fps
+    wf["7"]["inputs"]["frame_load_cap"] = frame_count
     wf["5"]["inputs"]["text"] = variation["prompt"]
     wf["6"]["inputs"]["text"] = NEGATIVE_PROMPT
     wf["13"]["inputs"]["noise_seed"] = variation["seed"]
     wf["11"]["inputs"]["denoise"] = variation["denoise"]
     wf["3"]["inputs"]["strength_model"] = variation["lora_strength"]
     wf["3"]["inputs"]["strength_clip"] = variation["lora_strength"]
+
+    # Set output frame rate to match
+    wf["20"]["inputs"]["frame_rate"] = fps
 
     # Set VFX-style filename prefix
     prefix = build_filename_prefix(variation, prompt_num)
@@ -289,6 +304,14 @@ Communities for LTX prompt engineering:
     parser.add_argument("--endpoint-id", default=os.environ.get("RUNPOD_ENDPOINT_ID", "taea2mhlwbdkuq"))
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--duration", type=float, default=15.0,
+        help="Target output duration in seconds (default: 15 = 5s loop x 3)",
+    )
+    parser.add_argument(
+        "--fps", type=int, default=24,
+        help="Frame rate for input loading and output encoding (default: 24)",
+    )
     args = parser.parse_args()
 
     runpod.api_key = os.environ["RUNPOD_API_KEY"]
@@ -301,6 +324,7 @@ Communities for LTX prompt engineering:
     print(f"Video: {args.video}")
     print(f"Workflow: {args.workflow}")
     print(f"Endpoint: {args.endpoint_id}")
+    print(f"Duration: {args.duration}s ({int(args.duration * args.fps)} frames @ {args.fps}fps)")
     print(f"Naming: al7/al7_<name>-<NN>_<params>_<timestamp>.mp4")
     print(f"\nGenerating {len(VARIATIONS)} alt retake variations...\n")
 
@@ -321,7 +345,10 @@ Communities for LTX prompt engineering:
             continue
 
         # Generate — direct path reference, no upload
-        job, prefix = generate_variation(endpoint, workflow, args.video, var, prompt_num)
+        job, prefix = generate_variation(
+            endpoint, workflow, args.video, var, prompt_num,
+            duration=args.duration, fps=args.fps,
+        )
         print(f"  Job: {job.job_id}")
 
         start = time.time()
