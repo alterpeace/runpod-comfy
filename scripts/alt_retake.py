@@ -273,8 +273,6 @@ def generate_variation(endpoint, workflow, video_path, variation, prompt_num=1,
     # Set VFX-style filename prefix for video
     prefix = build_filename_prefix(variation, prompt_num)
     wf["20"]["inputs"]["filename_prefix"] = prefix
-    # Don't save individual frame PNGs from VHS (we use SaveImage for thumbnail)
-    wf["20"]["inputs"]["save_metadata"] = False
 
     # Add a SaveImage node for a single thumbnail (first frame of output)
     # Uses the same prefix but in images/ subdirectory
