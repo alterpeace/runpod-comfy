@@ -224,13 +224,16 @@ def get_source_frame_count(video_path: str) -> int | None:
     return None
 
 
-def build_filename_prefix(variation: dict, prompt_num: int = 1) -> str:
+def build_filename_prefix(variation: dict, prompt_num: int = 1, subdir: str = "qtrtime") -> str:
     """Build the VFX-style filename prefix for ComfyUI output.
 
-    Format: al7/al7_<name>-<NN>_<params>_<version>
+    Format: al7/<subdir>/al7_<name>-<NN>_<params>_<version>
+
+    The MP4 goes to: al7/qtrtime/al7_velour-01_s42d03l10_20260816_192200_00001.mp4
+    The PNG goes to: al7/qtrtime/images/al7_velour-01_s42d03l10_20260816_192200_00001.png
 
     ComfyUI's VHS_VideoCombine will append _00001.mp4 etc. to this prefix.
-    The directory (al7/) is created automatically by ComfyUI if it doesn't exist.
+    Directories are created automatically by ComfyUI if they don't exist.
     """
     name = variation["name"]
     params = encode_params(
@@ -239,7 +242,7 @@ def build_filename_prefix(variation: dict, prompt_num: int = 1) -> str:
         variation["lora_strength"],
     )
     version = generate_version_id()
-    return f"al7/al7_{name}-{prompt_num:02d}_{params}_{version}"
+    return f"al7/{subdir}/al7_{name}-{prompt_num:02d}_{params}_{version}"
 
 
 def generate_variation(endpoint, workflow, video_path, variation, prompt_num=1,
@@ -267,9 +270,23 @@ def generate_variation(endpoint, workflow, video_path, variation, prompt_num=1,
     # Set output frame rate to match
     wf["20"]["inputs"]["frame_rate"] = fps
 
-    # Set VFX-style filename prefix
+    # Set VFX-style filename prefix for video
     prefix = build_filename_prefix(variation, prompt_num)
     wf["20"]["inputs"]["filename_prefix"] = prefix
+    # Don't save individual frame PNGs from VHS (we use SaveImage for thumbnail)
+    wf["20"]["inputs"]["save_metadata"] = False
+
+    # Add a SaveImage node for a single thumbnail (first frame of output)
+    # Uses the same prefix but in images/ subdirectory
+    image_prefix = prefix.replace("qtrtime/", "qtrtime/images/")
+    wf["21"] = {
+        "inputs": {
+            "images": ["19", 0],
+            "filename_prefix": image_prefix,
+        },
+        "class_type": "SaveImage",
+        "_meta": {"title": "Save Thumbnail"},
+    }
 
     # Submit job — NO input_files, just the workflow with path reference
     job = endpoint.run({
@@ -350,7 +367,8 @@ Communities for LTX prompt engineering:
         print(f"Frames: {frame_count} (~{duration_est:.1f}s @ {args.fps}fps)")
     else:
         print(f"Frames: all (frame_load_cap=0)")
-    print(f"Naming: al7/al7_<name>-<NN>_<params>_<timestamp>.mp4")
+    print(f"Naming: al7/qtrtime/al7_<name>-<NN>_<params>_<timestamp>.mp4")
+    print(f"Thumbs: al7/qtrtime/images/al7_<name>-<NN>_<params>_<timestamp>.png")
     print(f"\nGenerating {len(VARIATIONS)} alt retake variations...\n")
 
     results = []
@@ -455,7 +473,7 @@ Communities for LTX prompt engineering:
     print(f"\nDownload outputs:")
     print(f"  uv run python scripts/sync_outputs.py /media/chiral/data/comfy/output/sofaking")
     print(f"\nList outputs:")
-    print(f"  uv run python scripts/list_s3.py --prefix output/al7/")
+    print(f"  uv run python scripts/list_s3.py --prefix output/al7/qtrtime/")
 
 
 if __name__ == "__main__":
