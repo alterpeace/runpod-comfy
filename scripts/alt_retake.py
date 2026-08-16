@@ -273,6 +273,8 @@ def generate_variation(endpoint, workflow, video_path, variation, prompt_num=1,
     # Set VFX-style filename prefix for video
     prefix = build_filename_prefix(variation, prompt_num)
     wf["20"]["inputs"]["filename_prefix"] = prefix
+    # Use custom h264-al7 format with embedded artist metadata
+    wf["20"]["inputs"]["format"] = "video/h264-al7"
 
     # Add a SaveImage node for a single thumbnail (first frame of output)
     # Uses the same prefix but in images/ subdirectory
@@ -284,6 +286,37 @@ def generate_variation(endpoint, workflow, video_path, variation, prompt_num=1,
         },
         "class_type": "SaveImage",
         "_meta": {"title": "Save Thumbnail"},
+    }
+
+    # Add a Note node with full generation metadata as a sidecar
+    # This gets saved as a text file alongside the video
+    metadata = {
+        "project": "al7",
+        "variation": variation["name"],
+        "prompt_num": prompt_num,
+        "seed": variation["seed"],
+        "denoise": variation["denoise"],
+        "lora_strength": variation["lora_strength"],
+        "params": encode_params(variation["seed"], variation["denoise"], variation["lora_strength"]),
+        "prompt_text": variation["prompt"],
+        "negative_prompt": NEGATIVE_PROMPT,
+        "source_video": video_path,
+        "frame_count": frame_count,
+        "fps": fps,
+        "version": generate_version_id(),
+        "model": "LTX-2.5-Distilled-Q4_K_M.gguf",
+        "text_encoder": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+        "lora": "ltx-2.5-22b-distilled-lora-450-bf16.safetensors",
+        "vae": "ltx-2.5-video-vae-bf16.safetensors",
+        "workflow": "ltx25_v2v_redetail_entry_runpod.json",
+    }
+    # Save metadata as a string in a Note node (ComfyUI saves these as .txt)
+    wf["22"] = {
+        "inputs": {
+            "text": json.dumps(metadata, indent=2),
+        },
+        "class_type": "Note",
+        "_meta": {"title": "Generation Metadata"},
     }
 
     # Submit job — NO input_files, just the workflow with path reference
