@@ -9,7 +9,7 @@ Usage:
     uv run python scripts/purge_outputs.py --prefix output/al7/
     uv run python scripts/purge_outputs.py --dry-run
 """
-import argparsed
+import argparse
 import os
 import sys
 from pathlib import Path
