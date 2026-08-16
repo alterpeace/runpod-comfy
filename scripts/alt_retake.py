@@ -41,6 +41,7 @@ Usage:
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -186,6 +187,43 @@ def generate_version_id() -> str:
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
+def get_source_frame_count(video_path: str) -> int | None:
+    """Get the total frame count of a video using ffprobe.
+
+    The video path is on the RunPod worker, so we can't probe it locally.
+    Instead, we use the diagnostic action to run ffprobe on the worker.
+    But since alt_retake.py runs locally and the video is on the worker,
+    we need to probe a LOCAL copy if available, or use --frame-count to
+    specify manually.
+
+    For local files (when testing), we can probe directly.
+    For remote files (on the worker), the user should use --frame-count.
+    """
+    # Try to probe locally (works if the file exists on this machine)
+    # Check common local paths
+    local_paths = [
+        video_path,
+        os.path.expanduser(f"~/Desktop/sample/{os.path.basename(video_path)}"),
+        f"/media/chiral/data/comfy/input/{video_path}",
+        f"/home/chiral/Desktop/sample/{video_path}",
+    ]
+
+    for path in local_paths:
+        if os.path.exists(path):
+            cmd = [
+                "ffprobe", "-v", "quiet", "-select_streams", "v:0",
+                "-count_packets", "-show_entries", "stream=nb_read_packets",
+                "-of", "csv=p=0", path,
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode == 0 and result.stdout.strip():
+                count = int(result.stdout.strip())
+                if count > 0:
+                    return count
+
+    return None
+
+
 def build_filename_prefix(variation: dict, prompt_num: int = 1) -> str:
     """Build the VFX-style filename prefix for ComfyUI output.
 
@@ -205,21 +243,19 @@ def build_filename_prefix(variation: dict, prompt_num: int = 1) -> str:
 
 
 def generate_variation(endpoint, workflow, video_path, variation, prompt_num=1,
-                       duration=15, fps=24):
+                       frame_count=0, fps=24):
     """Generate a single variation using direct path reference (no upload).
 
     Args:
-        duration: Target output duration in seconds (controls frame_load_cap)
+        frame_count: Number of frames to load from source (0 = load all)
         fps: Frame rate for both input loading and output encoding
     """
     wf = json.loads(json.dumps(workflow))
 
-    # Calculate frame count from desired duration
-    frame_count = int(duration * fps)
-
     # Patch workflow with variation parameters
     wf["7"]["inputs"]["video"] = video_path
     wf["7"]["inputs"]["force_rate"] = fps
+    # frame_load_cap: 0 means load all frames; otherwise load exactly N
     wf["7"]["inputs"]["frame_load_cap"] = frame_count
     wf["5"]["inputs"]["text"] = variation["prompt"]
     wf["6"]["inputs"]["text"] = NEGATIVE_PROMPT
@@ -272,8 +308,12 @@ Communities for LTX prompt engineering:
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
-        "--duration", type=float, default=15.0,
-        help="Target output duration in seconds (default: 15 = 5s loop x 3)",
+        "--match-frames", action="store_true", default=True,
+        help="Auto-detect source video frame count and match it (default)",
+    )
+    parser.add_argument(
+        "--frame-count", type=int, default=0,
+        help="Manually set frame_load_cap (0 = load all frames from source)",
     )
     parser.add_argument(
         "--fps", type=int, default=24,
@@ -288,10 +328,28 @@ Communities for LTX prompt engineering:
     with open(args.workflow) as f:
         workflow = json.load(f)
 
-    print(f"Video: {args.video}")
+    # Auto-detect source frame count
+    frame_count = args.frame_count
+    if args.match_frames and frame_count == 0:
+        detected = get_source_frame_count(args.video)
+        if detected:
+            frame_count = detected
+            print(f"Source: {args.video} ({frame_count} frames detected)")
+        else:
+            print(f"Source: {args.video} (frame count unknown — will load all frames)")
+            frame_count = 0  # 0 = load all
+    elif frame_count > 0:
+        print(f"Source: {args.video} (using --frame-count {frame_count})")
+    else:
+        print(f"Source: {args.video} (will load all frames)")
+
+    duration_est = frame_count / args.fps if frame_count > 0 else 0
     print(f"Workflow: {args.workflow}")
     print(f"Endpoint: {args.endpoint_id}")
-    print(f"Duration: {args.duration}s ({int(args.duration * args.fps)} frames @ {args.fps}fps)")
+    if frame_count > 0:
+        print(f"Frames: {frame_count} (~{duration_est:.1f}s @ {args.fps}fps)")
+    else:
+        print(f"Frames: all (frame_load_cap=0)")
     print(f"Naming: al7/al7_<name>-<NN>_<params>_<timestamp>.mp4")
     print(f"\nGenerating {len(VARIATIONS)} alt retake variations...\n")
 
@@ -314,7 +372,7 @@ Communities for LTX prompt engineering:
         # Generate — direct path reference, no upload
         job, prefix = generate_variation(
             endpoint, workflow, args.video, var, prompt_num,
-            duration=args.duration, fps=args.fps,
+            frame_count=frame_count, fps=args.fps,
         )
         print(f"  Job: {job.job_id}")
 
