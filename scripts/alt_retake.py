@@ -204,8 +204,6 @@ def get_source_frame_count(video_path: str) -> int | None:
     local_paths = [
         video_path,
         os.path.expanduser(f"~/Desktop/sample/{os.path.basename(video_path)}"),
-        f"/media/chiral/data/comfy/input/{video_path}",
-        f"/home/chiral/Desktop/sample/{video_path}",
     ]
 
     for path in local_paths:
@@ -502,7 +500,7 @@ Communities for LTX prompt engineering:
     success_count = sum(1 for r in results if r["status"] == "success")
     print(f"\n{success_count}/{len(VARIATIONS)} variations generated successfully")
     print(f"\nDownload outputs:")
-    print(f"  uv run python scripts/sync_outputs.py /media/chiral/data/comfy/output/sofaking")
+    print(f"  uv run python scripts/sync_outputs.py <local_output_dir>")
     print(f"\nList outputs:")
     print(f"  uv run python scripts/list_s3.py --prefix output/al7/qtrtime/")
 

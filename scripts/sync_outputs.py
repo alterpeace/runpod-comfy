@@ -7,9 +7,9 @@ to a local folder. Useful for collecting generated videos.
 
 Usage:
     set -a && source .env && set +a
-    uv run python scripts/sync_outputs.py /media/chiral/data/comfy/output/sofaking
-    uv run python scripts/sync_outputs.py /media/chiral/data/comfy/output/sofaking --watch
-    uv run python scripts/sync_outputs.py /media/chiral/data/comfy/output/sofaking --prefix output/
+    uv run python scripts/sync_outputs.py <local_output_dir>
+    uv run python scripts/sync_outputs.py <local_output_dir> --watch
+    uv run python scripts/sync_outputs.py <local_output_dir> --prefix output/
 """
 import argparse
 import os

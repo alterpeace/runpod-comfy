@@ -285,7 +285,7 @@ Examples:
   %(prog)s video1.mp4 video2.mp4 image.png
 
   # Upload an entire directory (recursive, preserves structure)
-  %(prog)s /media/chiral/data/visuals/clips/al7/montked --subfolder montked
+  %(prog)s <local_dir> --subfolder montked
 
   # Upload to a subfolder under input/
   %(prog)s video.mp4 --subfolder upscale_test

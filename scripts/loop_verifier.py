@@ -12,10 +12,10 @@ Usage:
     uv run python scripts/loop_verifier.py
 
     # Verify specific retake against specific source
-    uv run python scripts/loop_verifier.py --retake /media/chiral/data/comfy/output/sofaking/al7/al7_velour-01_s42d03l10_20260816_220006_00001.mp4 --source /home/chiral/Desktop/sample/clip_26-06-11_17-52-52_00007.mp4
+    uv run python scripts/loop_verifier.py --retake <output_dir>/al7_velour-01_s42d03l10_20260816_220006_00001.mp4 --source <sample_dir>/clip_26-06-11_17-52-52_00007.mp4
 
     # Verify all retakes in a directory
-    uv run python scripts/loop_verifier.py --retake-dir /media/chiral/data/comfy/output/sofaking --source-dir /home/chiral/Desktop/sample
+    uv run python scripts/loop_verifier.py --retake-dir <output_dir> --source-dir <sample_dir>
 
 Requirements:
     - ffmpeg (for frame extraction)
@@ -280,13 +280,13 @@ Examples:
   uv run python scripts/loop_verifier.py --retake output/al7_velour-01_s42d03l10_20260816_220006_00001.mp4
 
   # Compare retake against original source
-  uv run python scripts/loop_verifier.py --retake output/al7_velour-01_s42d03l10_20260816_220006_00001.mp4 --source /home/chiral/Desktop/sample/clip_26-06-11_17-52-52_00007.mp4
+  uv run python scripts/loop_verifier.py --retake output/al7_velour-01_s42d03l10_20260816_220006_00001.mp4 --source <sample_dir>/clip_26-06-11_17-52-52_00007.mp4
 
   # Verify all retakes in a directory (self-loop check)
-  uv run python scripts/loop_verifier.py --retake-dir /media/chiral/data/comfy/output/sofaking
+  uv run python scripts/loop_verifier.py --retake-dir <output_dir>
 
   # Compare all retakes against all sources
-  uv run python scripts/loop_verifier.py --retake-dir /media/chiral/data/comfy/output/sofaking --source-dir /home/chiral/Desktop/sample
+  uv run python scripts/loop_verifier.py --retake-dir <output_dir> --source-dir <sample_dir>
         """,
     )
     parser.add_argument("--retake", help="Path to retake video to verify")
