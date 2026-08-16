@@ -15,7 +15,9 @@
       "weight_dtype": "default"
     },
     "class_type": "UNETLoader",
-    "_meta": { "title": "Load FP8 Diffusion Model" }
+    "_meta": {
+      "title": "Load FP8 Diffusion Model"
+    }
   },
   "2": {
     "inputs": {
@@ -24,34 +26,54 @@
       "device": "default"
     },
     "class_type": "CLIPLoader",
-    "_meta": { "title": "Load CLIP - Text Encoder" }
+    "_meta": {
+      "title": "Load CLIP - Text Encoder"
+    }
   },
   "3": {
     "inputs": {
-      "model": ["1", 0],
-      "clip": ["2", 0],
+      "model": [
+        "1",
+        0
+      ],
+      "clip": [
+        "2",
+        0
+      ],
       "lora_name": "ltx-2.5-22b-distilled-lora-450-bf16.safetensors",
       "strength_model": 1.0,
       "strength_clip": 1.0
     },
     "class_type": "LoraLoader",
-    "_meta": { "title": "Load Distilled LoRA" }
+    "_meta": {
+      "title": "Load Distilled LoRA"
+    }
   },
   "5": {
     "inputs": {
-      "clip": ["3", 1],
+      "clip": [
+        "3",
+        1
+      ],
       "text": "cinematic, film grain, shallow depth of field, golden hour lighting, professional color grading, enhanced detail, smooth motion, high contrast, neon accents, dramatic shadows, lens flares, particle systems, motion blur, 4k detail, professional post-production, pushes in slowly, lingering shot, vibrant color palette"
     },
     "class_type": "CLIPTextEncode",
-    "_meta": { "title": "Positive Prompt" }
+    "_meta": {
+      "title": "Positive Prompt"
+    }
   },
   "6": {
     "inputs": {
-      "clip": ["3", 1],
+      "clip": [
+        "3",
+        1
+      ],
       "text": "blurry, low quality, distorted, glitch, artifacts, flickering, jerky motion, compression artifacts, watermark, noisy, grainy, washed out, banding, rapid cuts, sudden stop, pixelated edges, amateur, shaky, wobbly"
     },
     "class_type": "CLIPTextEncode",
-    "_meta": { "title": "Negative Prompt" }
+    "_meta": {
+      "title": "Negative Prompt"
+    }
   },
   "7": {
     "inputs": {
@@ -64,36 +86,56 @@
       "select_every_nth": 1
     },
     "class_type": "VHS_LoadVideo",
-    "_meta": { "title": "Load Input Video" }
+    "_meta": {
+      "title": "Load Input Video"
+    }
   },
   "8": {
     "inputs": {
-      "image": ["7", 0],
+      "image": [
+        "7",
+        0
+      ],
       "width": 640,
       "height": 352,
       "upscale_method": "lanczos",
       "crop": "disabled"
     },
     "class_type": "ImageScale",
-    "_meta": { "title": "Resize to 640x352" }
+    "_meta": {
+      "title": "Resize to 640x352"
+    }
   },
   "10": {
     "inputs": {
-      "pixels": ["8", 0],
-      "vae": ["26", 0]
+      "pixels": [
+        "8",
+        0
+      ],
+      "vae": [
+        "26",
+        0
+      ]
     },
     "class_type": "VAEEncode",
-    "_meta": { "title": "VAE Encode" }
+    "_meta": {
+      "title": "VAE Encode"
+    }
   },
   "11": {
     "inputs": {
-      "model": ["3", 0],
+      "model": [
+        "3",
+        0
+      ],
       "scheduler": "linear_quadratic",
       "steps": 8,
       "denoise": 0.3
     },
     "class_type": "BasicScheduler",
-    "_meta": { "title": "Scheduler (8 steps, 0.3 denoise)" }
+    "_meta": {
+      "title": "Scheduler (8 steps, 0.3 denoise)"
+    }
   },
   "12": {
     "inputs": {
@@ -109,39 +151,72 @@
   },
   "14": {
     "inputs": {
-      "model": ["3", 0],
-      "positive": ["5", 0],
-      "negative": ["6", 0],
+      "model": [
+        "3",
+        0
+      ],
+      "positive": [
+        "5",
+        0
+      ],
+      "negative": [
+        "6",
+        0
+      ],
       "cfg": 1.0
     },
     "class_type": "CFGGuider"
   },
   "15": {
     "inputs": {
-      "noise": ["13", 0],
-      "guider": ["14", 0],
-      "sampler": ["12", 0],
-      "sigmas": ["11", 0],
-      "latent_image": ["10", 0]
+      "noise": [
+        "13",
+        0
+      ],
+      "guider": [
+        "14",
+        0
+      ],
+      "sampler": [
+        "12",
+        0
+      ],
+      "sigmas": [
+        "11",
+        0
+      ],
+      "latent_image": [
+        "10",
+        0
+      ]
     },
     "class_type": "SamplerCustomAdvanced",
-    "_meta": { "title": "Single Pass Sampler (8 steps, 640x352)" }
+    "_meta": {
+      "title": "Single Pass Sampler (8 steps, 640x352)"
+    }
   },
   "19": {
     "inputs": {
-      "vae": ["26", 0],
-      "latents": ["15", 0],
-      "horizontal_tiles": 1,
-      "vertical_tiles": 1,
-      "overlap": 1,
-      "last_frame_fix": false
+      "vae": [
+        "26",
+        0
+      ],
+      "samples": [
+        "15",
+        0
+      ]
     },
-    "class_type": "LTXVTiledVAEDecode",
-    "_meta": { "title": "Tiled VAE Decode" }
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
   },
   "20": {
     "inputs": {
-      "images": ["19", 0],
+      "images": [
+        "19",
+        0
+      ],
       "frame_rate": 24,
       "loop_count": 0,
       "filename_prefix": "ltx25_v2v_fp8",
@@ -150,13 +225,17 @@
       "save_output": true
     },
     "class_type": "VHS_VideoCombine",
-    "_meta": { "title": "Save Output Video" }
+    "_meta": {
+      "title": "Save Output Video"
+    }
   },
   "26": {
     "inputs": {
       "vae_name": "ltx-2.5-video-vae-bf16.safetensors"
     },
     "class_type": "VAELoader",
-    "_meta": { "title": "Load Video VAE" }
+    "_meta": {
+      "title": "Load Video VAE"
+    }
   }
 }
