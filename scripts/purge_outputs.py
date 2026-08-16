@@ -9,7 +9,7 @@ Usage:
     uv run python scripts/purge_outputs.py --prefix output/al7/
     uv run python scripts/purge_outputs.py --dry-run
 """
-import argparse
+import argparsed
 import os
 import sys
 from pathlib import Path
@@ -23,7 +23,7 @@ if env_file.exists():
             k, v = line.split("=", 1)
             v = v.strip().strip('"').strip("'")
             os.environ.setdefault(k, v)
-
+i
 try:
     import boto3
 except ImportError:
