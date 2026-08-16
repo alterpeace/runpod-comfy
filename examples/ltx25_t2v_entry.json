@@ -78,7 +78,7 @@
       "frame_rate": 24,
       "loop_count": 0,
       "filename_prefix": "ltx25_t2v",
-      "format": "video/h264-allintra",
+      "format": "video/h264-mp4",
       "pingpong": false,
       "save_output": true
     },

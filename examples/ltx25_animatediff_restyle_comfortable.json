@@ -404,7 +404,7 @@
       "frame_rate": 48,
       "loop_count": 0,
       "filename_prefix": "ltx25_restyle_upscaled",
-      "format": "video/h264-allintra",
+      "format": "video/h264-mp4",
       "pingpong": false,
       "save_output": true
     },

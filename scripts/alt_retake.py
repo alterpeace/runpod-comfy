@@ -202,7 +202,26 @@ def main():
         elapsed = int(time.time() - start)
         print(f"  {status} ({elapsed}s)")
 
-        if status == "COMPLETED" and job.output().get("status") == "success":
+        output = job.output()
+
+        # Handle None output (FAILED status, timeout, etc.)
+        if output is None:
+            error_msg = f"Job {status} with no output (likely timeout or worker error)"
+            print(f"  ❌ Error: {error_msg}")
+            results.append({
+                "variation": var["name"],
+                "seed": var["seed"],
+                "denoise": var["denoise"],
+                "lora_strength": var["lora_strength"],
+                "status": "failed",
+                "error": error_msg,
+                "elapsed": elapsed,
+            })
+            print()
+            continue
+
+        # Check if the job succeeded
+        if output.get("status") == "success":
             print(f"  ✅ Success!")
             results.append({
                 "variation": var["name"],
@@ -213,12 +232,22 @@ def main():
                 "elapsed": elapsed,
             })
         else:
-            meta = job.output().get("metadata", {})
-            print(f"  ❌ Error: {meta.get('error_message', 'unknown')[:200]}")
+            # Extract error message from multiple possible locations
+            error_msg = (
+                output.get("error")
+                or output.get("error_message")
+                or output.get("metadata", {}).get("error_message")
+                or str(output)[:500]
+            )
+            print(f"  ❌ Error: {str(error_msg)[:500]}")
             results.append({
                 "variation": var["name"],
+                "seed": var["seed"],
+                "denoise": var["denoise"],
+                "lora_strength": var["lora_strength"],
                 "status": "failed",
-                "error": meta.get("error_message", "unknown")[:200],
+                "error": str(error_msg)[:500],
+                "elapsed": elapsed,
             })
 
         print()

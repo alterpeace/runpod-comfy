@@ -166,7 +166,7 @@
     "_meta": { "title": "Tiled VAE Decode" }
   },
   "20": {
-    "inputs": { "images": ["19", 0], "frame_rate": 24, "loop_count": 0, "filename_prefix": "ltx25_v2v_comfortable", "format": "video/h264-allintra", "pingpong": false, "save_output": true },
+    "inputs": { "images": ["19", 0], "frame_rate": 24, "loop_count": 0, "filename_prefix": "ltx25_v2v_comfortable", "format": "video/h264-mp4", "pingpong": false, "save_output": true },
     "class_type": "VHS_VideoCombine",
     "_meta": { "title": "Save Output Video" }
   },
