@@ -23,7 +23,7 @@ if env_file.exists():
             k, v = line.split("=", 1)
             v = v.strip().strip('"').strip("'")
             os.environ.setdefault(k, v)
-i
+
 try:
     import boto3
 except ImportError:
