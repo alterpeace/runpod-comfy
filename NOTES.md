@@ -1,4 +1,4 @@
-cd /home/chiral/source/runpod-comfy
+cd ~/source/runpod-comfy
 set -a && source .env && set +a
 
 uv run python scripts/alt_retake.py --video sample/clip_26-06-11_17-52-52_00007.mp4
@@ -14,5 +14,8 @@ uv run python scripts/alt_retake.py --video sample/clip_26-06-11_17-52-59_00001.
 uv run python scripts/alt_retake.py --video sample/clip_26-06-11_17-52-59_00002.mp4
 uv run python scripts/alt_retake.py --video sample/clip_26-06-11_17-52-59_00003.mp4
 
-uv run python scripts/sync_outputs.py /media/chiral/data/comfy/output/sofaking
+uv run python scripts/sync_outputs.py ~/comfy/output/sofaking
 uv run python scripts/list_s3.py --prefix output/
+
+
+uv run python scripts/purge_outputs.py --prefix output/
