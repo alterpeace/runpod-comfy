@@ -89,11 +89,22 @@ NEGATIVE_PROMPT = (
 # atmosphere — NOT camera language or pacing, which would conflict with
 # the source footage's motion. The model re-renders the existing motion
 # with new visual style; it doesn't create new camera moves.
+#
+# This BASE_VISUALS is the signature style for al7. It's designed based on
+# what's working in the AI VJ art community:
+# - Volumetric depth (fog, particles, light shafts) for projection-friendly layering
+# - Material richness (liquid metal, glass, crystalline) for tangible surfaces
+# - Optical effects (chromatic aberration, light leaks) for the VJ aesthetic
+# - Luminosity (glowing, radiant) for self-luminous elements on big screens
+# - Quality markers (ultra detailed, sharp focus) for clean renders
 BASE_VISUALS = (
-    "chromatic aberration, light leaks, prismatic refraction, "
+    "volumetric fog, atmospheric haze, light shafts, "
+    "floating particles, dust motes, "
     "liquid metal, iridescent, holographic, "
-    "high quality render, sharp focus, clean detail, "
-    "motion blur, depth of field, 4k detail"
+    "glass refraction, crystalline, "
+    "chromatic aberration, light leaks, prismatic, "
+    "glowing, radiant, luminous, "
+    "ultra detailed, sharp focus, clean render"
 )
 # ---------------------------------------------------------------------------
 
