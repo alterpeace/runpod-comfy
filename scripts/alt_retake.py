@@ -94,39 +94,6 @@ BASE_VISUALS = (
     "high quality render, sharp focus, clean detail, "
     "motion blur, depth of field, 4k detail"
 )
-
-# ---------------------------------------------------------------------------
-# Prompt Engineering Methodology for LTX-2.5
-# ---------------------------------------------------------------------------
-# LTX-2.5 is a video diffusion model that responds well to structured prompts
-# with the following layers:
-#
-# 1. SUBJECT/MOOD — What is the dominant visual feeling? (1-2 words)
-# 2. LIGHTING — How is the scene lit? (natural sunlight, neon glow, etc.)
-# 3. TEXTURE/MATERIAL — What surfaces are visible? (smooth metal, worn fabric)
-# 4. COLOR PALETTE — What colors dominate? (vibrant, muted, monochromatic)
-# 5. ATMOSPHERE — What particles/effects fill the air? (fog, dust, smoke)
-# 6. CAMERA — How does the camera move? (tracks, pushes in, handheld)
-# 7. SCALE — How much of the scene is visible? (expansive, intimate)
-# 8. PACING — How fast does motion feel? (slow drift, rapid, hypnotic)
-# 9. STYLE MARKERS — Film characteristics (film grain, anamorphic, etc.)
-#
-# For V2V redetail: the prompt guides re-rendering style. Lower denoise
-# (0.2-0.3) keeps closer to source; higher denoise (0.4-0.5) allows more
-# creative reinterpretation. LoRA strength controls how strongly the
-# distilled model's style overrides the base model.
-#
-# Communities & Resources for LTX Prompt Engineering:
-# - ComfyUI Discord: #ltx-video channel (active workflow sharing)
-# - r/comfyui on Reddit (workflow JSON sharing, prompt discussions)
-# - r/StableDiffusion on Reddit (general diffusion prompt techniques)
-# - Hugging Face: Lightricks/LTX-2.5 model page (example prompts)
-# - Civitai.com: LTX model pages with user-generated prompts and LoRAs
-# - GitHub: Lightricks/ComfyUI-LTXVideo (example workflows in repo)
-# - X/Twitter: @Lightricks, search #LTX #ComfyUI for creator content
-# - YouTube: "ComfyUI LTX" tutorials by creators like Scott Detweiler,
-#   Olivio Sarikas, and Sebastian Kamph
-# - OpenArt.ai: LTX workflow templates with prompt examples
 # ---------------------------------------------------------------------------
 
 VARIATIONS = [
