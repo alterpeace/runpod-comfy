@@ -5,18 +5,15 @@ Alt Retake — Generate creative variations for music visuals.
 Uses direct path references (no base64 upload) so it works with ANY file size.
 Videos must already be on the RunPod volume at /runpod-volume/input/<path>.
 
-Designed for VJing at festivals, gigs, and altered-states experiences.
-Generates abstract, non-representational visuals with no people.
+## Output Naming Convention
 
-## VFX-Style Naming Convention
-
-Outputs use a structured, token-based filename inspired by VFX pipeline conventions:
+Outputs use a structured, token-based filename:
 
     al7/al7_<variation>-<prompt_num>_<params>_<version>.mp4
 
 Where:
   - al7              = project code (alterpeace LTX 2.5)
-  - <variation>      = one-word fancy name (e.g. "velour", "obsidian")
+  - <variation>      = variation name (e.g. "velour", "obsidian")
   - <prompt_num>     = 2-digit prompt variant number (01-99)
   - <params>          = compact parameter encoding (see below)
   - <version>        = timestamp-based version ID (YYYYMMDD_hhmmss)
@@ -35,33 +32,6 @@ Where denoise and lora are encoded as 2-digit integers (value × 10):
 
 Example: s42d03l10 = seed 42, denoise 0.3, lora 1.0
 
-### Why embed parameters in filenames?
-
-In AI video generation, the same prompt can produce wildly different results
-depending on the seed, denoise strength, and LoRA strength. Embedding these
-directly in the filename provides:
-
-1. **Reproducibility** — Anyone can recreate the exact output by reading
-   the filename and plugging the parameters back into the workflow. No
-   external database or sidecar file needed.
-
-2. **Iteration tracking** — When iterating on a look, you can see at a
-   glance which parameter combinations have been tried. "Did I already
-   test seed 42 with denoise 0.4?" → just check if s42d04* exists.
-
-3. **A/B comparison** — When comparing variations side by side in a VJ
-   set, the filename tells you exactly what you're looking at without
-   needing to cross-reference a spreadsheet.
-
-4. **Pipeline automation** — Downstream tools (sync scripts, quality
-   evaluators) can parse parameters directly from filenames without
-   reading ComfyUI's JSON output or querying the API.
-
-5. **Version control without Git** — The timestamp acts as a version
-   number. If you regenerate with the same parameters, you get a new
-   version with the same param token but a different timestamp, making
-   it easy to track which generation pass produced which file.
-
 Usage:
     set -a && source .env && set +a
     uv run python scripts/alt_retake.py --video rhizome.mp4
@@ -71,7 +41,6 @@ Usage:
 import argparse
 import json
 import os
-import random
 import sys
 import time
 from datetime import datetime
@@ -120,23 +89,6 @@ BASE_VISUALS = (
     "festival atmosphere, VJ loops, beat-synced motion, "
     "abstract, non-representational, motion blur, depth of field, 4k detail"
 )
-
-# ---------------------------------------------------------------------------
-# Fancy name pool — one-word evocative names for variations
-# Drawn from materials, phenomena, gemstones, weather, and myth
-# ---------------------------------------------------------------------------
-FANCY_NAMES = [
-    "velour", "obsidian", "zephyr", "mirage", "cinder",
-    "halcyon", "vortex", "nimbus", "cascade", "prism",
-    "onyx", "cobalt", "ember", "frost", "nebula",
-    "quartz", "tide", "specter", "lumen", "phase",
-    "rapture", "void", "flux", "amber", "sable",
-    "corona", "drift", "echo", "glow", "haze",
-    "iris", "jade", "karma", "lotus", "magma",
-    "opal", "pearl", "quasar", "ruby", "silk",
-    "thorn", "umber", "vapor", "willow", "xenon",
-    "yonder", "zenith",
-]
 
 # ---------------------------------------------------------------------------
 # Prompt Engineering Methodology for LTX-2.5
@@ -266,22 +218,6 @@ def generate_version_id() -> str:
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
-def generate_fancy_name(used: set | None = None) -> str:
-    """Pick a random one-word fancy name from the pool.
-
-    If `used` is provided, avoids names already in the set.
-    Falls back to a random 4-letter string if the pool is exhausted.
-    """
-    pool = FANCY_NAMES[:]
-    if used:
-        pool = [n for n in pool if n not in used]
-    if not pool:
-        # Fallback: generate a random name
-        import string
-        return "".join(random.choices(string.ascii_lowercase, k=5))
-    return random.choice(pool)
-
-
 def build_filename_prefix(variation: dict, prompt_num: int = 1) -> str:
     """Build the VFX-style filename prefix for ComfyUI output.
 
@@ -353,10 +289,6 @@ Communities for LTX prompt engineering:
     parser.add_argument("--endpoint-id", default=os.environ.get("RUNPOD_ENDPOINT_ID", "taea2mhlwbdkuq"))
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument(
-        "--random-names", action="store_true",
-        help="Use random fancy names instead of the predefined variation names",
-    )
     args = parser.parse_args()
 
     runpod.api_key = os.environ["RUNPOD_API_KEY"]
@@ -365,13 +297,6 @@ Communities for LTX prompt engineering:
     # Load workflow
     with open(args.workflow) as f:
         workflow = json.load(f)
-
-    # Optionally randomize names
-    used_names = set()
-    if args.random_names:
-        for var in VARIATIONS:
-            var["name"] = generate_fancy_name(used_names)
-            used_names.add(var["name"])
 
     print(f"Video: {args.video}")
     print(f"Workflow: {args.workflow}")
