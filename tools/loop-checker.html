@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Perfect Loop Checker</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    [v-cloak] { display: none; }
+    body { background: #0a0a0a; color: #fafafa; font-family: system-ui, -apple-system, sans-serif; }
+    .drop-zone { transition: all 0.2s; }
+    .drop-zone.dragover { border-color: #6366f1; background: rgba(99, 102, 241, 0.1); }
+    input[type="range"] { accent-color: #6366f1; }
+  </style>
+</head>
+<body>
+  <div id="app" v-cloak class="min-h-screen flex flex-col items-center p-8">
+    <!-- Header -->
+    <div class="w-full max-w-4xl mb-8">
+      <h1 class="text-3xl font-bold text-center mb-2">Perfect Loop Checker</h1>
+      <p class="text-center text-zinc-400 text-sm">Drag & drop a video to verify it loops seamlessly</p>
+    </div>
+
+    <!-- Drop Zone (shown when no video) -->
+    <div
+      v-if="!videoLoaded"
+      class="drop-zone w-full max-w-4xl h-64 border-2 border-dashed border-zinc-700 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-zinc-500"
+      @dragover.prevent="dragover = true"
+      @dragleave.prevent="dragover = false"
+      @drop.prevent="handleDrop"
+      @click="$refs.fileInput.click()"
+      :class="{ dragover }"
+    >
+      <svg class="w-12 h-12 text-zinc-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+      </svg>
+      <p class="text-zinc-400 text-lg">Drop video here or click to browse</p>
+      <p class="text-zinc-600 text-sm mt-1">MP4, WebM, MOV</p>
+      <input ref="fileInput" type="file" accept="video/*" class="hidden" @change="handleFileSelect" />
+    </div>
+
+    <!-- Main Interface (shown when video loaded) -->
+    <div v-if="videoLoaded" class="w-full max-w-6xl">
+      <!-- Video Player -->
+      <div class="relative bg-black rounded-xl overflow-hidden mb-4">
+        <video
+          ref="videoEl"
+          :src="videoUrl"
+          class="w-full max-h-[60vh]"
+          @loadedmetadata="onVideoLoaded"
+          @timeupdate="onTimeUpdate"
+          @ended="onVideoEnded"
+          loop
+          muted
+          playsinline
+        />
+        <!-- Frame markers overlay -->
+        <div v-if="duration > 0" class="absolute bottom-0 left-0 right-0 h-1 bg-zinc-800">
+          <div class="h-full bg-indigo-500" :style="{ width: progressPct + '%' }"></div>
+          <!-- First frame marker -->
+          <div class="absolute top-0 bottom-0 w-0.5 bg-green-500" style="left: 0%"></div>
+          <!-- Last frame marker -->
+          <div class="absolute top-0 bottom-0 w-0.5 bg-red-500" style="left: 100%"></div>
+          <!-- Loop point markers (if detected) -->
+          <div v-for="point in loopPoints" :key="point.time"
+            class="absolute top-0 bottom-0 w-0.5 bg-yellow-400"
+            :style="{ left: (point.time / duration * 100) + '%' }"
+            :title="point.label">
+          </div>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <!-- Playback Controls -->
+        <div class="bg-zinc-900 rounded-xl p-4">
+          <h3 class="text-sm font-semibold text-zinc-400 mb-3">Playback</h3>
+          <div class="flex items-center gap-3">
+            <button @click="togglePlay" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-medium text-sm">
+              {{ isPlaying ? 'Pause' : 'Play' }}
+            </button>
+            <button @click="restartLoop" class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg font-medium text-sm">
+              Restart
+            </button>
+            <span class="text-zinc-400 text-sm font-mono">{{ currentTime.toFixed(2) }}s / {{ duration.toFixed(2) }}s</span>
+          </div>
+          <div class="mt-3">
+            <label class="text-xs text-zinc-500">Playback speed: {{ playbackRate }}x</label>
+            <input type="range" min="0.25" max="2" step="0.25" v-model.number="playbackRate" @input="updatePlaybackRate"
+              class="w-full mt-1" />
+          </div>
+        </div>
+
+        <!-- Loop Analysis -->
+        <div class="bg-zinc-900 rounded-xl p-4">
+          <h3 class="text-sm font-semibold text-zinc-400 mb-3">Loop Analysis</h3>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between">
+              <span class="text-zinc-500">Duration:</span>
+              <span class="font-mono">{{ duration.toFixed(3) }}s</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-zinc-500">Frames (est):</span>
+              <span class="font-mono">{{ estimatedFrames }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-zinc-500">Loop status:</span>
+              <span :class="loopStatusClass" class="font-semibold">{{ loopStatusText }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-zinc-500">Loop count:</span>
+              <span class="font-mono">{{ loopCount }}x</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Seamless Loop Test -->
+      <div class="bg-zinc-900 rounded-xl p-4 mb-4">
+        <h3 class="text-sm font-semibold text-zinc-400 mb-3">Seamless Loop Test</h3>
+        <p class="text-xs text-zinc-500 mb-3">
+          This test plays the last 1 second, then immediately jumps to the first 1 second.
+          If the transition is invisible, your loop is perfect.
+        </p>
+        <div class="flex items-center gap-3">
+          <button @click="testSeamlessLoop" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg font-medium text-sm">
+            {{ isTestingLoop ? 'Stop Test' : 'Run Seamless Test' }}
+          </button>
+          <button @click="testLoopPoint(0.5)" class="px-3 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">
+            Test at 0.5s
+          </button>
+          <button @click="testLoopPoint(1.0)" class="px-3 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">
+            Test at 1.0s
+          </button>
+          <button @click="testLoopPoint(2.0)" class="px-3 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">
+            Test at 2.0s
+          </button>
+        </div>
+        <div v-if="isTestingLoop" class="mt-3 text-sm text-purple-400">
+          ⏳ Playing last {{ testDuration }}s → first {{ testDuration }}s repeatedly...
+        </div>
+      </div>
+
+      <!-- Frame Comparison -->
+      <div class="bg-zinc-900 rounded-xl p-4 mb-4">
+        <h3 class="text-sm font-semibold text-zinc-400 mb-3">First / Last Frame Comparison</h3>
+        <p class="text-xs text-zinc-500 mb-3">
+          Visual comparison of the first and last frames. If they match, the loop is seamless.
+        </p>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <p class="text-xs text-green-500 mb-1">First Frame</p>
+            <canvas ref="firstFrameCanvas" class="w-full bg-black rounded-lg"></canvas>
+          </div>
+          <div>
+            <p class="text-xs text-red-500 mb-1">Last Frame</p>
+            <canvas ref="lastFrameCanvas" class="w-full bg-black rounded-lg"></canvas>
+          </div>
+        </div>
+        <div class="mt-3 text-center">
+          <span :class="frameMatchClass" class="text-sm font-semibold">{{ frameMatchText }}</span>
+        </div>
+      </div>
+
+      <!-- File Info -->
+      <div class="bg-zinc-900 rounded-xl p-4 mb-4">
+        <h3 class="text-sm font-semibold text-zinc-400 mb-2">File Info</h3>
+        <div class="text-sm text-zinc-300 space-y-1">
+          <p>Name: <span class="font-mono text-zinc-400">{{ fileName }}</span></p>
+          <p>Size: <span class="font-mono text-zinc-400">{{ fileSize }}</span></p>
+        </div>
+      </div>
+
+      <!-- Load New Video -->
+      <div class="text-center">
+        <button @click="resetVideo" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm">
+          Load Different Video
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp, ref, computed, onMounted, watch, nextTick } = Vue;
+
+    createApp({
+      setup() {
+        const videoEl = ref(null);
+        const fileInput = ref(null);
+        const firstFrameCanvas = ref(null);
+        const lastFrameCanvas = ref(null);
+
+        const videoLoaded = ref(false);
+        const videoUrl = ref('');
+        const fileName = ref('');
+        const fileSizeBytes = ref(0);
+        const dragover = ref(false);
+        const isPlaying = ref(false);
+        const currentTime = ref(0);
+        const duration = ref(0);
+        const playbackRate = ref(1);
+        const loopCount = ref(0);
+        const isTestingLoop = ref(false);
+        const testDuration = ref(1);
+        const loopPoints = ref([]);
+        const firstFrameData = ref(null);
+        const lastFrameData = ref(null);
+        const frameDifference = ref(null);
+
+        const progressPct = computed(() => {
+          if (duration.value === 0) return 0;
+          return (currentTime.value / duration.value) * 100;
+        });
+
+        const estimatedFrames = computed(() => {
+          // Estimate at 24fps
+          return Math.round(duration.value * 24);
+        });
+
+        const fileSize = computed(() => {
+          const bytes = fileSizeBytes.value;
+          if (bytes < 1024) return bytes + ' B';
+          if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+          return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        });
+
+        const loopStatusText = computed(() => {
+          if (duration.value === 0) return '—';
+          // Check if duration is close to a multiple of 5 seconds (5s loop)
+          const loopsAt5s = duration.value / 5;
+          const isNearMultiple = Math.abs(loopsAt5s - Math.round(loopsAt5s)) < 0.1;
+          if (isNearMultiple) {
+            return `✓ ${Math.round(loopsAt5s)}x 5s loop (${duration.value.toFixed(1)}s)`;
+          }
+          // Check if duration is close to a multiple of 4 seconds
+          const loopsAt4s = duration.value / 4;
+          const isNearMultiple4 = Math.abs(loopsAt4s - Math.round(loopsAt4s)) < 0.1;
+          if (isNearMultiple4) {
+            return `✓ ${Math.round(loopsAt4s)}x 4s loop (${duration.value.toFixed(1)}s)`;
+          }
+          return `${duration.value.toFixed(1)}s (custom)`;
+        });
+
+        const loopStatusClass = computed(() => {
+          if (duration.value === 0) return 'text-zinc-500';
+          const loopsAt5s = duration.value / 5;
+          if (Math.abs(loopsAt5s - Math.round(loopsAt5s)) < 0.1) return 'text-green-400';
+          return 'text-yellow-400';
+        });
+
+        const frameMatchText = computed(() => {
+          if (frameDifference.value === null) return 'Click "Run Seamless Test" to compare';
+          const diff = frameDifference.value;
+          if (diff < 0.02) return `✓ Perfect match (${(diff * 100).toFixed(1)}% difference)`;
+          if (diff < 0.05) return `~ Good match (${(diff * 100).toFixed(1)}% difference)`;
+          if (diff < 0.15) return `⚠ Noticeable difference (${(diff * 100).toFixed(1)}%)`;
+          return `✗ Poor match (${(diff * 100).toFixed(1)}% difference)`;
+        });
+
+        const frameMatchClass = computed(() => {
+          if (frameDifference.value === null) return 'text-zinc-500';
+          const diff = frameDifference.value;
+          if (diff < 0.02) return 'text-green-400';
+          if (diff < 0.05) return 'text-green-400';
+          if (diff < 0.15) return 'text-yellow-400';
+          return 'text-red-400';
+        });
+
+        function handleDrop(e) {
+          dragover.value = false;
+          const file = e.dataTransfer.files[0];
+          if (file && file.type.startsWith('video/')) {
+            loadVideo(file);
+          }
+        }
+
+        function handleFileSelect(e) {
+          const file = e.target.files[0];
+          if (file) {
+            loadVideo(file);
+          }
+        }
+
+        function loadVideo(file) {
+          if (videoUrl.value) {
+            URL.revokeObjectURL(videoUrl.value);
+          }
+          videoUrl.value = URL.createObjectURL(file);
+          fileName.value = file.name;
+          fileSizeBytes.value = file.size;
+          videoLoaded.value = true;
+          loopCount.value = 0;
+          frameDifference.value = null;
+          loopPoints.value = [];
+        }
+
+        function onVideoLoaded() {
+          duration.value = videoEl.value.duration;
+          // Capture first and last frames
+          nextTick(() => {
+            captureFrames();
+          });
+        }
+
+        function captureFrames() {
+          const video = videoEl.value;
+          if (!video) return;
+
+          // Capture first frame
+          video.currentTime = 0;
+          video.addEventListener('seeked', function onFirstSeek() {
+            video.removeEventListener('seeked', onFirstSeek);
+            drawFrameToCanvas(firstFrameCanvas.value, video);
+            firstFrameData.value = getFrameData(firstFrameCanvas.value);
+
+            // Capture last frame (seek to just before end)
+            video.currentTime = Math.max(0, duration.value - 0.04);
+            video.addEventListener('seeked', function onLastSeek() {
+              video.removeEventListener('seeked', onLastSeek);
+              drawFrameToCanvas(lastFrameCanvas.value, video);
+              lastFrameData.value = getFrameData(lastFrameCanvas.value);
+              compareFrames();
+              // Reset to start
+              video.currentTime = 0;
+            });
+          });
+        }
+
+        function drawFrameToCanvas(canvas, video) {
+          if (!canvas) return;
+          canvas.width = 320;
+          canvas.height = 180;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        }
+
+        function getFrameData(canvas) {
+          if (!canvas) return null;
+          const ctx = canvas.getContext('2d');
+          return ctx.getImageData(0, 0, canvas.width, canvas.height);
+        }
+
+        function compareFrames() {
+          if (!firstFrameData.value || !lastFrameData.value) return;
+          const a = firstFrameData.value.data;
+          const b = lastFrameData.value.data;
+          let diffPixels = 0;
+          const totalPixels = a.length / 4;
+          for (let i = 0; i < a.length; i += 4) {
+            const dr = Math.abs(a[i] - b[i]);
+            const dg = Math.abs(a[i + 1] - b[i + 1]);
+            const db = Math.abs(a[i + 2] - b[i + 2]);
+            const avgDiff = (dr + dg + db) / 3;
+            if (avgDiff > 30) diffPixels++;
+          }
+          frameDifference.value = diffPixels / totalPixels;
+        }
+
+        function togglePlay() {
+          if (isPlaying.value) {
+            videoEl.value.pause();
+          } else {
+            videoEl.value.play();
+          }
+          isPlaying.value = !isPlaying.value;
+        }
+
+        function restartLoop() {
+          videoEl.value.currentTime = 0;
+          videoEl.value.play();
+          isPlaying.value = true;
+        }
+
+        function onTimeUpdate() {
+          currentTime.value = videoEl.value.currentTime;
+        }
+
+        function onVideoEnded() {
+          loopCount.value++;
+        }
+
+        function updatePlaybackRate() {
+          if (videoEl.value) {
+            videoEl.value.playbackRate = playbackRate.value;
+          }
+        }
+
+        function testSeamlessLoop() {
+          if (isTestingLoop.value) {
+            isTestingLoop.value = false;
+            return;
+          }
+          isTestingLoop.value = true;
+          runSeamlessTest();
+        }
+
+        function runSeamlessTest() {
+          if (!isTestingLoop.value) return;
+          const video = videoEl.value;
+          const dur = duration.value;
+          const testDur = Math.min(testDuration.value, dur / 3);
+
+          // Play last testDur seconds
+          video.currentTime = dur - testDur;
+          video.play();
+
+          setTimeout(() => {
+            if (!isTestingLoop.value) return;
+            // Jump to first testDur seconds
+            video.currentTime = 0;
+            setTimeout(() => {
+              if (!isTestingLoop.value) return;
+              // Repeat
+              runSeamlessTest();
+            }, testDur * 1000);
+          }, testDur * 1000);
+        }
+
+        function testLoopPoint(seconds) {
+          const video = videoEl.value;
+          const dur = duration.value;
+          if (seconds >= dur) return;
+
+          // Play from loop point to end, then jump to start
+          video.currentTime = seconds;
+          video.play();
+
+          const checkEnd = setInterval(() => {
+            if (video.currentTime >= dur - 0.05 || !videoEl.value) {
+              clearInterval(checkEnd);
+              video.currentTime = 0;
+              setTimeout(() => {
+                video.pause();
+              }, seconds * 1000);
+            }
+          }, 50);
+        }
+
+        function resetVideo() {
+          if (videoUrl.value) {
+            URL.revokeObjectURL(videoUrl.value);
+          }
+          videoLoaded.value = false;
+          videoUrl.value = '';
+          fileName.value = '';
+          duration.value = 0;
+          currentTime.value = 0;
+          isPlaying.value = false;
+          isTestingLoop.value = false;
+          loopCount.value = 0;
+          frameDifference.value = null;
+          loopPoints.value = [];
+        }
+
+        return {
+          videoEl, fileInput, firstFrameCanvas, lastFrameCanvas,
+          videoLoaded, videoUrl, fileName, fileSize, dragover,
+          isPlaying, currentTime, duration, playbackRate, loopCount,
+          isTestingLoop, testDuration, loopPoints,
+          progressPct, estimatedFrames, loopStatusText, loopStatusClass,
+          frameMatchText, frameMatchClass,
+          handleDrop, handleFileSelect, onVideoLoaded, onTimeUpdate, onVideoEnded,
+          togglePlay, restartLoop, updatePlaybackRate,
+          testSeamlessLoop, testLoopPoint, resetVideo,
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
