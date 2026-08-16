@@ -15,454 +15,409 @@
   </style>
 </head>
 <body>
-  <div id="app" v-cloak class="min-h-screen flex flex-col items-center p-8">
-    <!-- Header -->
-    <div class="w-full max-w-4xl mb-8">
-      <h1 class="text-3xl font-bold text-center mb-2">Perfect Loop Checker</h1>
-      <p class="text-center text-zinc-400 text-sm">Drag & drop a video to verify it loops seamlessly</p>
+  <div id="app" v-cloak class="min-h-screen flex flex-col items-center p-6">
+    <h1 class="text-3xl font-bold mb-2">Perfect Loop Checker</h1>
+    <p class="text-zinc-400 text-sm mb-6">Drop original + retake to compare side by side, or just one to check its loop</p>
+
+    <!-- Drop Zones (shown when no videos loaded) -->
+    <div v-if="!hasAnyVideo" class="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-4">
+      <!-- Original -->
+      <div
+        class="drop-zone h-48 border-2 border-dashed border-zinc-700 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-zinc-500"
+        :class="{ dragover: dragoverOrig }"
+        @dragover.prevent="dragoverOrig = true"
+        @dragleave.prevent="dragoverOrig = false"
+        @drop.prevent="e => handleDrop(e, 'orig')"
+        @click="$refs.origInput.click()"
+      >
+        <p class="text-green-400 text-sm font-semibold mb-1">ORIGINAL</p>
+        <p class="text-zinc-400">Drop source video</p>
+        <input ref="origInput" type="file" accept="video/*" class="hidden" @change="e => handleFileSelect(e, 'orig')" />
+      </div>
+      <!-- Retake -->
+      <div
+        class="drop-zone h-48 border-2 border-dashed border-zinc-700 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-zinc-500"
+        :class="{ dragover: dragoverRetake }"
+        @dragover.prevent="dragoverRetake = true"
+        @dragleave.prevent="dragoverRetake = false"
+        @drop.prevent="e => handleDrop(e, 'retake')"
+        @click="$refs.retakeInput.click()"
+      >
+        <p class="text-indigo-400 text-sm font-semibold mb-1">RETAKE</p>
+        <p class="text-zinc-400">Drop retake video</p>
+        <input ref="retakeInput" type="file" accept="video/*" class="hidden" @change="e => handleFileSelect(e, 'retake')" />
+      </div>
     </div>
 
-    <!-- Drop Zone (shown when no video) -->
-    <div
-      v-if="!videoLoaded"
-      class="drop-zone w-full max-w-4xl h-64 border-2 border-dashed border-zinc-700 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-zinc-500"
-      @dragover.prevent="dragover = true"
-      @dragleave.prevent="dragover = false"
-      @drop.prevent="handleDrop"
-      @click="$refs.fileInput.click()"
-      :class="{ dragover }"
-    >
-      <svg class="w-12 h-12 text-zinc-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-      </svg>
-      <p class="text-zinc-400 text-lg">Drop video here or click to browse</p>
-      <p class="text-zinc-600 text-sm mt-1">MP4, WebM, MOV</p>
-      <input ref="fileInput" type="file" accept="video/*" class="hidden" @change="handleFileSelect" />
-    </div>
-
-    <!-- Main Interface (shown when video loaded) -->
-    <div v-if="videoLoaded" class="w-full max-w-6xl">
-      <!-- Video Player -->
-      <div class="relative bg-black rounded-xl overflow-hidden mb-4">
-        <video
-          ref="videoEl"
-          :src="videoUrl"
-          class="w-full max-h-[60vh]"
-          @loadedmetadata="onVideoLoaded"
-          @timeupdate="onTimeUpdate"
-          @ended="onVideoEnded"
-          loop
-          muted
-          playsinline
-        />
-        <!-- Frame markers overlay -->
-        <div v-if="duration > 0" class="absolute bottom-0 left-0 right-0 h-1 bg-zinc-800">
-          <div class="h-full bg-indigo-500" :style="{ width: progressPct + '%' }"></div>
-          <!-- First frame marker -->
-          <div class="absolute top-0 bottom-0 w-0.5 bg-green-500" style="left: 0%"></div>
-          <!-- Last frame marker -->
-          <div class="absolute top-0 bottom-0 w-0.5 bg-red-500" style="left: 100%"></div>
-          <!-- Loop point markers (if detected) -->
-          <div v-for="point in loopPoints" :key="point.time"
-            class="absolute top-0 bottom-0 w-0.5 bg-yellow-400"
-            :style="{ left: (point.time / duration * 100) + '%' }"
-            :title="point.label">
+    <!-- Main Interface -->
+    <div v-if="hasAnyVideo" class="w-full max-w-5xl">
+      <!-- Side by side videos -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <!-- Original -->
+        <div v-if="orig.loaded" class="bg-black rounded-xl overflow-hidden relative">
+          <video ref="origEl" :src="orig.url" class="w-full max-h-[40vh]" @loadedmetadata="e => onVideoLoaded(e, 'orig')" @timeupdate="e => onTimeUpdate(e, 'orig')" @ended="orig.loopCount++" loop muted playsinline />
+          <div class="absolute top-2 left-2 bg-green-600/80 px-2 py-1 rounded text-xs font-semibold">ORIGINAL</div>
+          <div v-if="orig.duration > 0" class="absolute bottom-0 left-0 right-0 h-1 bg-zinc-800">
+            <div class="h-full bg-green-500" :style="{ width: origProgress + '%' }"></div>
           </div>
+        </div>
+        <!-- Retake -->
+        <div v-if="retake.loaded" class="bg-black rounded-xl overflow-hidden relative">
+          <video ref="retakeEl" :src="retake.url" class="w-full max-h-[40vh]" @loadedmetadata="e => onVideoLoaded(e, 'retake')" @timeupdate="e => onTimeUpdate(e, 'retake')" @ended="retake.loopCount++" loop muted playsinline />
+          <div class="absolute top-2 left-2 bg-indigo-600/80 px-2 py-1 rounded text-xs font-semibold">RETAKE</div>
+          <div v-if="retake.duration > 0" class="absolute bottom-0 left-0 right-0 h-1 bg-zinc-800">
+            <div class="h-full bg-indigo-500" :style="{ width: retakeProgress + '%' }"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty slot for missing video -->
+      <div v-if="!orig.loaded || !retake.loaded" class="mb-4">
+        <div
+          v-if="!orig.loaded"
+          class="drop-zone h-24 border-2 border-dashed border-green-700 rounded-xl flex items-center justify-center cursor-pointer hover:border-green-500"
+          :class="{ dragover: dragoverOrig }"
+          @dragover.prevent="dragoverOrig = true"
+          @dragleave.prevent="dragoverOrig = false"
+          @drop.prevent="e => handleDrop(e, 'orig')"
+          @click="$refs.origInput.click()"
+        >
+          <p class="text-green-400 text-sm">+ Drop original video</p>
+          <input ref="origInput" type="file" accept="video/*" class="hidden" @change="e => handleFileSelect(e, 'orig')" />
+        </div>
+        <div
+          v-if="!retake.loaded"
+          class="drop-zone h-24 border-2 border-dashed border-indigo-700 rounded-xl flex items-center justify-center cursor-pointer hover:border-indigo-500"
+          :class="{ dragover: dragoverRetake }"
+          @dragover.prevent="dragoverRetake = true"
+          @dragleave.prevent="dragoverRetake = false"
+          @drop.prevent="e => handleDrop(e, 'retake')"
+          @click="$refs.retakeInput.click()"
+        >
+          <p class="text-indigo-400 text-sm">+ Drop retake video</p>
+          <input ref="retakeInput" type="file" accept="video/*" class="hidden" @change="e => handleFileSelect(e, 'retake')" />
+        </div>
+      </div>
+
+      <!-- Comparison Info -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <!-- Original Info -->
+        <div v-if="orig.loaded" class="bg-zinc-900 rounded-xl p-4">
+          <h3 class="text-sm font-semibold text-green-400 mb-2">Original</h3>
+          <div class="text-sm space-y-1">
+            <div class="flex justify-between"><span class="text-zinc-500">Duration:</span><span class="font-mono">{{ orig.duration.toFixed(3) }}s</span></div>
+            <div class="flex justify-between"><span class="text-zinc-500">Frames:</span><span class="font-mono">{{ orig.estimatedFrames }}</span></div>
+            <div class="flex justify-between"><span class="text-zinc-500">Loop diff:</span><span :class="origDiffClass">{{ origDiffText }}</span></div>
+            <div class="flex justify-between"><span class="text-zinc-500">Loops:</span><span class="font-mono">{{ orig.loopCount }}x</span></div>
+            <div class="flex justify-between"><span class="text-zinc-500">File:</span><span class="font-mono text-xs truncate ml-2">{{ orig.fileName }}</span></div>
+          </div>
+        </div>
+        <!-- Retake Info -->
+        <div v-if="retake.loaded" class="bg-zinc-900 rounded-xl p-4">
+          <h3 class="text-sm font-semibold text-indigo-400 mb-2">Retake</h3>
+          <div class="text-sm space-y-1">
+            <div class="flex justify-between"><span class="text-zinc-500">Duration:</span><span class="font-mono">{{ retake.duration.toFixed(3) }}s</span></div>
+            <div class="flex justify-between"><span class="text-zinc-500">Frames:</span><span class="font-mono">{{ retake.estimatedFrames }}</span></div>
+            <div class="flex justify-between"><span class="text-zinc-500">Loop diff:</span><span :class="retakeDiffClass">{{ retakeDiffText }}</span></div>
+            <div class="flex justify-between"><span class="text-zinc-500">Loops:</span><span class="font-mono">{{ retake.loopCount }}x</span></div>
+            <div class="flex justify-between"><span class="text-zinc-500">File:</span><span class="font-mono text-xs truncate ml-2">{{ retake.fileName }}</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Comparison verdict -->
+      <div v-if="orig.loaded && retake.loaded" class="bg-zinc-900 rounded-xl p-4 mb-4">
+        <h3 class="text-sm font-semibold text-zinc-400 mb-2">Comparison</h3>
+        <div class="text-sm space-y-1">
+          <div class="flex justify-between"><span class="text-zinc-500">Frame diff:</span><span :class="frameDiffClass">{{ frameDiffText }}</span></div>
+          <div class="flex justify-between"><span class="text-zinc-500">Duration diff:</span><span class="font-mono">{{ Math.abs(orig.duration - retake.duration).toFixed(3) }}s {{ durationMatch ? '✓' : '✗' }}</span></div>
+          <div class="flex justify-between"><span class="text-zinc-500">Verdict:</span><span :class="verdictClass" class="font-bold">{{ verdict }}</span></div>
         </div>
       </div>
 
       <!-- Controls -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <!-- Playback Controls -->
-        <div class="bg-zinc-900 rounded-xl p-4">
-          <h3 class="text-sm font-semibold text-zinc-400 mb-3">Playback</h3>
-          <div class="flex items-center gap-3">
-            <button @click="togglePlay" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-medium text-sm">
-              {{ isPlaying ? 'Pause' : 'Play' }}
-            </button>
-            <button @click="restartLoop" class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg font-medium text-sm">
-              Restart
-            </button>
-            <span class="text-zinc-400 text-sm font-mono">{{ currentTime.toFixed(2) }}s / {{ duration.toFixed(2) }}s</span>
-          </div>
-          <div class="mt-3">
-            <label class="text-xs text-zinc-500">Playback speed: {{ playbackRate }}x</label>
-            <input type="range" min="0.25" max="2" step="0.25" v-model.number="playbackRate" @input="updatePlaybackRate"
-              class="w-full mt-1" />
-          </div>
-        </div>
-
-        <!-- Loop Analysis -->
-        <div class="bg-zinc-900 rounded-xl p-4">
-          <h3 class="text-sm font-semibold text-zinc-400 mb-3">Loop Analysis</h3>
-          <div class="space-y-2 text-sm">
-            <div class="flex justify-between">
-              <span class="text-zinc-500">Duration:</span>
-              <span class="font-mono">{{ duration.toFixed(3) }}s</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-zinc-500">Frames (est):</span>
-              <span class="font-mono">{{ estimatedFrames }}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-zinc-500">Loop status:</span>
-              <span :class="loopStatusClass" class="font-semibold">{{ loopStatusText }}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-zinc-500">Loop count:</span>
-              <span class="font-mono">{{ loopCount }}x</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Seamless Loop Test -->
-      <div class="bg-zinc-900 rounded-xl p-4 mb-4">
-        <h3 class="text-sm font-semibold text-zinc-400 mb-3">Seamless Loop Test</h3>
-        <p class="text-xs text-zinc-500 mb-3">
-          This test plays the last 1 second, then immediately jumps to the first 1 second.
-          If the transition is invisible, your loop is perfect.
-        </p>
-        <div class="flex items-center gap-3">
-          <button @click="testSeamlessLoop" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg font-medium text-sm">
-            {{ isTestingLoop ? 'Stop Test' : 'Run Seamless Test' }}
-          </button>
-          <button @click="testLoopPoint(0.5)" class="px-3 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">
-            Test at 0.5s
-          </button>
-          <button @click="testLoopPoint(1.0)" class="px-3 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">
-            Test at 1.0s
-          </button>
-          <button @click="testLoopPoint(2.0)" class="px-3 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">
-            Test at 2.0s
-          </button>
-        </div>
-        <div v-if="isTestingLoop" class="mt-3 text-sm text-purple-400">
-          ⏳ Playing last {{ testDuration }}s → first {{ testDuration }}s repeatedly...
-        </div>
-      </div>
-
-      <!-- Frame Comparison -->
-      <div class="bg-zinc-900 rounded-xl p-4 mb-4">
-        <h3 class="text-sm font-semibold text-zinc-400 mb-3">First / Last Frame Comparison</h3>
-        <p class="text-xs text-zinc-500 mb-3">
-          Visual comparison of the first and last frames. If they match, the loop is seamless.
-        </p>
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <p class="text-xs text-green-500 mb-1">First Frame</p>
-            <canvas ref="firstFrameCanvas" class="w-full bg-black rounded-lg"></canvas>
-          </div>
-          <div>
-            <p class="text-xs text-red-500 mb-1">Last Frame</p>
-            <canvas ref="lastFrameCanvas" class="w-full bg-black rounded-lg"></canvas>
-          </div>
-        </div>
-        <div class="mt-3 text-center">
-          <span :class="frameMatchClass" class="text-sm font-semibold">{{ frameMatchText }}</span>
-        </div>
-      </div>
-
-      <!-- File Info -->
-      <div class="bg-zinc-900 rounded-xl p-4 mb-4">
-        <h3 class="text-sm font-semibold text-zinc-400 mb-2">File Info</h3>
-        <div class="text-sm text-zinc-300 space-y-1">
-          <p>Name: <span class="font-mono text-zinc-400">{{ fileName }}</span></p>
-          <p>Size: <span class="font-mono text-zinc-400">{{ fileSize }}</span></p>
-        </div>
-      </div>
-
-      <!-- Load New Video -->
-      <div class="text-center">
-        <button @click="resetVideo" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm">
-          Load Different Video
+      <div class="flex items-center gap-3 mb-4 flex-wrap">
+        <button @click="togglePlayAll" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-medium text-sm">
+          {{ isPlaying ? 'Pause All' : 'Play All' }}
         </button>
+        <button @click="restartAll" class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg font-medium text-sm">
+          Restart All
+        </button>
+        <button @click="testSeamlessLoop" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg font-medium text-sm">
+          {{ isTestingLoop ? 'Stop Test' : 'Seamless Test' }}
+        </button>
+        <button @click="resetAll" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm ml-auto">
+          Reset
+        </button>
+      </div>
+
+      <!-- Speed -->
+      <div class="mb-4">
+        <label class="text-xs text-zinc-500">Playback speed: {{ playbackRate }}x</label>
+        <input type="range" min="0.25" max="2" step="0.25" v-model.number="playbackRate" @input="updatePlaybackRate" class="w-full mt-1" />
+      </div>
+
+      <!-- Frame comparisons -->
+      <div v-if="orig.loaded || retake.loaded" class="bg-zinc-900 rounded-xl p-4 mb-4">
+        <h3 class="text-sm font-semibold text-zinc-400 mb-3">First / Last Frame Comparison</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <template v-if="orig.loaded">
+            <div>
+              <p class="text-xs text-green-500 mb-1">Orig First</p>
+              <canvas ref="origFirstCanvas" class="w-full bg-black rounded"></canvas>
+            </div>
+            <div>
+              <p class="text-xs text-red-500 mb-1">Orig Last</p>
+              <canvas ref="origLastCanvas" class="w-full bg-black rounded"></canvas>
+            </div>
+          </template>
+          <template v-if="retake.loaded">
+            <div>
+              <p class="text-xs text-green-500 mb-1">Retake First</p>
+              <canvas ref="retakeFirstCanvas" class="w-full bg-black rounded"></canvas>
+            </div>
+            <div>
+              <p class="text-xs text-red-500 mb-1">Retake Last</p>
+              <canvas ref="retakeLastCanvas" class="w-full bg-black rounded"></canvas>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <div v-if="isTestingLoop" class="bg-purple-950/30 border border-purple-800 rounded-xl p-3 mb-4 text-sm text-purple-300">
+        Playing last 1s → first 1s repeatedly on all loaded videos.
       </div>
     </div>
   </div>
 
   <script>
-    const { createApp, ref, computed, onMounted, watch, nextTick } = Vue;
+    const { createApp, ref, computed, nextTick } = Vue;
+
+    function makeVideoState() {
+      return {
+        loaded: false, url: '', fileName: '', duration: 0,
+        currentTime: 0, loopCount: 0, frameDiff: null,
+        estimatedFrames: 0,
+      };
+    }
 
     createApp({
       setup() {
-        const videoEl = ref(null);
-        const fileInput = ref(null);
-        const firstFrameCanvas = ref(null);
-        const lastFrameCanvas = ref(null);
+        const origEl = ref(null);
+        const retakeEl = ref(null);
+        const origInput = ref(null);
+        const retakeInput = ref(null);
+        const origFirstCanvas = ref(null);
+        const origLastCanvas = ref(null);
+        const retakeFirstCanvas = ref(null);
+        const retakeLastCanvas = ref(null);
 
-        const videoLoaded = ref(false);
-        const videoUrl = ref('');
-        const fileName = ref('');
-        const fileSizeBytes = ref(0);
-        const dragover = ref(false);
+        const orig = ref(makeVideoState());
+        const retake = ref(makeVideoState());
+        const dragoverOrig = ref(false);
+        const dragoverRetake = ref(false);
         const isPlaying = ref(false);
-        const currentTime = ref(0);
-        const duration = ref(0);
         const playbackRate = ref(1);
-        const loopCount = ref(0);
         const isTestingLoop = ref(false);
-        const testDuration = ref(1);
-        const loopPoints = ref([]);
-        const firstFrameData = ref(null);
-        const lastFrameData = ref(null);
-        const frameDifference = ref(null);
 
-        const progressPct = computed(() => {
-          if (duration.value === 0) return 0;
-          return (currentTime.value / duration.value) * 100;
-        });
+        const hasAnyVideo = computed(() => orig.value.loaded || retake.value.loaded);
+        const origProgress = computed(() => orig.value.duration === 0 ? 0 : (orig.value.currentTime / orig.value.duration) * 100);
+        const retakeProgress = computed(() => retake.value.duration === 0 ? 0 : (retake.value.currentTime / retake.value.duration) * 100);
 
-        const estimatedFrames = computed(() => {
-          // Estimate at 24fps
-          return Math.round(duration.value * 24);
-        });
-
-        const fileSize = computed(() => {
-          const bytes = fileSizeBytes.value;
-          if (bytes < 1024) return bytes + ' B';
-          if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-          return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-        });
-
-        const loopStatusText = computed(() => {
-          if (duration.value === 0) return '—';
-          // Check if duration is close to a multiple of 5 seconds (5s loop)
-          const loopsAt5s = duration.value / 5;
-          const isNearMultiple = Math.abs(loopsAt5s - Math.round(loopsAt5s)) < 0.1;
-          if (isNearMultiple) {
-            return `✓ ${Math.round(loopsAt5s)}x 5s loop (${duration.value.toFixed(1)}s)`;
-          }
-          // Check if duration is close to a multiple of 4 seconds
-          const loopsAt4s = duration.value / 4;
-          const isNearMultiple4 = Math.abs(loopsAt4s - Math.round(loopsAt4s)) < 0.1;
-          if (isNearMultiple4) {
-            return `✓ ${Math.round(loopsAt4s)}x 4s loop (${duration.value.toFixed(1)}s)`;
-          }
-          return `${duration.value.toFixed(1)}s (custom)`;
-        });
-
-        const loopStatusClass = computed(() => {
-          if (duration.value === 0) return 'text-zinc-500';
-          const loopsAt5s = duration.value / 5;
-          if (Math.abs(loopsAt5s - Math.round(loopsAt5s)) < 0.1) return 'text-green-400';
-          return 'text-yellow-400';
-        });
-
-        const frameMatchText = computed(() => {
-          if (frameDifference.value === null) return 'Click "Run Seamless Test" to compare';
-          const diff = frameDifference.value;
-          if (diff < 0.02) return `✓ Perfect match (${(diff * 100).toFixed(1)}% difference)`;
-          if (diff < 0.05) return `~ Good match (${(diff * 100).toFixed(1)}% difference)`;
-          if (diff < 0.15) return `⚠ Noticeable difference (${(diff * 100).toFixed(1)}%)`;
-          return `✗ Poor match (${(diff * 100).toFixed(1)}% difference)`;
-        });
-
-        const frameMatchClass = computed(() => {
-          if (frameDifference.value === null) return 'text-zinc-500';
-          const diff = frameDifference.value;
-          if (diff < 0.02) return 'text-green-400';
-          if (diff < 0.05) return 'text-green-400';
-          if (diff < 0.15) return 'text-yellow-400';
+        function diffText(d) {
+          if (d === null) return '—';
+          if (d < 0.02) return `${(d*100).toFixed(1)}% ✓`;
+          if (d < 0.05) return `${(d*100).toFixed(1)}% ✓`;
+          if (d < 0.15) return `${(d*100).toFixed(1)}% ⚠`;
+          return `${(d*100).toFixed(1)}% ✗`;
+        }
+        function diffClass(d) {
+          if (d === null) return 'text-zinc-500';
+          if (d < 0.05) return 'text-green-400';
+          if (d < 0.15) return 'text-yellow-400';
           return 'text-red-400';
+        }
+
+        const origDiffText = computed(() => diffText(orig.value.frameDiff));
+        const origDiffClass = computed(() => diffClass(orig.value.frameDiff));
+        const retakeDiffText = computed(() => diffText(retake.value.frameDiff));
+        const retakeDiffClass = computed(() => diffClass(retake.value.frameDiff));
+
+        const frameDiffText = computed(() => {
+          if (!orig.value.loaded || !retake.value.loaded) return '—';
+          const d = Math.abs(orig.value.estimatedFrames - retake.value.estimatedFrames);
+          return d === 0 ? '0 frames ✓ Match' : `${d} frames ✗ Mismatch`;
+        });
+        const frameDiffClass = computed(() => {
+          if (!orig.value.loaded || !retake.value.loaded) return 'text-zinc-500';
+          return Math.abs(orig.value.estimatedFrames - retake.value.estimatedFrames) <= 1 ? 'text-green-400' : 'text-red-400';
         });
 
-        function handleDrop(e) {
-          dragover.value = false;
+        const durationMatch = computed(() => {
+          if (!orig.value.loaded || !retake.value.loaded) return false;
+          return Math.abs(orig.value.duration - retake.value.duration) < 0.2;
+        });
+
+        const verdict = computed(() => {
+          if (!orig.value.loaded || !retake.value.loaded) return '—';
+          const frameOk = Math.abs(orig.value.estimatedFrames - retake.value.estimatedFrames) <= 1;
+          const durOk = durationMatch.value;
+          return frameOk && durOk ? 'PASS ✓' : 'FAIL ✗';
+        });
+        const verdictClass = computed(() => verdict.value.startsWith('PASS') ? 'text-green-400' : 'text-red-400');
+
+        function handleDrop(e, which) {
+          if (which === 'orig') dragoverOrig.value = false;
+          else dragoverRetake.value = false;
           const file = e.dataTransfer.files[0];
-          if (file && file.type.startsWith('video/')) {
-            loadVideo(file);
-          }
+          if (file && file.type.startsWith('video/')) loadVideo(file, which);
         }
 
-        function handleFileSelect(e) {
+        function handleFileSelect(e, which) {
           const file = e.target.files[0];
-          if (file) {
-            loadVideo(file);
-          }
+          if (file) loadVideo(file, which);
         }
 
-        function loadVideo(file) {
-          if (videoUrl.value) {
-            URL.revokeObjectURL(videoUrl.value);
-          }
-          videoUrl.value = URL.createObjectURL(file);
-          fileName.value = file.name;
-          fileSizeBytes.value = file.size;
-          videoLoaded.value = true;
-          loopCount.value = 0;
-          frameDifference.value = null;
-          loopPoints.value = [];
+        function loadVideo(file, which) {
+          const state = which === 'orig' ? orig.value : retake.value;
+          if (state.url) URL.revokeObjectURL(state.url);
+          state.url = URL.createObjectURL(file);
+          state.fileName = file.name;
+          state.loaded = true;
+          state.loopCount = 0;
+          state.frameDiff = null;
+          state.duration = 0;
+          state.estimatedFrames = 0;
         }
 
-        function onVideoLoaded() {
-          duration.value = videoEl.value.duration;
-          // Capture first and last frames
-          nextTick(() => {
-            captureFrames();
-          });
+        function onVideoLoaded(e, which) {
+          const state = which === 'orig' ? orig.value : retake.value;
+          state.duration = e.target.duration;
+          state.estimatedFrames = Math.round(e.target.duration * 24);
+          nextTick(() => captureFrames(which));
         }
 
-        function captureFrames() {
-          const video = videoEl.value;
+        function onTimeUpdate(e, which) {
+          const state = which === 'orig' ? orig.value : retake.value;
+          state.currentTime = e.target.currentTime;
+        }
+
+        function captureFrames(which) {
+          const video = which === 'orig' ? origEl.value : retakeEl.value;
           if (!video) return;
+          const firstCanvas = which === 'orig' ? origFirstCanvas.value : retakeFirstCanvas.value;
+          const lastCanvas = which === 'orig' ? origLastCanvas.value : retakeLastCanvas.value;
+          const state = which === 'orig' ? orig.value : retake.value;
 
-          // Capture first frame
           video.currentTime = 0;
-          video.addEventListener('seeked', function onFirstSeek() {
-            video.removeEventListener('seeked', onFirstSeek);
-            drawFrameToCanvas(firstFrameCanvas.value, video);
-            firstFrameData.value = getFrameData(firstFrameCanvas.value);
+          video.addEventListener('seeked', function onFirst() {
+            video.removeEventListener('seeked', onFirst);
+            drawFrame(firstCanvas, video);
+            const firstData = getFrameData(firstCanvas);
 
-            // Capture last frame (seek to just before end)
-            video.currentTime = Math.max(0, duration.value - 0.04);
-            video.addEventListener('seeked', function onLastSeek() {
-              video.removeEventListener('seeked', onLastSeek);
-              drawFrameToCanvas(lastFrameCanvas.value, video);
-              lastFrameData.value = getFrameData(lastFrameCanvas.value);
-              compareFrames();
-              // Reset to start
+            video.currentTime = Math.max(0, state.duration - 0.04);
+            video.addEventListener('seeked', function onLast() {
+              video.removeEventListener('seeked', onLast);
+              drawFrame(lastCanvas, video);
+              const lastData = getFrameData(lastCanvas);
+              state.frameDiff = compareFrames(firstData, lastData);
               video.currentTime = 0;
             });
           });
         }
 
-        function drawFrameToCanvas(canvas, video) {
+        function drawFrame(canvas, video) {
           if (!canvas) return;
-          canvas.width = 320;
-          canvas.height = 180;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          canvas.width = 160;
+          canvas.height = 90;
+          canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
         }
 
         function getFrameData(canvas) {
           if (!canvas) return null;
-          const ctx = canvas.getContext('2d');
-          return ctx.getImageData(0, 0, canvas.width, canvas.height);
+          return canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
         }
 
-        function compareFrames() {
-          if (!firstFrameData.value || !lastFrameData.value) return;
-          const a = firstFrameData.value.data;
-          const b = lastFrameData.value.data;
-          let diffPixels = 0;
-          const totalPixels = a.length / 4;
-          for (let i = 0; i < a.length; i += 4) {
-            const dr = Math.abs(a[i] - b[i]);
-            const dg = Math.abs(a[i + 1] - b[i + 1]);
-            const db = Math.abs(a[i + 2] - b[i + 2]);
-            const avgDiff = (dr + dg + db) / 3;
-            if (avgDiff > 30) diffPixels++;
+        function compareFrames(a, b) {
+          if (!a || !b) return null;
+          const ad = a.data, bd = b.data;
+          let diff = 0;
+          const total = ad.length / 4;
+          for (let i = 0; i < ad.length; i += 4) {
+            const avg = (Math.abs(ad[i]-bd[i]) + Math.abs(ad[i+1]-bd[i+1]) + Math.abs(ad[i+2]-bd[i+2])) / 3;
+            if (avg > 30) diff++;
           }
-          frameDifference.value = diffPixels / totalPixels;
+          return diff / total;
         }
 
-        function togglePlay() {
+        function togglePlayAll() {
           if (isPlaying.value) {
-            videoEl.value.pause();
+            if (origEl.value) origEl.value.pause();
+            if (retakeEl.value) retakeEl.value.pause();
           } else {
-            videoEl.value.play();
+            if (origEl.value) origEl.value.play();
+            if (retakeEl.value) retakeEl.value.play();
           }
           isPlaying.value = !isPlaying.value;
         }
 
-        function restartLoop() {
-          videoEl.value.currentTime = 0;
-          videoEl.value.play();
+        function restartAll() {
+          if (origEl.value) { origEl.value.currentTime = 0; origEl.value.play(); }
+          if (retakeEl.value) { retakeEl.value.currentTime = 0; retakeEl.value.play(); }
           isPlaying.value = true;
         }
 
-        function onTimeUpdate() {
-          currentTime.value = videoEl.value.currentTime;
-        }
-
-        function onVideoEnded() {
-          loopCount.value++;
-        }
-
         function updatePlaybackRate() {
-          if (videoEl.value) {
-            videoEl.value.playbackRate = playbackRate.value;
-          }
+          if (origEl.value) origEl.value.playbackRate = playbackRate.value;
+          if (retakeEl.value) retakeEl.value.playbackRate = playbackRate.value;
         }
 
         function testSeamlessLoop() {
-          if (isTestingLoop.value) {
-            isTestingLoop.value = false;
-            return;
-          }
+          if (isTestingLoop.value) { isTestingLoop.value = false; return; }
           isTestingLoop.value = true;
           runSeamlessTest();
         }
 
         function runSeamlessTest() {
           if (!isTestingLoop.value) return;
-          const video = videoEl.value;
-          const dur = duration.value;
-          const testDur = Math.min(testDuration.value, dur / 3);
+          const states = [];
+          if (orig.value.loaded && origEl.value) states.push({ v: origEl.value, d: orig.value.duration });
+          if (retake.value.loaded && retakeEl.value) states.push({ v: retakeEl.value, d: retake.value.duration });
+          if (states.length === 0) { isTestingLoop.value = false; return; }
 
-          // Play last testDur seconds
-          video.currentTime = dur - testDur;
-          video.play();
+          const minDur = Math.min(...states.map(s => s.d));
+          const t = Math.min(1, minDur / 3);
 
+          states.forEach(s => { s.v.currentTime = s.d - t; s.v.play(); });
           setTimeout(() => {
             if (!isTestingLoop.value) return;
-            // Jump to first testDur seconds
-            video.currentTime = 0;
+            states.forEach(s => { s.v.currentTime = 0; });
             setTimeout(() => {
               if (!isTestingLoop.value) return;
-              // Repeat
               runSeamlessTest();
-            }, testDur * 1000);
-          }, testDur * 1000);
+            }, t * 1000);
+          }, t * 1000);
         }
 
-        function testLoopPoint(seconds) {
-          const video = videoEl.value;
-          const dur = duration.value;
-          if (seconds >= dur) return;
-
-          // Play from loop point to end, then jump to start
-          video.currentTime = seconds;
-          video.play();
-
-          const checkEnd = setInterval(() => {
-            if (video.currentTime >= dur - 0.05 || !videoEl.value) {
-              clearInterval(checkEnd);
-              video.currentTime = 0;
-              setTimeout(() => {
-                video.pause();
-              }, seconds * 1000);
-            }
-          }, 50);
-        }
-
-        function resetVideo() {
-          if (videoUrl.value) {
-            URL.revokeObjectURL(videoUrl.value);
-          }
-          videoLoaded.value = false;
-          videoUrl.value = '';
-          fileName.value = '';
-          duration.value = 0;
-          currentTime.value = 0;
+        function resetAll() {
+          if (orig.value.url) URL.revokeObjectURL(orig.value.url);
+          if (retake.value.url) URL.revokeObjectURL(retake.value.url);
+          orig.value = makeVideoState();
+          retake.value = makeVideoState();
           isPlaying.value = false;
           isTestingLoop.value = false;
-          loopCount.value = 0;
-          frameDifference.value = null;
-          loopPoints.value = [];
         }
 
         return {
-          videoEl, fileInput, firstFrameCanvas, lastFrameCanvas,
-          videoLoaded, videoUrl, fileName, fileSize, dragover,
-          isPlaying, currentTime, duration, playbackRate, loopCount,
-          isTestingLoop, testDuration, loopPoints,
-          progressPct, estimatedFrames, loopStatusText, loopStatusClass,
-          frameMatchText, frameMatchClass,
-          handleDrop, handleFileSelect, onVideoLoaded, onTimeUpdate, onVideoEnded,
-          togglePlay, restartLoop, updatePlaybackRate,
-          testSeamlessLoop, testLoopPoint, resetVideo,
+          origEl, retakeEl, origInput, retakeInput,
+          origFirstCanvas, origLastCanvas, retakeFirstCanvas, retakeLastCanvas,
+          orig, retake, dragoverOrig, dragoverRetake,
+          isPlaying, playbackRate, isTestingLoop,
+          hasAnyVideo, origProgress, retakeProgress,
+          origDiffText, origDiffClass, retakeDiffText, retakeDiffClass,
+          frameDiffText, frameDiffClass, durationMatch, verdict, verdictClass,
+          handleDrop, handleFileSelect, onVideoLoaded, onTimeUpdate,
+          togglePlayAll, restartAll, updatePlaybackRate, testSeamlessLoop, resetAll,
         };
       }
     }).mount('#app');
