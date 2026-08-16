@@ -20,7 +20,7 @@ Usage:
     uv run python scripts/preflight_check.py --target local
 
     # Full check against RunPod endpoint
-    uv run python scripts/preflight_check.py --target runpod --endpoint-id taea2mhlwbdkuq
+    uv run python scripts/preflight_check.py --target runpod --endpoint-id $RUNPOD_ENDPOINT_ID
 
     # Static + model checks only (no ComfyUI needed)
     uv run python scripts/preflight_check.py --skip-node-types --skip-custom-nodes --skip-dry-run --skip-runpod

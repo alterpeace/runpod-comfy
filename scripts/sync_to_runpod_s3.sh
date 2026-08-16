@@ -15,7 +15,7 @@
 # Environment (set in .env or export):
 #   RUNPOD_S3_ENDPOINT   e.g. https://s3api-us-ca-2.runpod.io
 #   RUNPOD_S3_REGION     e.g. us-ca-2
-#   RUNPOD_S3_BUCKET     e.g. el6aj9vatl
+#   RUNPOD_S3_BUCKET     e.g. your-volume-id
 # =============================================================================
 
 set -euo pipefail
@@ -31,7 +31,7 @@ fi
 
 ENDPOINT="${RUNPOD_S3_ENDPOINT:-https://s3api-us-ca-2.runpod.io}"
 REGION="${RUNPOD_S3_REGION:-us-ca-2}"
-BUCKET="${RUNPOD_S3_BUCKET:-el6aj9vatl}"
+BUCKET="${RUNPOD_S3_BUCKET:-your-volume-id}"
 MODELS_DIR="${COMFY_DATA_DIR:-./.local}/models"
 NODES_DIR="${COMFY_DATA_DIR:-./.local}/custom_nodes"
 

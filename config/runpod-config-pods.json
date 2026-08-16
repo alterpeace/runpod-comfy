@@ -1,6 +1,6 @@
 {
   "name": "comfyui-pods",
-  "image": "ghcr.io/alterpeace/runpod-comfy:latest",
+  "image": "ghcr.io/${GITHUB_USERNAME:-alterpeace}/runpod-comfy:latest",
   "gpu_type_id": "NVIDIA RTX A4000",
   "container_disk_in_gb": 50,
   "volume_in_gb": 100,

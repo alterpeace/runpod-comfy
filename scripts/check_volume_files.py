@@ -17,7 +17,7 @@ import json
 import time
 
 runpod.api_key = os.environ['RUNPOD_API_KEY']
-endpoint = runpod.Endpoint('taea2mhlwbdkuq')
+endpoint = runpod.Endpoint(os.environ.get('RUNPOD_ENDPOINT_ID', 'taea2mhlwbdkuq'))
 
 # Inline manifest with bogus repo — if file exists, [skip]; if not, [FAIL]
 inline_manifest = {
