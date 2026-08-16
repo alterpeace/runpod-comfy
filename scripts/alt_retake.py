@@ -41,6 +41,7 @@ Usage:
 import argparse
 import json
 import os
+import random
 import subprocess
 import sys
 import time
@@ -332,6 +333,22 @@ Communities for LTX prompt engineering:
         "--fps", type=int, default=24,
         help="Frame rate for input loading and output encoding (default: 24)",
     )
+    parser.add_argument(
+        "--random-seeds", action="store_true",
+        help="Use random seeds instead of the fixed defaults (latent space exploration)",
+    )
+    parser.add_argument(
+        "--seed-sweep", type=int, default=0,
+        help="Test N seeds per variation (e.g. --seed-sweep 3 = 3 random seeds × 5 variations = 15 jobs)",
+    )
+    parser.add_argument(
+        "--seed-min", type=int, default=1,
+        help="Minimum seed value for random generation (default: 1)",
+    )
+    parser.add_argument(
+        "--seed-max", type=int, default=999999,
+        help="Maximum seed value for random generation (default: 999999)",
+    )
     args = parser.parse_args()
 
     runpod.api_key = os.environ["RUNPOD_API_KEY"]
@@ -364,15 +381,37 @@ Communities for LTX prompt engineering:
     else:
         print(f"Frames: all (frame_load_cap=0)")
     print(f"Naming: al7/qtrtime/al7_<name>-<NN>_<params>_<timestamp>.mp4")
-    print(f"\nGenerating {len(VARIATIONS)} alt retake variations...\n")
 
-    results = []
+    # Build the job list: (variation, seed) pairs
+    # Default: 1 seed per variation (the fixed default)
+    # --random-seeds: 1 random seed per variation
+    # --seed-sweep N: N random seeds per variation
+    jobs_list = []
+    sweep_count = args.seed_sweep if args.seed_sweep > 0 else 1
+    use_random = args.random_seeds or args.seed_sweep > 0
+
     for i, var in enumerate(VARIATIONS):
         prompt_num = i + 1
+        if use_random:
+            for _ in range(sweep_count):
+                seed = random.randint(args.seed_min, args.seed_max)
+                v = dict(var)
+                v["seed"] = seed
+                jobs_list.append((v, prompt_num))
+        else:
+            jobs_list.append((var, prompt_num))
+
+    total_jobs = len(jobs_list)
+    mode = "seed sweep" if args.seed_sweep > 0 else "random seeds" if use_random else "fixed seeds"
+    print(f"Mode: {mode} ({total_jobs} jobs total)")
+    print(f"\nGenerating {total_jobs} alt retake variations...\n")
+
+    results = []
+    for idx, (var, prompt_num) in enumerate(jobs_list):
         params_token = encode_params(var["seed"], var["denoise"], var["lora_strength"])
         prefix_preview = build_filename_prefix(var, prompt_num)
 
-        print(f"[{i+1}/{len(VARIATIONS)}] {var['name']}")
+        print(f"[{idx+1}/{total_jobs}] {var['name']} (seed={var['seed']})")
         print(f"  Params: {params_token} (seed={var['seed']}, denoise={var['denoise']}, lora={var['lora_strength']})")
         print(f"  Output: {prefix_preview}_00001.mp4")
         print(f"  Prompt: {var['prompt'][:100]}...")
@@ -464,7 +503,7 @@ Communities for LTX prompt engineering:
         print(f"  {status_icon} {r['variation']:12s} {r.get('params', '?'):12s}  {r.get('prefix', '?')}")
 
     success_count = sum(1 for r in results if r["status"] == "success")
-    print(f"\n{success_count}/{len(VARIATIONS)} variations generated successfully")
+    print(f"\n{success_count}/{total_jobs} variations generated successfully")
     print(f"\nDownload outputs:")
     print(f"  uv run python scripts/sync_outputs.py <local_output_dir>")
     print(f"\nList outputs:")
