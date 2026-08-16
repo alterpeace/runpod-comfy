@@ -124,13 +124,13 @@ VARIATIONS = [
     {
         "name": "obsidian",
         "seed": 1337,
-        "denoise": 0.4,
+        "denoise": 0.3,
         "lora_strength": 0.5,
         "prompt": (
-            f"psychedelic, fractal patterns, morphing geometry, kaleidoscopic, "
-            f"neon glow, dramatic shadows, high contrast, "
-            f"rain, fog, smoke, particles, glossy surfaces, iridescent, "
-            f"hypnotic, flowing organic shapes, {BASE_VISUALS}"
+            f"high contrast, neon glow, dramatic shadows, "
+            f"glossy black surfaces, reflective, "
+            f"dark tones with electric highlights, "
+            f"sharp edges, geometric, {BASE_VISUALS}"
         ),
     },
     {
@@ -148,14 +148,13 @@ VARIATIONS = [
     {
         "name": "nebula",
         "seed": 2718,
-        "denoise": 0.4,
+        "denoise": 0.3,
         "lora_strength": 1.0,
         "prompt": (
-            f"nebula clouds, cosmic dust, gravitational lensing, "
-            f"deep space colors, ultraviolet, infrared, "
-            f"star fields, light trails, wormhole, "
-            f"dark background, glowing particles, volumetric light, "
-            f"fluid dynamics, swirling, {BASE_VISUALS}"
+            f"deep blue and purple tones, ultraviolet glow, "
+            f"dark background with luminous highlights, "
+            f"swirling textures, fluid motion, "
+            f"star-like sparkles, ethereal, {BASE_VISUALS}"
         ),
     },
     {
