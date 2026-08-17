@@ -9,12 +9,11 @@ Videos must already be on the RunPod volume at /runpod-volume/input/<path>.
 
 Outputs use a structured, token-based filename:
 
-    al7/al7_<variation>-<prompt_num>_<params>_<version>.mp4
+    al7/al7_<variation>_<params>_<version>.mp4
 
 Where:
   - al7              = project code (alterpeace LTX 2.5)
   - <variation>      = variation name (e.g. "velour", "obsidian")
-  - <prompt_num>     = 2-digit prompt variant number (01-99)
   - <params>          = compact parameter encoding (see below)
   - <version>        = timestamp-based version ID (YYYYMMDD_hhmmss)
 
@@ -27,16 +26,20 @@ Parameters are encoded as a single alphanumeric token:
 Where denoise and lora are encoded as 2-digit integers (value × 10):
   - denoise 0.3 → d03
   - denoise 0.4 → d04
-  - lora 1.0    → l10
   - lora 0.5    → l05
+  - lora 1.0    → l10
 
-Example: s42d03l10 = seed 42, denoise 0.3, lora 1.0
+Example: s42d03l05 = seed 42, denoise 0.3, lora 0.5
 
 Usage:
     set -a && source .env && set +a
     uv run python scripts/invoke/alt_retake.py --video rhizome.mp4
     uv run python scripts/invoke/alt_retake.py --video sample/clip_26-06-11_17-52-52_00007.mp4
     uv run python scripts/invoke/alt_retake.py --video sample/clip_26-06-11_17-52-54_00002.mp4 --dry-run
+
+    # Parameter sweep — test denoise and lora_strength combinations
+    uv run python scripts/invoke/alt_retake.py --video rhizome.mp4 \\
+        --denoise-sweep 0.2,0.3,0.5 --lora-sweep 0.3,0.5,0.7
 """
 import argparse
 import json
@@ -111,18 +114,6 @@ BASE_VISUALS = (
 
 VARIATIONS = [
     {
-        "name": "velour",
-        "seed": 42,
-        "denoise": 0.3,
-        "lora_strength": 1.0,
-        "prompt": (
-            f"cinematic, film noir, golden hour lighting, natural sunlight, "
-            f"dramatic shadows, film grain, anamorphic lens flare, shallow depth of field, "
-            f"smooth metal textures, vibrant color palette, "
-            f"professional cinematography, {BASE_VISUALS}"
-        ),
-    },
-    {
         "name": "obsidian",
         "seed": 1337,
         "denoise": 0.3,
@@ -135,32 +126,8 @@ VARIATIONS = [
         ),
     },
     {
-        "name": "halcyon",
-        "seed": 8080,
-        "denoise": 0.3,
-        "lora_strength": 1.0,
-        "prompt": (
-            f"sacred geometry, mandala, infinite zoom, "
-            f"experimental film, arthouse, volumetric fog, "
-            f"dust, particles, natural sunlight, worn fabric textures, "
-            f"muted color palette, particle systems, {BASE_VISUALS}"
-        ),
-    },
-    {
-        "name": "nebula",
-        "seed": 2718,
-        "denoise": 0.3,
-        "lora_strength": 1.0,
-        "prompt": (
-            f"deep blue and purple tones, ultraviolet glow, "
-            f"dark background with luminous highlights, "
-            f"swirling textures, fluid motion, "
-            f"star-like sparkles, ethereal, {BASE_VISUALS}"
-        ),
-    },
-    {
         "name": "mirage",
-        "seed": 31415,
+        "seed": 36963,
         "denoise": 0.3,
         "lora_strength": 0.5,
         "prompt": (
@@ -180,7 +147,7 @@ def encode_params(seed: int, denoise: float, lora: float) -> str:
     Format: s<seed>d<DD>l<LL>
     Where DD = denoise × 10 (2 digits), LL = lora × 10 (2 digits)
 
-    Example: s42d03l10 = seed 42, denoise 0.3, lora 1.0
+    Example: s42d03l05 = seed 42, denoise 0.3, lora 0.5
     """
     d = int(denoise * 10)
     l = int(lora * 10)
@@ -233,13 +200,13 @@ def get_source_frame_count(video_path: str) -> int | None:
     return None
 
 
-def build_filename_prefix(variation: dict, prompt_num: int = 1, subdir: str = "qtrtime") -> str:
+def build_filename_prefix(variation: dict, subdir: str = "qtrtime") -> str:
     """Build the VFX-style filename prefix for ComfyUI output.
 
-    Format: al7/<subdir>/al7_<name>-<NN>_<params>_<version>
+    Format: al7/<subdir>/al7_<name>_<params>_<version>
 
-    The MP4 goes to: al7/qtrtime/al7_velour-01_s42d03l10_20260816_192200_00001.mp4
-    The PNG goes to: al7/qtrtime/images/al7_velour-01_s42d03l10_20260816_192200_00001.png
+    The MP4 goes to: al7/qtrtime/al7_velour_s42d03l05_20260816_192200_00001.mp4
+    The PNG goes to: al7/qtrtime/images/al7_velour_s42d03l05_20260816_192200_00001.png
 
     ComfyUI's VHS_VideoCombine will append _00001.mp4 etc. to this prefix.
     Directories are created automatically by ComfyUI if they don't exist.
@@ -251,10 +218,10 @@ def build_filename_prefix(variation: dict, prompt_num: int = 1, subdir: str = "q
         variation["lora_strength"],
     )
     version = generate_version_id()
-    return f"al7/{subdir}/al7_{name}-{prompt_num:02d}_{params}_{version}"
+    return f"al7/{subdir}/al7_{name}_{params}_{version}"
 
 
-def generate_variation(endpoint, workflow, video_path, variation, prompt_num=1,
+def generate_variation(endpoint, workflow, video_path, variation,
                        frame_count=0, fps=24):
     """Generate a single variation using direct path reference (no upload).
 
@@ -280,7 +247,7 @@ def generate_variation(endpoint, workflow, video_path, variation, prompt_num=1,
     wf["20"]["inputs"]["frame_rate"] = fps
 
     # Set VFX-style filename prefix for video
-    prefix = build_filename_prefix(variation, prompt_num)
+    prefix = build_filename_prefix(variation)
     wf["20"]["inputs"]["filename_prefix"] = prefix
     # Use custom h264-al7 format with embedded artist metadata
     wf["20"]["inputs"]["format"] = "video/h264-al7"
@@ -302,11 +269,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Filename format:
-  al7/al7_<name>-<NN>_<params>_<version>.mp4
+  al7/al7_<name>_<params>_<version>.mp4
 
-  Example: al7/al7_velour-01_s42d03l10_20260816_192200_00001.mp4
+  Example: al7/al7_velour_s42d03l05_20260816_192200_00001.mp4
 
-  Params: s42d03l10 = seed 42, denoise 0.3, lora 1.0
+  Params: s42d03l05 = seed 42, denoise 0.3, lora 0.5
 
 Communities for LTX prompt engineering:
   - ComfyUI Discord (#ltx-video)
@@ -349,6 +316,16 @@ Communities for LTX prompt engineering:
         "--seed-max", type=int, default=999999,
         help="Maximum seed value for random generation (default: 999999)",
     )
+    parser.add_argument(
+        "--denoise-sweep", type=str, default=None,
+        help="Comma-separated denoise values to sweep (e.g. --denoise-sweep 0.2,0.3,0.5). "
+             "Creates a cartesian product with variations and --lora-sweep if set.",
+    )
+    parser.add_argument(
+        "--lora-sweep", type=str, default=None,
+        help="Comma-separated lora_strength values to sweep (e.g. --lora-sweep 0.3,0.5,0.7). "
+             "Creates a cartesian product with variations and --denoise-sweep if set.",
+    )
     args = parser.parse_args()
 
     runpod.api_key = os.environ["RUNPOD_API_KEY"]
@@ -380,36 +357,68 @@ Communities for LTX prompt engineering:
         print(f"Frames: {frame_count} (~{duration_est:.1f}s @ {args.fps}fps)")
     else:
         print(f"Frames: all (frame_load_cap=0)")
-    print(f"Naming: al7/qtrtime/al7_<name>-<NN>_<params>_<timestamp>.mp4")
+    print(f"Naming: al7/qtrtime/al7_<name>_<params>_<timestamp>.mp4")
 
-    # Build the job list: (variation, seed) pairs
-    # Default: 1 seed per variation (the fixed default)
+    # Parse parameter sweep values
+    denoise_values = None
+    lora_values = None
+    if args.denoise_sweep:
+        denoise_values = [float(x.strip()) for x in args.denoise_sweep.split(",")]
+    if args.lora_sweep:
+        lora_values = [float(x.strip()) for x in args.lora_sweep.split(",")]
+
+    # Build the job list
+    # Default: 1 job per variation (fixed seed, fixed denoise/lora from VARIATIONS)
     # --random-seeds: 1 random seed per variation
     # --seed-sweep N: N random seeds per variation
+    # --denoise-sweep / --lora-sweep: cartesian product of (variation × denoise × lora)
+    #   If only one sweep is set, the other uses the variation's default value
     jobs_list = []
     sweep_count = args.seed_sweep if args.seed_sweep > 0 else 1
     use_random = args.random_seeds or args.seed_sweep > 0
 
-    for i, var in enumerate(VARIATIONS):
-        prompt_num = i + 1
-        if use_random:
-            for _ in range(sweep_count):
-                seed = random.randint(args.seed_min, args.seed_max)
-                v = dict(var)
-                v["seed"] = seed
-                jobs_list.append((v, prompt_num))
-        else:
-            jobs_list.append((var, prompt_num))
+    for var in VARIATIONS:
+        # Determine the parameter grid for this variation
+        d_values = denoise_values if denoise_values else [var["denoise"]]
+        l_values = lora_values if lora_values else [var["lora_strength"]]
+
+        for d in d_values:
+            for l in l_values:
+                if use_random:
+                    for _ in range(sweep_count):
+                        seed = random.randint(args.seed_min, args.seed_max)
+                        v = dict(var)
+                        v["seed"] = seed
+                        v["denoise"] = d
+                        v["lora_strength"] = l
+                        jobs_list.append(v)
+                else:
+                    v = dict(var)
+                    v["denoise"] = d
+                    v["lora_strength"] = l
+                    jobs_list.append(v)
 
     total_jobs = len(jobs_list)
-    mode = "seed sweep" if args.seed_sweep > 0 else "random seeds" if use_random else "fixed seeds"
+    # Build mode description
+    mode_parts = []
+    if args.seed_sweep > 0:
+        mode_parts.append(f"seed sweep ×{sweep_count}")
+    elif use_random:
+        mode_parts.append("random seeds")
+    else:
+        mode_parts.append("fixed seeds")
+    if denoise_values:
+        mode_parts.append(f"denoise sweep {denoise_values}")
+    if lora_values:
+        mode_parts.append(f"lora sweep {lora_values}")
+    mode = " + ".join(mode_parts)
     print(f"Mode: {mode} ({total_jobs} jobs total)")
     print(f"\nGenerating {total_jobs} alt retake variations...\n")
 
     results = []
-    for idx, (var, prompt_num) in enumerate(jobs_list):
+    for idx, var in enumerate(jobs_list):
         params_token = encode_params(var["seed"], var["denoise"], var["lora_strength"])
-        prefix_preview = build_filename_prefix(var, prompt_num)
+        prefix_preview = build_filename_prefix(var)
 
         print(f"[{idx+1}/{total_jobs}] {var['name']} (seed={var['seed']})")
         print(f"  Params: {params_token} (seed={var['seed']}, denoise={var['denoise']}, lora={var['lora_strength']})")
@@ -423,7 +432,7 @@ Communities for LTX prompt engineering:
 
         # Generate — direct path reference, no upload
         job, prefix = generate_variation(
-            endpoint, workflow, args.video, var, prompt_num,
+            endpoint, workflow, args.video, var,
             frame_count=frame_count, fps=args.fps,
         )
         print(f"  Job: {job.job_id}")
