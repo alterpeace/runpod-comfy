@@ -49,7 +49,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Load .env
-env_file = Path(__file__).parent.parent / ".env"
+env_file = Path(__file__).parent.parent.parent / ".env"
 if env_file.exists():
     for line in env_file.read_text().splitlines():
         line = line.strip()
@@ -64,7 +64,7 @@ except ImportError:
     print("ERROR: runpod SDK not installed. Run: uv sync")
     sys.exit(1)
 
-DEFAULT_WORKFLOW = Path(__file__).parent.parent / "examples" / "ltx25_v2v_redetail_entry_runpod.json"
+DEFAULT_WORKFLOW = Path(__file__).parent.parent.parent / "examples" / "ltx25_v2v_redetail_entry_runpod.json"
 
 # ---------------------------------------------------------------------------
 # Negative Prompt — comprehensive exclusion list

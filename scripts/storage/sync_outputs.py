@@ -26,7 +26,7 @@ def main():
     args = parser.parse_args()
 
     # Load .env
-    env_file = Path(__file__).parent.parent / ".env"
+    env_file = Path(__file__).parent.parent.parent / ".env"
     if env_file.exists():
         for line in env_file.read_text().splitlines():
             line = line.strip()

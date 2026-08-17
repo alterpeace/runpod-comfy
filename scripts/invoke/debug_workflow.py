@@ -50,7 +50,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 # Auto-activate project venv if running with system Python
-_PROJECT_ROOT = Path(__file__).parent.parent
+_PROJECT_ROOT = Path(__file__).parent.parent.parent
 _VENV_PYTHON = _PROJECT_ROOT / ".venv" / "bin" / "python"
 if _VENV_PYTHON.exists() and sys.executable != str(_VENV_PYTHON):
     os.execv(str(_VENV_PYTHON), [str(_VENV_PYTHON)] + sys.argv)

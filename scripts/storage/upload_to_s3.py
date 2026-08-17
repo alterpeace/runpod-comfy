@@ -52,7 +52,7 @@ import sys
 from pathlib import Path
 
 # Make src/ importable when run as a standalone script.
-PROJECT_DIR = Path(__file__).resolve().parent.parent
+PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
 
 from src.storage_s3 import S3StorageClient, S3StorageError  # noqa: E402
