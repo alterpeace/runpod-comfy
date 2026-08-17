@@ -25,7 +25,7 @@ uv run python scripts/storage/purge_outputs.py --prefix output/
 uv run python scripts/storage/upload_to_volume.py <folder> --subfolder <name> --sync-timeout 600
 
 
-# Fire-and-forget: submit all jobs, save IDs, exit immediately
+# Fire-and-forget
 uv run python scripts/invoke/alt_retake.py \
     --batch-dir <folder> \
     --variation obsidian \
@@ -42,7 +42,7 @@ uv run python scripts/invoke/alt_retake.py \
     --video rhizome.mp4 \
     --variation obsidian
 
-# Submit all 3,075 clips × 1 variation = 3,075 jobs
+# FnF
 uv run python scripts/invoke/alt_retake.py \
     --batch-dir <folder> \
     --variation obsidian \

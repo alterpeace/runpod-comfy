@@ -263,11 +263,12 @@ def generate_variation(endpoint, workflow, video_path, variation,
     return job, prefix
 
 
-def collect_batch_videos(batch_dir, extensions=(".mp4", ".mov", ".avi", ".mkv", ".webm")):
+def collect_batch_videos(batch_dir, volume_prefix="", extensions=(".mp4", ".mov", ".avi", ".mkv", ".webm")):
     """Collect all video files from a local directory for batch processing.
 
-    Returns list of relative paths (relative to batch_dir) suitable for
-    referencing on the RunPod volume.
+    Returns list of paths suitable for referencing on the RunPod volume.
+    If volume_prefix is set (e.g. "swa_aliens"), paths are prefixed with it
+    so they match the volume path (e.g. "swa_aliens/clip_001.mp4").
     """
     base = Path(batch_dir)
     if not base.is_dir():
@@ -277,9 +278,11 @@ def collect_batch_videos(batch_dir, extensions=(".mp4", ".mov", ".avi", ".mkv", 
     videos = []
     for f in sorted(base.rglob("*")):
         if f.is_file() and f.suffix.lower() in extensions:
-            # Use relative path for volume reference
             rel = f.relative_to(base)
-            videos.append(str(rel))
+            if volume_prefix:
+                videos.append(f"{volume_prefix}/{rel}")
+            else:
+                videos.append(str(rel))
     return videos
 
 
@@ -511,6 +514,7 @@ Communities for LTX prompt engineering:
     )
     parser.add_argument("--video", default=None, help="Video path on volume (e.g. rhizome.mp4 or sample/clip_001.mp4)")
     parser.add_argument("--batch-dir", default=None, help="Local directory of videos to batch process (all videos will be submitted)")
+    parser.add_argument("--volume-prefix", default="", help="Prefix to prepend to volume paths (e.g. 'swa_aliens' so paths become 'swa_aliens/clip_001.mp4')")
     parser.add_argument("--workflow", type=Path, default=DEFAULT_WORKFLOW)
     parser.add_argument("--endpoint-id", default=os.environ.get("RUNPOD_ENDPOINT_ID", "taea2mhlwbdkuq"))
     parser.add_argument("--timeout", type=int, default=600)
@@ -590,7 +594,7 @@ Communities for LTX prompt engineering:
 
     # ---- Collect video paths ----
     if args.batch_dir:
-        videos = collect_batch_videos(args.batch_dir)
+        videos = collect_batch_videos(args.batch_dir, volume_prefix=args.volume_prefix)
         if not videos:
             print(f"ERROR: No video files found in {args.batch_dir}")
             sys.exit(1)
