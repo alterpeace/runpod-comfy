@@ -263,6 +263,164 @@ def generate_variation(endpoint, workflow, video_path, variation,
     return job, prefix
 
 
+def collect_batch_videos(batch_dir, extensions=(".mp4", ".mov", ".avi", ".mkv", ".webm")):
+    """Collect all video files from a local directory for batch processing.
+
+    Returns list of relative paths (relative to batch_dir) suitable for
+    referencing on the RunPod volume.
+    """
+    base = Path(batch_dir)
+    if not base.is_dir():
+        print(f"ERROR: Not a directory: {batch_dir}")
+        sys.exit(1)
+
+    videos = []
+    for f in sorted(base.rglob("*")):
+        if f.is_file() and f.suffix.lower() in extensions:
+            # Use relative path for volume reference
+            rel = f.relative_to(base)
+            videos.append(str(rel))
+    return videos
+
+
+def submit_fire_and_forget(endpoint, workflow, videos, jobs_list, frame_count, fps, jobs_file):
+    """Submit all jobs without waiting, save tracking info to JSON.
+
+    Args:
+        videos: List of video paths on the volume
+        jobs_list: List of variation dicts (one per variation/param combo)
+        frame_count: Frame count to use (0 = all)
+        fps: Frame rate
+        jobs_file: Path to save job tracking JSON
+
+    Returns:
+        Number of jobs submitted
+    """
+    submitted = []
+    total = len(videos) * len(jobs_list)
+    count = 0
+
+    for video_path in videos:
+        for var in jobs_list:
+            count += 1
+            params_token = encode_params(var["seed"], var["denoise"], var["lora_strength"])
+            prefix = build_filename_prefix(var)
+
+            print(f"[{count}/{total}] {video_path} × {var['name']} (seed={var['seed']})")
+
+            job, prefix = generate_variation(
+                endpoint, workflow, video_path, var,
+                frame_count=frame_count, fps=fps,
+            )
+
+            submitted.append({
+                "job_id": job.job_id,
+                "video": video_path,
+                "variation": var["name"],
+                "seed": var["seed"],
+                "denoise": var["denoise"],
+                "lora_strength": var["lora_strength"],
+                "params": params_token,
+                "prefix": prefix,
+                "status": "submitted",
+                "submitted_at": datetime.now().isoformat(),
+            })
+            print(f"  Job: {job.job_id}")
+
+    # Save to JSON file
+    with open(jobs_file, "w") as f:
+        json.dump({
+            "submitted_at": datetime.now().isoformat(),
+            "endpoint_id": endpoint.endpoint_id if hasattr(endpoint, "endpoint_id") else "unknown",
+            "total_jobs": len(submitted),
+            "jobs": submitted,
+        }, f, indent=2)
+
+    print(f"\n{'='*70}")
+    print(f"SUBMITTED {len(submitted)} JOBS (fire-and-forget mode)")
+    print(f"{'='*70}")
+    print(f"Jobs file: {jobs_file}")
+    print(f"\nCheck status later with:")
+    print(f"  uv run python scripts/invoke/alt_retake.py --check-jobs --jobs-file {jobs_file}")
+    print(f"\nDownload outputs:")
+    print(f"  uv run python scripts/storage/sync_outputs.py <local_dir>")
+    return len(submitted)
+
+
+def check_jobs_status(jobs_file, endpoint):
+    """Check status of previously submitted fire-and-forget jobs.
+
+    Reads the jobs JSON file, checks each job's status, and prints a summary.
+    Updates the JSON file with current statuses.
+    """
+    with open(jobs_file) as f:
+        data = json.load(f)
+
+    jobs = data.get("jobs", [])
+    if not jobs:
+        print("No jobs found in file.")
+        return
+
+    print(f"{'='*70}")
+    print(f"CHECKING {len(jobs)} JOBS from {jobs_file}")
+    print(f"{'='*70}\n")
+
+    results = []
+    completed = 0
+    failed = 0
+    in_progress = 0
+
+    for i, job_info in enumerate(jobs):
+        job_id = job_info["job_id"]
+        job = endpoint.jobs(job_id)
+
+        status = job.status()
+        elapsed = ""
+
+        if status in ["IN_QUEUE", "IN_PROGRESS"]:
+            in_progress += 1
+            icon = "⏳"
+        elif status == "COMPLETED":
+            output = job.output()
+            if output and output.get("status") == "success":
+                completed += 1
+                icon = "✅"
+                job_info["status"] = "success"
+            else:
+                failed += 1
+                icon = "❌"
+                error = output.get("error", "unknown") if output else "no output"
+                job_info["status"] = "failed"
+                job_info["error"] = str(error)[:200]
+        else:
+            failed += 1
+            icon = "❌"
+            job_info["status"] = f"failed ({status})"
+
+        job_info["checked_at"] = datetime.now().isoformat()
+        results.append(job_info)
+
+        print(f"  {icon} [{i+1}/{len(jobs)}] {job_id} {job_info['video']} × {job_info['variation']} → {status}")
+
+    # Update the JSON file with current statuses
+    data["jobs"] = results
+    data["last_checked"] = datetime.now().isoformat()
+    with open(jobs_file, "w") as f:
+        json.dump(data, f, indent=2)
+
+    print(f"\n{'='*70}")
+    print(f"SUMMARY: {completed} completed, {in_progress} in progress, {failed} failed")
+    print(f"{'='*70}")
+
+    if in_progress > 0:
+        print(f"\n{in_progress} jobs still running. Check again later:")
+        print(f"  uv run python scripts/invoke/alt_retake.py --check-jobs --jobs-file {jobs_file}")
+
+    if completed > 0:
+        print(f"\nDownload completed outputs:")
+        print(f"  uv run python scripts/storage/sync_outputs.py <local_dir>")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate creative variations for music visuals with VFX-style naming",
@@ -275,6 +433,11 @@ Filename format:
 
   Params: s42d03l05 = seed 42, denoise 0.3, lora 0.5
 
+Modes:
+  Synchronous (default):  Submit jobs and wait for completion
+  Fire-and-forget:        Submit all jobs, save IDs, exit immediately
+  Check jobs:             Check status of previously submitted jobs
+
 Communities for LTX prompt engineering:
   - ComfyUI Discord (#ltx-video)
   - r/comfyui, r/StableDiffusion
@@ -283,11 +446,24 @@ Communities for LTX prompt engineering:
   - X/Twitter: #LTX #ComfyUI
         """,
     )
-    parser.add_argument("--video", required=True, help="Video path on volume (e.g. rhizome.mp4 or sample/clip_001.mp4)")
+    parser.add_argument("--video", default=None, help="Video path on volume (e.g. rhizome.mp4 or sample/clip_001.mp4)")
+    parser.add_argument("--batch-dir", default=None, help="Local directory of videos to batch process (all videos will be submitted)")
     parser.add_argument("--workflow", type=Path, default=DEFAULT_WORKFLOW)
     parser.add_argument("--endpoint-id", default=os.environ.get("RUNPOD_ENDPOINT_ID", "taea2mhlwbdkuq"))
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--fire-and-forget", action="store_true",
+        help="Submit all jobs without waiting, save job IDs to --jobs-file, exit immediately",
+    )
+    parser.add_argument(
+        "--check-jobs", action="store_true",
+        help="Check status of previously submitted fire-and-forget jobs",
+    )
+    parser.add_argument(
+        "--jobs-file", type=str, default="alt_retake_jobs.json",
+        help="JSON file for tracking fire-and-forget jobs (default: alt_retake_jobs.json)",
+    )
     parser.add_argument(
         "--variation", type=str, default=None,
         help="Comma-separated variation names to run (e.g. --variation obsidian or --variation obsidian,mirage). "
@@ -336,24 +512,48 @@ Communities for LTX prompt engineering:
     runpod.api_key = os.environ["RUNPOD_API_KEY"]
     endpoint = runpod.Endpoint(args.endpoint_id)
 
+    # ---- Mode: Check jobs (fire-and-forget status check) ----
+    if args.check_jobs:
+        check_jobs_status(args.jobs_file, endpoint)
+        return
+
+    # ---- Validate input: need either --video or --batch-dir ----
+    if not args.video and not args.batch_dir:
+        print("ERROR: Must specify either --video or --batch-dir")
+        print("  --video rhizome.mp4           Process a single video")
+        print("  --batch-dir /path/to/clips/   Process all videos in a directory")
+        print("  --check-jobs                  Check status of previous fire-and-forget jobs")
+        sys.exit(1)
+
+    # ---- Collect video paths ----
+    if args.batch_dir:
+        videos = collect_batch_videos(args.batch_dir)
+        if not videos:
+            print(f"ERROR: No video files found in {args.batch_dir}")
+            sys.exit(1)
+        print(f"Batch directory: {args.batch_dir}")
+        print(f"Found {len(videos)} videos")
+    else:
+        videos = [args.video]
+
     # Load workflow
     with open(args.workflow) as f:
         workflow = json.load(f)
 
-    # Auto-detect source frame count
+    # Auto-detect source frame count (use first video for detection)
     frame_count = args.frame_count
-    if args.match_frames and frame_count == 0:
-        detected = get_source_frame_count(args.video)
+    if args.match_frames and frame_count == 0 and videos:
+        detected = get_source_frame_count(videos[0])
         if detected:
             frame_count = detected
-            print(f"Source: {args.video} ({frame_count} frames detected)")
+            print(f"Source: {videos[0]} ({frame_count} frames detected)")
         else:
-            print(f"Source: {args.video} (frame count unknown — will load all frames)")
+            print(f"Source: {videos[0]} (frame count unknown — will load all frames)")
             frame_count = 0  # 0 = load all
     elif frame_count > 0:
-        print(f"Source: {args.video} (using --frame-count {frame_count})")
+        print(f"Source: {videos[0]} (using --frame-count {frame_count})")
     else:
-        print(f"Source: {args.video} (will load all frames)")
+        print(f"Source: {videos[0]} (will load all frames)")
 
     duration_est = frame_count / args.fps if frame_count > 0 else 0
     print(f"Workflow: {args.workflow}")
@@ -431,30 +631,55 @@ Communities for LTX prompt engineering:
     if lora_values:
         mode_parts.append(f"lora sweep {lora_values}")
     mode = " + ".join(mode_parts)
-    print(f"Mode: {mode} ({total_jobs} jobs total)")
-    print(f"\nGenerating {total_jobs} alt retake variations...\n")
+    total_with_videos = total_jobs * len(videos)
+    print(f"Mode: {mode} ({total_jobs} variations × {len(videos)} videos = {total_with_videos} jobs total)")
+
+    # ---- Fire-and-forget mode: submit all, save IDs, exit ----
+    if args.fire_and_forget:
+        if args.dry_run:
+            print(f"\nDRY RUN — would submit {total_with_videos} jobs in fire-and-forget mode")
+            for v in videos[:5]:
+                for var in jobs_list:
+                    params_token = encode_params(var["seed"], var["denoise"], var["lora_strength"])
+                    print(f"  {v} × {var['name']} ({params_token})")
+            if len(videos) > 5:
+                print(f"  ... and {len(videos) - 5} more videos")
+            return
+
+        print(f"\nSubmitting {total_with_videos} jobs (fire-and-forget)...\n")
+        submit_fire_and_forget(
+            endpoint, workflow, videos, jobs_list,
+            frame_count, args.fps, args.jobs_file,
+        )
+        return
+
+    # ---- Synchronous mode: submit and wait for each job ----
+    print(f"\nGenerating {total_with_videos} alt retake variations...\n")
 
     results = []
-    for idx, var in enumerate(jobs_list):
-        params_token = encode_params(var["seed"], var["denoise"], var["lora_strength"])
-        prefix_preview = build_filename_prefix(var)
+    job_idx = 0
+    for video_path in videos:
+        for var in jobs_list:
+            job_idx += 1
+            params_token = encode_params(var["seed"], var["denoise"], var["lora_strength"])
+            prefix_preview = build_filename_prefix(var)
 
-        print(f"[{idx+1}/{total_jobs}] {var['name']} (seed={var['seed']})")
-        print(f"  Params: {params_token} (seed={var['seed']}, denoise={var['denoise']}, lora={var['lora_strength']})")
-        print(f"  Output: {prefix_preview}_00001.mp4")
-        print(f"  Prompt: {var['prompt'][:100]}...")
+            print(f"[{job_idx}/{total_with_videos}] {video_path} × {var['name']} (seed={var['seed']})")
+            print(f"  Params: {params_token} (seed={var['seed']}, denoise={var['denoise']}, lora={var['lora_strength']})")
+            print(f"  Output: {prefix_preview}_00001.mp4")
+            print(f"  Prompt: {var['prompt'][:100]}...")
 
-        if args.dry_run:
-            print("  (dry run — skipping generation)")
-            results.append({"variation": var["name"], "status": "dry_run", "prefix": prefix_preview, "params": params_token})
-            continue
+            if args.dry_run:
+                print("  (dry run — skipping generation)")
+                results.append({"variation": var["name"], "video": video_path, "status": "dry_run", "prefix": prefix_preview, "params": params_token})
+                continue
 
-        # Generate — direct path reference, no upload
-        job, prefix = generate_variation(
-            endpoint, workflow, args.video, var,
-            frame_count=frame_count, fps=args.fps,
-        )
-        print(f"  Job: {job.job_id}")
+            # Generate — direct path reference, no upload
+            job, prefix = generate_variation(
+                endpoint, workflow, video_path, var,
+                frame_count=frame_count, fps=args.fps,
+            )
+            print(f"  Job: {job.job_id}")
 
         start = time.time()
         while job.status() in ["IN_QUEUE", "IN_PROGRESS"]:
