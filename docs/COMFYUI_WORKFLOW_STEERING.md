@@ -187,10 +187,10 @@ job = endpoint.run({
 
 ```bash
 set -a && source .env && set +a
-uv run python scripts/invoke_v2v_with_upload.py --video rhizome.mp4
+uv run python scripts/invoke/invoke_v2v_with_upload.py --video rhizome.mp4
 ```
 
-See [`scripts/invoke_v2v_with_upload.py`](../scripts/invoke_v2v_with_upload.py).
+See [`scripts/invoke/invoke_v2v_with_upload.py`](../scripts/invoke/invoke_v2v_with_upload.py).
 
 ### Diagnostic commands (when available)
 
@@ -224,24 +224,24 @@ job = endpoint.run({
 
 ```bash
 # Start mock RunPod server
-uv run python scripts/mock_runpod_server.py
+uv run python scripts/build/mock_runpod_server.py
 
 # Test workflow
-uv run python scripts/test_local.sh
+uv run python scripts/build/test_local.sh
 ```
 
 ### Using the debug workflow script
 
 ```bash
 # Validate workflow structure without submitting
-uv run python scripts/debug_workflow.py --workflow examples/ltx25_v2v_redetail_24gb_runpod.json --dry-run
+uv run python scripts/invoke/debug_workflow.py --workflow examples/ltx25_v2v_redetail_24gb_runpod.json --dry-run
 ```
 
 ### Using the preflight check
 
 ```bash
 # Check models, nodes, and workflow validity
-uv run python scripts/preflight_check.py
+uv run python scripts/diag/preflight_check.py
 ```
 
 ---
@@ -283,10 +283,10 @@ Workflow fails?
 | Model manifest | [`config/ltx-2.5-models.json`](../config/ltx-2.5-models.json) | Model download config |
 | Gemma config | [`config/gemma4-12b-ltx-2.5/`](../config/gemma4-12b-ltx-2.5/) | Tokenizer files |
 | Example workflows | [`examples/`](../examples/) | LTX-2.3/2.5 workflow JSONs |
-| V2V invocation | [`scripts/invoke_v2v.py`](../scripts/invoke_v2v.py) | Submit V2V workflow |
-| V2V with upload | [`scripts/invoke_v2v_with_upload.py`](../scripts/invoke_v2v_with_upload.py) | Submit with video upload |
-| Debug workflow | [`scripts/debug_workflow.py`](../scripts/debug_workflow.py) | Validate workflow |
-| Preflight check | [`scripts/preflight_check.py`](../scripts/preflight_check.py) | Pre-deployment checks |
+| V2V invocation | [`scripts/invoke/invoke_v2v.py`](../scripts/invoke/invoke_v2v.py) | Submit V2V workflow |
+| V2V with upload | [`scripts/invoke/invoke_v2v_with_upload.py`](../scripts/invoke/invoke_v2v_with_upload.py) | Submit with video upload |
+| Debug workflow | [`scripts/invoke/debug_workflow.py`](../scripts/invoke/debug_workflow.py) | Validate workflow |
+| Preflight check | [`scripts/diag/preflight_check.py`](../scripts/diag/preflight_check.py) | Pre-deployment checks |
 | RunPod steering | [`docs/RUNPOD_STEERING.md`](RUNPOD_STEERING.md) | RunPod CLI/MCP/handler guide |
 | Serverless deploy | [`docs/SERVERLESS_DEPLOY.md`](SERVERLESS_DEPLOY.md) | Deployment guide |
 | LTX-2.5 setup | [`docs/LTX_2.5_SETUP.md`](LTX_2.5_SETUP.md) | Model setup guide |

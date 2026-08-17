@@ -19,7 +19,7 @@ ssh root@<POD_IP> -p <SSH_PORT>
 
 # 3. Run your commands inside the pod
 export HF_TOKEN=hf_...
-./scripts/install_ltx25.sh --profile mid_vram_24gb
+./scripts/models/install_ltx25.sh --profile mid_vram_24gb
 
 # 4. Exit SSH
 exit
@@ -90,14 +90,14 @@ You're now inside the container. The workspace is at `/workspace`, ComfyUI is at
 ```bash
 cd /workspace
 export HF_TOKEN=hf_your_token_here
-./scripts/install_ltx25.sh --profile mid_vram_24gb
+./scripts/models/install_ltx25.sh --profile mid_vram_24gb
 ```
 
 Models land in `/runpod-volume/models/` and persist after the pod is terminated.
 
 #### Download LTX-2.3 models:
 ```bash
-./scripts/install_ltx23.sh --profile mid_vram_12_24gb
+./scripts/models/install_ltx23.sh --profile mid_vram_12_24gb
 ```
 
 #### Access the ComfyUI WebUI:
@@ -110,14 +110,14 @@ ssh -L 8188:127.0.0.1:8188 root@<POD_IP> -p <SSH_PORT>
 
 Or use the tunnel script:
 ```bash
-./scripts/tunnel_webui.sh <POD_IP> <SSH_PORT>
+./scripts/build/tunnel_webui.sh <POD_IP> <SSH_PORT>
 ```
 
 #### Install custom nodes:
 ```bash
-./scripts/install_ltx25.sh --skip-models  # nodes only
+./scripts/models/install_ltx25.sh --skip-models  # nodes only
 # or
-./scripts/update_custom_nodes.sh
+./scripts/build/update_custom_nodes.sh
 ```
 
 ### Step 5 — Exit SSH

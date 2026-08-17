@@ -17,14 +17,14 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts" / "invoke"))
 
 # Import the debug_workflow module
 import importlib.util
 
 spec = importlib.util.spec_from_file_location(
     "debug_workflow",
-    Path(__file__).parent.parent / "scripts" / "debug_workflow.py"
+    Path(__file__).parent.parent / "scripts" / "invoke" / "debug_workflow.py"
 )
 debug_workflow = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(debug_workflow)

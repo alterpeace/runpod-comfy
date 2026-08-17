@@ -105,17 +105,17 @@ Complete record of debugging, fixes, and improvements made during this session.
 - `ltx25_animatediff_restyle_comfortable.json` — AnimateDiff restyle, 48GB
 
 ### Scripts Created
-- `scripts/diagnose_worker.py` — Send diagnostic commands to worker
-- `scripts/invoke_v2v_with_upload.py` — V2V with video upload via input_files
-- `scripts/invoke_v2v.py` — V2V workflow invocation
-- `scripts/fix_input_symlink.py` — Create input symlinks via download_models
-- `scripts/check_volume_files.py` — Verify files on worker FUSE mount
-- `scripts/check_comfyui_input.py` — Verify symlinks in /comfyui/input/
-- `scripts/patch_gemma_int8.py` — Patch embeddings_connector.py (strict=False)
-- `scripts/patch_gemma_dequant.py` — Patch with dequantization logic
-- `scripts/patch_and_restart.py` — Patch and restart ComfyUI
-- `scripts/sync_outputs.py` — Sync S3 outputs to local directory
-- `scripts/list_s3.py` — List S3 volume as tree with sizes
+- `scripts/diag/diagnose_worker.py` — Send diagnostic commands to worker
+- `scripts/invoke/invoke_v2v_with_upload.py` — V2V with video upload via input_files
+- `scripts/invoke/invoke_v2v.py` — V2V workflow invocation
+- `scripts/diag/fix_input_symlink.py` — Create input symlinks via download_models
+- `scripts/diag/check_volume_files.py` — Verify files on worker FUSE mount
+- `scripts/diag/check_comfyui_input.py` — Verify symlinks in /comfyui/input/
+- `scripts/diag/patch_gemma_int8.py` — Patch embeddings_connector.py (strict=False)
+- `scripts/diag/patch_gemma_dequant.py` — Patch with dequantization logic
+- `scripts/diag/patch_and_restart.py` — Patch and restart ComfyUI
+- `scripts/storage/sync_outputs.py` — Sync S3 outputs to local directory
+- `scripts/storage/list_s3.py` — List S3 volume as tree with sizes
 
 ### Documentation Created
 - `docs/STEERING_RULES.md` — 12 project rules for AI agents
@@ -172,7 +172,7 @@ Complete record of debugging, fixes, and improvements made during this session.
 
 2. **Download and integrate turbo LoRA** — `TheDivergentAI/ltx25-turbo-distill-lora` (r128 variant) for faster generation (4 steps instead of 8)
 
-3. **Rebuild and push Docker image** — All fixes are in code but the deployed image is stale. Rebuild with `./scripts/build.sh --username alterpeace --push` to bake in all entrypoint/handler changes permanently.
+3. **Rebuild and push Docker image** — All fixes are in code but the deployed image is stale. Rebuild with `./scripts/build/build.sh --username alterpeace --push` to bake in all entrypoint/handler changes permanently.
 
 4. **Create keyframe interpolation workflow** — Using `LTXVImgToVideoConditionOnly` to interpolate between keyframes for slow-motion effects
 

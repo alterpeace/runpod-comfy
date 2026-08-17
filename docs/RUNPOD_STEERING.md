@@ -208,8 +208,8 @@ via an `action` field in the job input:
 - **Creative debugging without SSH:** The `download_models` action's
   `inline_manifest` + `symlink_target` feature can be exploited to create
   symlinks and check file existence on the worker (see
-  [`scripts/fix_input_symlink.py`](../scripts/fix_input_symlink.py) and
-  [`scripts/check_volume_files.py`](../scripts/check_volume_files.py))
+  [`scripts/diag/fix_input_symlink.py`](../scripts/diag/fix_input_symlink.py) and
+  [`scripts/diag/check_volume_files.py`](../scripts/diag/check_volume_files.py))
 
 ### Key lessons from this project
 
@@ -320,7 +320,7 @@ The docs MCP server lets AI agents search RunPod documentation:
 |---|---|---|
 | Serverless endpoint ID | `taea2mhlwbdkuq` | `.env` → `RUNPOD_ENDPOINT_ID` |
 | Network volume ID | `el6aj9vatl` | `.env` |
-| Docker image | `ghcr.io/alterpeace/runpod-comfy:latest` | `scripts/build.sh` |
+| Docker image | `ghcr.io/alterpeace/runpod-comfy:latest` | `scripts/build/build.sh` |
 | Handler | [`src/handler.py`](../src/handler.py) | Serverless entry point |
 | Entrypoint | [`entrypoint.sh`](../entrypoint.sh) | Container boot script |
 | Models config | [`config/ltx-2.5-models.json`](../config/ltx-2.5-models.json) | Model manifest |
@@ -337,7 +337,7 @@ Is the workflow failing?
 │   └── NO (capacity shortage)
 │       ├── Is the `diagnostic` action available?
 │       │   ├── YES → Send diagnostic commands via serverless API
-│       │   └── NO (stale image) → Rebuild & push image (./scripts/build.sh --push)
+│       │   └── NO (stale image) → Rebuild & push image (./scripts/build/build.sh --push)
 │       └── Can you exploit `download_models` action?
 │           ├── Create symlinks via inline_manifest + symlink_target
 │           ├── Check file existence via skip-if-exists logic

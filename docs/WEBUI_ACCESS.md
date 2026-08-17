@@ -4,7 +4,7 @@
 
 | Where ComfyUI runs | Inbound? | How to reach the WebUI | Script |
 |---|---|---|---|
-| **Pod** | Public SSH (IP:port from Connect panel) | `ssh -L 8188:127.0.0.1:8188 root@<ip> -p <port>` → http://localhost:8188 | [`scripts/tunnel_webui.sh`](../scripts/tunnel_webui.sh) / [`.ps1`](../scripts/tunnel_webui.ps1) |
+| **Pod** | Public SSH (IP:port from Connect panel) | `ssh -L 8188:127.0.0.1:8188 root@<ip> -p <port>` → http://localhost:8188 | [`scripts/build/tunnel_webui.sh`](../scripts/build/tunnel_webui.sh) / [`.ps1`](../scripts/build/tunnel_webui.ps1) |
 | **Serverless worker** | ❌ outbound-only | **Cloudflare Tunnel** (userspace, outbound-only) → `https://comfyui.yourdomain.com` | See [`docs/CLOUDFLARE_TUNNEL.md`](CLOUDFLARE_TUNNEL.md) |
 | **Local docker** | direct | http://localhost:8188 | — |
 

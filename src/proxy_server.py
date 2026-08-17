@@ -204,7 +204,7 @@ def load_object_info() -> dict:
         return object_info_cache
 
     logger.warning(f"object_info cache not found at {cache_path}")
-    logger.warning("Run: python scripts/fetch_object_info.py --source local|runpod")
+    logger.warning("Run: python scripts/build/fetch_object_info.py --source local|runpod")
     object_info_cache = {}
     return object_info_cache
 
@@ -774,7 +774,7 @@ def main():
     cache_path = Path(OBJECT_INFO_CACHE)
     if not cache_path.exists():
         logger.warning(f"object_info cache not found at {cache_path}")
-        logger.warning("Node palette will be empty. Run: python scripts/fetch_object_info.py --source local")
+        logger.warning("Node palette will be empty. Run: python scripts/build/fetch_object_info.py --source local")
     else:
         logger.info(f"object_info cache: {cache_path}")
 

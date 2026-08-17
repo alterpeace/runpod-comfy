@@ -106,17 +106,17 @@ Commit and push after each fix. Don't accumulate changes.
 
 ```bash
 # Build the Docker image
-./scripts/build.sh
+./scripts/build/build.sh
 
 # Deploy to RunPod serverless
-./scripts/deploy.sh
+./scripts/build/deploy.sh
 
 # Run locally for testing
-./scripts/run_local.sh --logs
+./scripts/build/run_local.sh --logs
 
 # Test a v2v workflow on serverless
 set -a && source .env && set +a
-uv run python scripts/invoke_v2v_with_upload.py --video rhizome.mp4
+uv run python scripts/invoke/invoke_v2v_with_upload.py --video rhizome.mp4
 
 # Enter the running container
 docker exec -it comfy bash
@@ -126,8 +126,8 @@ docker exec -it comfy bash
 
 ## Testing Order
 
-1. Test locally first: `./scripts/run_local.sh --logs` → WebUI at `http://localhost:8188`
-2. If local works, test on serverless: `uv run python scripts/invoke_v2v_with_upload.py`
+1. Test locally first: `./scripts/build/run_local.sh --logs` → WebUI at `http://localhost:8188`
+2. If local works, test on serverless: `uv run python scripts/invoke/invoke_v2v_with_upload.py`
 3. If serverless fails but local works, check:
    - Worker image is up to date (is `diagnostic` action available?)
    - Model files exist on the volume

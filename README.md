@@ -166,7 +166,7 @@ runpod-serverless/
 >
 > **One-command fix** — run this after every reboot or driver update:
 > ```bash
-> ./scripts/setup_local_gpu.sh
+> ./scripts/gpu/setup_local_gpu.sh
 > ```
 > This patches the CDI spec, generates a `docker-compose.gpu.yml` override with
 > explicit device + library mounts, creates NVIDIA `.so` symlinks inside the
@@ -238,7 +238,7 @@ wget https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/v1-5-pru
 ### Step 3: Start ComfyUI
 
 ```bash
-./scripts/run_local.sh
+./scripts/build/run_local.sh
 ```
 
 This automatically handles GPU passthrough (patches CDI spec if needed, generates
@@ -247,14 +247,14 @@ http://localhost:8188.
 
 Other options:
 ```bash
-./scripts/run_local.sh --build   # rebuild image first
-./scripts/run_local.sh --logs    # start + follow logs
+./scripts/build/run_local.sh --build   # rebuild image first
+./scripts/build/run_local.sh --logs    # start + follow logs
 ```
 
 For RunPod deployments:
 ```bash
-./scripts/run_runpod.sh serverless deploy    # deploy serverless endpoint
-./scripts/run_runpod.sh pods create --gpu "RTX 4090" --name "comfy-prod"
+./scripts/build/run_runpod.sh serverless deploy    # deploy serverless endpoint
+./scripts/build/run_runpod.sh pods create --gpu "RTX 4090" --name "comfy-prod"
 ```
 
 ## RunPod Deployment with Backblaze B2
@@ -424,7 +424,7 @@ There are three separate issues:
 **One-command fix** for all three:
 
 ```bash
-./scripts/setup_local_gpu.sh
+./scripts/gpu/setup_local_gpu.sh
 ```
 
 This patches the CDI spec, generates `docker-compose.gpu.yml` with explicit

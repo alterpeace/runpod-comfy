@@ -83,7 +83,7 @@ services:
     environment:
       - COMFYUI_URL=http://comfy:8188
     volumes:
-      - ./scripts/mock_runpod_server.py:/app/mock_runpod_server.py:ro
+      - ./scripts/build/mock_runpod_server.py:/app/mock_runpod_server.py:ro
     profiles: ["mock"]
     depends_on:
       comfy:

@@ -63,7 +63,7 @@ services:
     # shim — it mangles them into path-based source:target syntax. The
     # deploy.resources GPU block is also silently ignored.
     #
-    # Instead, run ./scripts/setup_local_gpu.sh which:
+    # Instead, run ./scripts/gpu/setup_local_gpu.sh which:
     #   1. Patches the CDI spec for Podman 4.9.x (fix_local_gpu_cdi.sh)
     #   2. Generates docker-compose.gpu.yml with explicit device + library mounts
     #   3. Restarts the container with both compose files

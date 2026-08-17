@@ -15,7 +15,7 @@ encoder, spatial + temporal latent upscalers, and a duration head patch.
 - **ComfyUI-LTXVideo** custom node (same as 2.3, updated for 2.5)
 - **ComfyUI-GGUF** custom node (only for `*_8gb.json` workflows)
 - **ComfyUI-VideoHelperSuite** (VHS) for video load/save nodes
-- **LTX-2.5 models** — run `./scripts/install_ltx25.sh --profile mid_vram_24gb`
+- **LTX-2.5 models** — run `./scripts/models/install_ltx25.sh --profile mid_vram_24gb`
 - **HF_TOKEN** — LTX-2.5 is auto-gated on HuggingFace. Visit
   https://huggingface.co/Lightricks/LTX-2.5 and click "Agree and Access".
 

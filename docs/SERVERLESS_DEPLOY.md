@@ -129,9 +129,9 @@ uv run python lifecycle/runpod_serverless.py create \
   --env VOLUME_OUTPUT_PATH=/runpod-volume/outputs
 ```
 
-Or via the deploy helper ([`scripts/deploy.sh`](../scripts/deploy.sh:1)):
+Or via the deploy helper ([`scripts/build/deploy.sh`](../scripts/build/deploy.sh:1)):
 ```bash
-./scripts/deploy.sh --mode serverless \
+./scripts/build/deploy.sh --mode serverless \
   --name comfyui-serverless \
   --image ghcr.io/alterpeace/runpod-comfy:latest \
   --gpu "RTX 4090" \
@@ -160,12 +160,12 @@ The image ships ComfyUI + custom nodes but **no models**. You have two paths:
      --env MODE=pods --env ENABLE_SSH=true
    ```
 2. SSH in (or use the RunPod web terminal) and run the installer from
-   [`scripts/install_ltx23.sh`](../scripts/install_ltx23.sh:1):
+   [`scripts/models/install_ltx23.sh`](../scripts/models/install_ltx23.sh:1):
    ```bash
    docker exec -it <pod> bash
    cd /workspace
    export HF_TOKEN=hf_...   # only for gated repos
-   ./scripts/install_ltx23.sh --profile low_vram_8gb   # or mid_vram_12_24gb / full
+   ./scripts/models/install_ltx23.sh --profile low_vram_8gb   # or mid_vram_12_24gb / full
    ```
    Models land in `/runpod-volume/models/...` and persist on the volume.
 3. **Terminate** the seed pod (don't just stop — stopping doesn't stop

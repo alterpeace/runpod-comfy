@@ -191,7 +191,7 @@ class TestNodeTypes:
     @pytest.fixture
     def object_info(self, object_info_cache):
         if object_info_cache is None:
-            pytest.skip("No object_info cache found — run: python scripts/fetch_object_info.py --source local")
+            pytest.skip("No object_info cache found — run: python scripts/build/fetch_object_info.py --source local")
         return object_info_cache
 
     @pytest.mark.parametrize("wf_path", LTX25_WORKFLOWS)

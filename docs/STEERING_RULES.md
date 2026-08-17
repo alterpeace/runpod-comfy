@@ -209,12 +209,12 @@ If a code fix is needed in ComfyUI-LTXVideo:
 
 **Test locally first, then on serverless.**
 
-1. Start local ComfyUI: `AUTO_INSTALL_CUSTOM_NODE_DEPS=false ./scripts/run_local.sh --logs`
+1. Start local ComfyUI: `AUTO_INSTALL_CUSTOM_NODE_DEPS=false ./scripts/build/run_local.sh --logs`
 2. Test workflow via WebUI at http://localhost:8188
 3. If it works locally, test on serverless:
    ```bash
    set -a && source .env && set +a
-   uv run python scripts/invoke_v2v_with_upload.py --video rhizome.mp4
+   uv run python scripts/invoke/invoke_v2v_with_upload.py --video rhizome.mp4
    ```
 4. If it fails on serverless but works locally, check:
    - Worker image is up to date (diagnostic action available?)
