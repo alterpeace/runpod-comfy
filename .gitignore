@@ -37,6 +37,8 @@ temp/
 
 
 models/
+# Allow scripts/models/ (model download scripts, not model data files)
+!scripts/models/
 output/
 input/
 custom_nodes/

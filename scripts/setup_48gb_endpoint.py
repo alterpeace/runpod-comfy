@@ -235,15 +235,25 @@ def purge_models(endpoint_id, dry_run=False):
 
 
 def create_48gb_endpoint():
-    """Create a new 48GB serverless endpoint."""
+    """Create a new 48GB serverless endpoint via RunPod GraphQL API."""
     log_info("Creating 48GB (A6000) serverless endpoint...")
 
-    runpod.api_key = os.environ["RUNPOD_API_KEY"]
+    import requests
 
-    endpoint_config = {
+    headers = {
+        "Authorization": f"Bearer {os.environ['RUNPOD_API_KEY']}",
+        "Content-Type": "application/json",
+    }
+
+    # GPU type for 48GB: NVIDIA RTX A6000
+    gpu_type = "NVIDIA RTX A6000"
+
+    # Use RunPod REST API to create serverless endpoint
+    # The SDK's create_endpoint requires a template_id (different flow)
+    payload = {
         "name": "comfyui-48gb",
         "imageName": DOCKER_IMAGE,
-        "gpuTypeId": "NVIDIA RTX A6000",
+        "gpuTypeId": gpu_type,
         "scalerType": "QUEUE_DELAY",
         "scalerValue": 5,
         "workersMin": 0,
@@ -259,8 +269,40 @@ def create_48gb_endpoint():
     }
 
     try:
-        response = runpod.create_endpoint(**endpoint_config)
-        endpoint_id = response.get("id", "N/A")
+        # Try the RunPod v2 API first
+        response = requests.post(
+            "https://api.runpod.ai/v2/serverless/create",
+            json=payload,
+            headers=headers,
+            timeout=30,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            endpoint_id = data.get("id", data.get("endpointId", "N/A"))
+        else:
+            # Fallback: use GraphQL
+            log_info("REST API failed, trying GraphQL...")
+            query = """
+            mutation CreateEndpoint($input: EndpointCreateInput!) {
+                createEndpoint(input: $input) {
+                    id
+                    name
+                    status
+                }
+            }
+            """
+            gql_response = requests.post(
+                "https://api.runpod.ai/graphql",
+                json={"query": query, "variables": {"input": payload}},
+                headers=headers,
+                timeout=30,
+            )
+            gql_data = gql_response.json()
+            if "errors" in gql_data:
+                raise Exception(gql_data["errors"][0].get("message", "GraphQL error"))
+            endpoint_data = gql_data.get("data", {}).get("createEndpoint", {})
+            endpoint_id = endpoint_data.get("id", "N/A")
+
         log_ok(f"Endpoint created: {endpoint_id}")
         log_info(f"  GPU: NVIDIA RTX A6000 (48GB)")
         log_info(f"  Image: {DOCKER_IMAGE}")
