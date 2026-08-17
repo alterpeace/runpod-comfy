@@ -289,6 +289,11 @@ Communities for LTX prompt engineering:
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
+        "--variation", type=str, default=None,
+        help="Comma-separated variation names to run (e.g. --variation obsidian or --variation obsidian,mirage). "
+             "If omitted, runs all variations. Available: " + ", ".join(v["name"] for v in VARIATIONS),
+    )
+    parser.add_argument(
         "--match-frames", action="store_true", default=True,
         help="Auto-detect source video frame count and match it (default)",
     )
@@ -359,6 +364,20 @@ Communities for LTX prompt engineering:
         print(f"Frames: all (frame_load_cap=0)")
     print(f"Naming: al7/qtrtime/al7_<name>_<params>_<timestamp>.mp4")
 
+    # Filter variations by name if --variation is specified
+    active_variations = VARIATIONS
+    if args.variation:
+        selected_names = [v.strip().lower() for v in args.variation.split(",")]
+        active_variations = [v for v in VARIATIONS if v["name"].lower() in selected_names]
+        if not active_variations:
+            available = ", ".join(v["name"] for v in VARIATIONS)
+            print(f"ERROR: No matching variations for '{args.variation}'. Available: {available}")
+            sys.exit(1)
+        skipped = [v["name"] for v in VARIATIONS if v["name"].lower() not in selected_names]
+        if skipped:
+            print(f"Skipping variations: {', '.join(skipped)}")
+        print(f"Active variations: {', '.join(v['name'] for v in active_variations)}")
+
     # Parse parameter sweep values
     denoise_values = None
     lora_values = None
@@ -377,7 +396,7 @@ Communities for LTX prompt engineering:
     sweep_count = args.seed_sweep if args.seed_sweep > 0 else 1
     use_random = args.random_seeds or args.seed_sweep > 0
 
-    for var in VARIATIONS:
+    for var in active_variations:
         # Determine the parameter grid for this variation
         d_values = denoise_values if denoise_values else [var["denoise"]]
         l_values = lora_values if lora_values else [var["lora_strength"]]

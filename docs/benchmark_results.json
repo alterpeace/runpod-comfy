@@ -1,0 +1,89 @@
+{
+  "generated": "2026-08-17T21:39:28.317636",
+  "sample_video": "rhizome.mp4",
+  "endpoint_id": "taea2mhlwbdkuq",
+  "total_videos": 156,
+  "avg_duration": 15.0,
+  "results": [
+    {
+      "workflow": {
+        "name": "entry_q4",
+        "file": "examples/ltx25_v2v_redetail_entry_runpod.json",
+        "model": "GGUF Q4 (~6 GB)",
+        "resolution": "640x352",
+        "vram_required": 10,
+        "gpu_tier": "24GB+",
+        "passes": "single (8 steps)"
+      },
+      "status": "success",
+      "time_seconds": 49.21691632270813,
+      "error": null
+    },
+    {
+      "workflow": {
+        "name": "entry_fp8",
+        "file": "examples/ltx25_v2v_redetail_entry_fp8.json",
+        "model": "FP8 (~19 GB)",
+        "resolution": "640x352",
+        "vram_required": 22,
+        "gpu_tier": "24GB+",
+        "passes": "single (8 steps)"
+      },
+      "status": "failed",
+      "time_seconds": 16.578670978546143,
+      "error": "Workflow execution failed: Workflow execution failed: [['execution_start', {'prompt_id': 'df853543-47af-4c1c-b66f-794442b64a3d', 'timestamp': 1786959556420}], ['execution_cached', {'nodes': [], 'prompt_id': 'df853543-47af-4c1c-b66f-794442b64a3d', 'timestamp': 1786959556423}], ['execution_error', {'prompt_id': 'df853543-47af-4c1c-b66f-794442b64a3d', 'node_id': '1', 'node_type': 'UNETLoader', 'executed': ['26'], 'exception_message': \"shape '[2048, 2048]' is invalid for input of size 3032144\\n\", 'e"
+    },
+    {
+      "workflow": {
+        "name": "comfortable_int8",
+        "file": "examples/ltx25_v2v_redetail_comfortable_runpod.json",
+        "model": "int8-convrot (21.5 GB)",
+        "resolution": "768x448 -> 1536x896",
+        "vram_required": 48,
+        "gpu_tier": "48GB+",
+        "passes": "two-pass (8 + 3 steps)"
+      },
+      "status": "failed",
+      "time_seconds": 5.670416355133057,
+      "error": "Workflow execution failed: ComfyUI rejected workflow (HTTP 400): {'error': {'type': 'missing_node_type', 'message': \"Node 'Add IC-LoRA Guide' not found. The custom node may not be installed.\", 'details': \"Node ID '#10'\", 'extra_info': {'node_id': '10', 'class_type': 'LTXAddVideoICLoRAGuide', 'node_title': 'Add IC-LoRA Guide'}}, 'node_errors': {}}"
+    }
+  ],
+  "gpu_pricing": {
+    "NVIDIA RTX A4000": {
+      "vram": 16,
+      "price": 0.16
+    },
+    "NVIDIA RTX A5000": {
+      "vram": 24,
+      "price": 0.23
+    },
+    "NVIDIA RTX A6000": {
+      "vram": 48,
+      "price": 0.45
+    },
+    "NVIDIA RTX 4090": {
+      "vram": 24,
+      "price": 0.34
+    },
+    "NVIDIA L4": {
+      "vram": 24,
+      "price": 0.26
+    },
+    "NVIDIA L40S": {
+      "vram": 48,
+      "price": 0.55
+    },
+    "NVIDIA RTX 6000 Ada": {
+      "vram": 48,
+      "price": 0.6
+    },
+    "NVIDIA A100 80GB": {
+      "vram": 80,
+      "price": 1.1
+    },
+    "NVIDIA H100 80GB": {
+      "vram": 80,
+      "price": 2.49
+    }
+  }
+}
