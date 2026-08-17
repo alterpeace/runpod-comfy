@@ -365,42 +365,105 @@ def check_jobs_status(jobs_file, endpoint):
     print(f"CHECKING {len(jobs)} JOBS from {jobs_file}")
     print(f"{'='*70}\n")
 
+    # First, try to check via RunPod API (works for recent jobs)
+    # Then fall back to checking output files on the volume (for old jobs
+    # where RunPod has purged the metadata)
     results = []
     completed = 0
     failed = 0
     in_progress = 0
+    unknown = 0
 
     for i, job_info in enumerate(jobs):
         job_id = job_info["job_id"]
-        job = endpoint.jobs(job_id)
+        prefix = job_info.get("prefix", "")
+        api_status = None
 
-        status = job.status()
-        elapsed = ""
+        # Try RunPod API first
+        try:
+            job = endpoint.jobs(job_id)
+            api_status = job.status()
+        except Exception:
+            api_status = None  # Job metadata purged from API
 
-        if status in ["IN_QUEUE", "IN_PROGRESS"]:
+        if api_status in ["IN_QUEUE", "IN_PROGRESS"]:
             in_progress += 1
             icon = "⏳"
-        elif status == "COMPLETED":
-            output = job.output()
-            if output and output.get("status") == "success":
-                completed += 1
-                icon = "✅"
-                job_info["status"] = "success"
-            else:
-                failed += 1
-                icon = "❌"
-                error = output.get("error", "unknown") if output else "no output"
-                job_info["status"] = "failed"
-                job_info["error"] = str(error)[:200]
+            job_info["status"] = api_status.lower()
+        elif api_status == "COMPLETED":
+            try:
+                output = job.output()
+                if output and output.get("status") == "success":
+                    completed += 1
+                    icon = "✅"
+                    job_info["status"] = "success"
+                else:
+                    failed += 1
+                    icon = "❌"
+                    error = output.get("error", "unknown") if output else "no output"
+                    job_info["status"] = "failed"
+                    job_info["error"] = str(error)[:200]
+            except Exception:
+                # Output purged but job completed — check volume
+                api_status = "PURGED"
+                api_status = None  # Fall through to volume check
         else:
-            failed += 1
-            icon = "❌"
-            job_info["status"] = f"failed ({status})"
+            api_status = None  # Fall through to volume check
+
+        # If API didn't give us a definitive answer, check the volume
+        if api_status is None:
+            # Use diagnostic action to check if the output file exists on the volume
+            # The prefix is like "al7/qtrtime/al7_obsidian_s1337d03l05_20260817_230500"
+            # The actual file would be at /runpod-volume/output/<prefix>_00001.mp4
+            check_cmd = f"ls /runpod-volume/output/{prefix}_*.mp4 2>/dev/null | head -1"
+            try:
+                from runpod import api as runpod_api
+                check_job = endpoint.run({
+                    "input": {
+                        "action": "diagnostic",
+                        "commands": [check_cmd],
+                        "timeout": 15,
+                    }
+                })
+                import time as _time
+                _start = _time.time()
+                while check_job.status() in ["IN_QUEUE", "IN_PROGRESS"]:
+                    _time.sleep(3)
+                    if _time.time() - _start > 30:
+                        break
+
+                check_output = check_job.output()
+                if check_output and check_output.get("status") == "success":
+                    check_results = check_output.get("output", {}).get("results", [])
+                    if check_results and check_results[0].get("stdout", "").strip():
+                        completed += 1
+                        icon = "✅"
+                        job_info["status"] = "success (verified on volume)"
+                        job_info["output_file"] = check_results[0]["stdout"].strip()
+                    else:
+                        if job_info.get("status") in ["success", "success (verified on volume)"]:
+                            completed += 1
+                            icon = "✅"
+                        else:
+                            unknown += 1
+                            icon = "❓"
+                            job_info["status"] = "unknown (API purged, no output file found)"
+                else:
+                    unknown += 1
+                    icon = "❓"
+                    job_info["status"] = "unknown (API purged, volume check failed)"
+            except Exception as e:
+                unknown += 1
+                icon = "❓"
+                job_info["status"] = f"unknown ({str(e)[:100]})"
 
         job_info["checked_at"] = datetime.now().isoformat()
         results.append(job_info)
 
-        print(f"  {icon} [{i+1}/{len(jobs)}] {job_id} {job_info['video']} × {job_info['variation']} → {status}")
+        video_name = job_info.get("video", "?")
+        var_name = job_info.get("variation", "?")
+        status_display = job_info.get("status", "?")
+        print(f"  {icon} [{i+1}/{len(jobs)}] {video_name} × {var_name} → {status_display}")
 
     # Update the JSON file with current statuses
     data["jobs"] = results
@@ -409,7 +472,7 @@ def check_jobs_status(jobs_file, endpoint):
         json.dump(data, f, indent=2)
 
     print(f"\n{'='*70}")
-    print(f"SUMMARY: {completed} completed, {in_progress} in progress, {failed} failed")
+    print(f"SUMMARY: {completed} completed, {in_progress} in progress, {failed} failed, {unknown} unknown")
     print(f"{'='*70}")
 
     if in_progress > 0:
