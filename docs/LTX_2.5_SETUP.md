@@ -62,41 +62,41 @@ New nodes in LTX-2.5 workflows (from official Lightricks examples):
 export HF_TOKEN=hf_your_token_here
 
 # Install custom nodes + models for 24GB GPUs (RTX 4090)
-./scripts/models/install_ltx25.sh --profile mid_vram_24gb
+./scripts/models/install_models.sh --profile mid_vram_24gb
 
 # Or for 8GB GPUs (GGUF quantized)
-./scripts/models/install_ltx25.sh --profile low_vram_8gb
+./scripts/models/install_models.sh --profile low_vram_8gb
 
 # Or everything (48GB+ GPUs)
-./scripts/models/install_ltx25.sh --profile full
+./scripts/models/install_models.sh --profile full
 ```
 
 ### Models Only (skip custom nodes)
 
 ```bash
 export HF_TOKEN=hf_your_token_here
-./scripts/models/install_ltx25.sh --profile mid_vram_24gb --skip-nodes
+./scripts/models/install_models.sh --profile mid_vram_24gb --skip-nodes
 ```
 
 ### List Available Models
 
 ```bash
-./scripts/models/install_ltx25.sh --list
+./scripts/models/install_models.sh --list
 # or
-python3 scripts/models/download_ltx25_models.py --list
+python3 scripts/models/download_models.py --list
 ```
 
 ### Dry Run (see what would be downloaded)
 
 ```bash
-./scripts/models/install_ltx25.sh --profile mid_vram_24gb --dry-run
+./scripts/models/install_models.sh --profile mid_vram_24gb --dry-run
 ```
 
 ### Download Specific Models Only
 
 ```bash
 export HF_TOKEN=hf_your_token_here
-./scripts/models/install_ltx25.sh --ids checkpoint_dev_int8 text_encoder_int8 distilled_lora video_vae
+./scripts/models/install_models.sh --ids checkpoint_dev_int8 text_encoder_int8 distilled_lora video_vae
 ```
 
 ## VRAM Profiles
@@ -185,7 +185,7 @@ uv run python lifecycle/runpod_pods.py create \
 docker exec -it <pod> bash
 cd /workspace
 export HF_TOKEN=hf_...   # required — LTX-2.5 is gated
-./scripts/models/install_ltx25.sh --profile mid_vram_24gb
+./scripts/models/install_models.sh --profile mid_vram_24gb
 
 # Terminate the seed pod
 uv run python lifecycle/runpod_pods.py terminate --pod-id <seed_pod_id>
@@ -208,8 +208,8 @@ files and different text encoders:
 | Component | LTX-2.3 | LTX-2.5 |
 |---|---|---|
 | Config | `config/ltx-2.3-models.json` | `config/ltx-2.5-models.json` |
-| Install script | `scripts/models/install_ltx23.sh` | `scripts/models/install_ltx25.sh` |
-| Download script | `scripts/models/download_ltx23_models.py` | `scripts/models/download_ltx25_models.py` |
+| Install script | `scripts/models/install_models.sh --version 23` | `scripts/models/install_models.sh --version 25` |
+| Download script | `scripts/models/download_models.py --version 23` | `scripts/models/download_models.py --version 25` |
 | Example workflows | `examples/ltx23_*.json` | `examples/ltx25_*.json` |
 | Setup doc | `docs/LTX_2.3_V2V_ICLORA_SETUP.md` | `docs/LTX_2.5_SETUP.md` |
 | Text encoder | `gemma_3_12B_it_fp4_mixed.safetensors` | `gemma4-12b-with-proj-ltx-2.5-*.safetensors` |
@@ -237,7 +237,7 @@ uv pip install 'huggingface_hub[cli,hf_transfer]'
 
 Ensure `ComfyUI-GGUF` custom node is installed:
 ```bash
-./scripts/models/install_ltx25.sh --skip-models  # nodes only
+./scripts/models/install_models.sh --skip-models  # nodes only
 ```
 
 ### Out of memory on 24GB GPU

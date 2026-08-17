@@ -683,7 +683,7 @@ def download_models(job_input: Dict[str, Any], job_id: str) -> Dict[str, Any]:
         )
 
     # Build the download script command
-    download_script = "/workspace/scripts/models/download_ltx25_models.py"
+    download_script = "/workspace/scripts/models/download_models.py"
     if not os.path.isfile(download_script):
         raise HandlerError(
             f"Download script not found at {download_script}. "

@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# Start the ComfyUI Frontend + Proxy Server for local development.
+# Start or stop the ComfyUI Frontend + Proxy Server for local development.
 #
 # This script:
 #   1. Checks if the official ComfyUI Frontend is cloned (clones if missing)
@@ -9,10 +9,11 @@
 #   4. Starts the ComfyUI Frontend dev server (Vite, port 5173)
 #
 # Usage:
-#   ./scripts/build/run_frontend.sh                # auto-detect backend
-#   ./scripts/build/run_frontend.sh --serverless    # force proxy → RunPod serverless
-#   ./scripts/build/run_frontend.sh --local         # frontend → local Docker ComfyUI
-#   ./scripts/build/run_frontend.sh --debug         # verbose proxy logging
+#   ./scripts/build/frontend.sh                     # auto-detect backend (start)
+#   ./scripts/build/frontend.sh --serverless         # force proxy → RunPod serverless
+#   ./scripts/build/frontend.sh --local              # frontend → local Docker ComfyUI
+#   ./scripts/build/frontend.sh --debug              # verbose proxy logging
+#   ./scripts/build/frontend.sh stop                 # stop all frontend processes
 #
 # Prerequisites:
 #   - Node.js 18+ (for frontend dev server)
@@ -33,6 +34,50 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
+
+# --- Stop subcommand ---
+if [ "${1:-}" = "stop" ]; then
+    stopped_any=false
+
+    # Stop proxy server (python src/proxy_server.py)
+    PROXY_PIDS=$(pgrep -f "proxy_server.py" 2>/dev/null || true)
+    if [ -n "$PROXY_PIDS" ]; then
+        echo -e "${YELLOW}Stopping proxy server (PID: $PROXY_PIDS)...${NC}"
+        echo "$PROXY_PIDS" | xargs kill 2>/dev/null || true
+        stopped_any=true
+        echo -e "${GREEN}✓ Proxy stopped${NC}"
+    else
+        echo -e "${GREEN}Proxy server not running${NC}"
+    fi
+
+    # Stop frontend dev server (npm run dev / vite)
+    FRONTEND_PIDS=$(pgrep -f "vite.*ComfyUI_frontend\|npm run dev.*frontend" 2>/dev/null || true)
+    if [ -n "$FRONTEND_PIDS" ]; then
+        echo -e "${YELLOW}Stopping frontend dev server (PID: $FRONTEND_PIDS)...${NC}"
+        echo "$FRONTEND_PIDS" | xargs kill 2>/dev/null || true
+        stopped_any=true
+        echo -e "${GREEN}✓ Frontend stopped${NC}"
+    else
+        echo -e "${GREEN}Frontend dev server not running${NC}"
+    fi
+
+    # Also check for any process listening on port 5173 (frontend) or 8188 (proxy)
+    for port in 5173 8188; do
+        PIDS=$(lsof -ti :$port 2>/dev/null || true)
+        if [ -n "$PIDS" ]; then
+            echo -e "${YELLOW}Killing process on port $port (PID: $PIDS)...${NC}"
+            echo "$PIDS" | xargs kill 2>/dev/null || true
+            stopped_any=true
+        fi
+    done
+
+    if [ "$stopped_any" = true ]; then
+        echo -e "\n${GREEN}All frontend processes stopped.${NC}"
+    else
+        echo -e "\n${GREEN}Nothing to stop — no frontend processes running.${NC}"
+    fi
+    exit 0
+fi
 
 # Defaults
 MODE="auto"

@@ -93,7 +93,7 @@ content (no lip-sync or characters).
 **Usage:**
 ```bash
 # Download required models
-python scripts/models/download_ltx23_models.py --ids \
+python scripts/models/download_models.py --version 23 --ids \
   checkpoint_fp8 distilled_lora \
   iclora_decompression omninft_rl_lora \
   spatial_upscaler
@@ -131,12 +131,12 @@ pass for higher resolution output.
 **Usage:**
 ```bash
 # Download required models (8GB)
-python scripts/models/download_ltx23_models.py --ids \
+python scripts/models/download_models.py --version 23 --ids \
   gguf_distilled_q4 text_encoder video_vae \
   omninft_rl_lora
 
 # Download required models (24GB)
-python scripts/models/download_ltx23_models.py --ids \
+python scripts/models/download_models.py --version 23 --ids \
   checkpoint_fp8 distilled_lora \
   iclora_decompression omninft_rl_lora \
   spatial_upscaler
@@ -172,12 +172,12 @@ any output resolution.
 **Usage:**
 ```bash
 # Download required models (8GB)
-python scripts/models/download_ltx23_models.py --ids \
+python scripts/models/download_models.py --version 23 --ids \
   gguf_distilled_q4 text_encoder video_vae \
   iclora_deblur omninft_rl_lora
 
 # Download required models (24GB)
-python scripts/models/download_ltx23_models.py --ids \
+python scripts/models/download_models.py --version 23 --ids \
   checkpoint_fp8 distilled_lora \
   iclora_deblur iclora_decompression omninft_rl_lora \
   spatial_upscaler
@@ -212,7 +212,7 @@ for installation instructions.
 **Install LTX-2.5 models:**
 ```bash
 export HF_TOKEN=hf_...  # required — LTX-2.5 is gated
-./scripts/models/install_ltx25.sh --profile mid_vram_24gb
+./scripts/models/install_models.sh --profile mid_vram_24gb
 ```
 
 ## Creating Custom Workflows

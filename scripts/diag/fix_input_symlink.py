@@ -7,7 +7,7 @@ Exploits the download_models action's inline_manifest feature combined
 with the download script's symlink_target field to create symlinks on
 the worker's filesystem.
 
-The download script (download_ltx25_models.py) has this logic:
+The download script (download_models.py) has this logic:
     symlink_target = model.get("symlink_target")
     if symlink_target:
         dest_path = output_dir / model["dest"] / filename

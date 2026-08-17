@@ -209,7 +209,7 @@ via an `action` field in the job input:
   `inline_manifest` + `symlink_target` feature can be exploited to create
   symlinks and check file existence on the worker (see
   [`scripts/diag/fix_input_symlink.py`](../scripts/diag/fix_input_symlink.py) and
-  [`scripts/diag/check_volume_files.py`](../scripts/diag/check_volume_files.py))
+  [`scripts/diag/check_files.py --mode volume`](../scripts/diag/check_files.py --mode volume))
 
 ### Key lessons from this project
 

@@ -109,11 +109,11 @@ Complete record of debugging, fixes, and improvements made during this session.
 - `scripts/invoke/invoke_v2v_with_upload.py` — V2V with video upload via input_files
 - `scripts/invoke/invoke_v2v.py` — V2V workflow invocation
 - `scripts/diag/fix_input_symlink.py` — Create input symlinks via download_models
-- `scripts/diag/check_volume_files.py` — Verify files on worker FUSE mount
-- `scripts/diag/check_comfyui_input.py` — Verify symlinks in /comfyui/input/
-- `scripts/diag/patch_gemma_int8.py` — Patch embeddings_connector.py (strict=False)
-- `scripts/diag/patch_gemma_dequant.py` — Patch with dequantization logic
-- `scripts/diag/patch_and_restart.py` — Patch and restart ComfyUI
+- `scripts/diag/check_files.py --mode volume` — Verify files on worker FUSE mount
+- `scripts/diag/check_files.py --mode input` — Verify symlinks in /comfyui/input/
+- `scripts/diag/patch_gemma.py --mode int8` — Patch embeddings_connector.py (strict=False)
+- `scripts/diag/patch_gemma.py --mode dequant` — Patch with dequantization logic
+- `scripts/diag/patch_gemma.py --mode restart` — Patch and restart ComfyUI
 - `scripts/storage/sync_outputs.py` — Sync S3 outputs to local directory
 - `scripts/storage/list_s3.py` — List S3 volume as tree with sizes
 

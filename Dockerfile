@@ -374,8 +374,8 @@ COPY config/gemma4-12b-ltx-2.5/ ./config/gemma4-12b-ltx-2.5/
 # Copy custom video format files (h264-allintra for VJing — keyframe every frame)
 COPY config/video_formats/ ./config/video_formats/
 
-# Copy download scripts (used by the "download_models" serverless action)
-COPY scripts/models/download_ltx25_models.py scripts/models/download_ltx23_models.py ./scripts/models/
+# Copy download script (used by the "download_models" serverless action)
+COPY scripts/models/download_models.py ./scripts/models/
 RUN chmod +x ./scripts/models/*.py 2>/dev/null || true
 
 COPY ssh/ ./ssh/

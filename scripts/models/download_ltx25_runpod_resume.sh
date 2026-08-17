@@ -61,21 +61,21 @@ fi
 mkdir -p "$MODELS_DIR" /workspace/scripts /workspace/config
 
 # Remove old script + pycache to force fresh download
-rm -f /workspace/scripts/models/download_ltx25_models.py
+rm -f /workspace/scripts/models/download_models.py
 rm -rf /workspace/scripts/__pycache__
 
 # Always download latest scripts (overwrite old versions)
-log_info "Downloading latest download_ltx25_models.py..."
-curl -fsSL https://raw.githubusercontent.com/alterpeace/runpod-comfy/main/scripts/models/download_ltx25_models.py \
-    -o /workspace/scripts/models/download_ltx25_models.py
-chmod +x /workspace/scripts/models/download_ltx25_models.py
+log_info "Downloading latest download_models.py..."
+curl -fsSL https://raw.githubusercontent.com/alterpeace/runpod-comfy/main/scripts/models/download_models.py \
+    -o /workspace/scripts/models/download_models.py
+chmod +x /workspace/scripts/models/download_models.py
 
 # Verify the downloaded script has --copy support
-if ! grep -q '"--copy"' /workspace/scripts/models/download_ltx25_models.py; then
+if ! grep -q '"--copy"' /workspace/scripts/models/download_models.py; then
     log_error "Downloaded script does not have --copy support (GitHub CDN cache?)"
-    log_error "File size: $(wc -c < /workspace/scripts/models/download_ltx25_models.py) bytes"
+    log_error "File size: $(wc -c < /workspace/scripts/models/download_models.py) bytes"
     log_error "First 5 lines:"
-    head -5 /workspace/scripts/models/download_ltx25_models.py
+    head -5 /workspace/scripts/models/download_models.py
     exit 1
 fi
 log_success "Verified: downloaded script has --copy support"
@@ -101,7 +101,7 @@ export PYTHONUNBUFFERED=1
 # Download models with --copy (real files, not symlinks) and --force (re-download broken ones)
 # The script skips files that already exist as real files (not symlinks), so this is resumable.
 log_info "Starting download (copy mode, resumable)..."
-python /workspace/scripts/models/download_ltx25_models.py \
+python /workspace/scripts/models/download_models.py \
     --manifest /workspace/config/ltx-2.5-models.json \
     --output-dir "$MODELS_DIR" \
     --profile "$PROFILE" \

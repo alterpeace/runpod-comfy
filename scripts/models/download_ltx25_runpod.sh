@@ -3,7 +3,7 @@
 # Trigger LTX-2.5 model downloads on a RunPod serverless endpoint.
 #
 # This script sends a "download_models" job to a RunPod serverless endpoint
-# via the RunPod API. The worker runs scripts/models/download_ltx25_models.py
+# via the RunPod API. The worker runs scripts/models/download_models.py
 # inside the container, downloading models to /runpod-volume/models/ on the
 # network volume — no SSH access required.
 #
@@ -106,7 +106,7 @@ fi
 # If --list, just run the local download script in list mode (no API call needed)
 if [ "$LIST_ONLY" = true ]; then
     log_info "Listing available LTX-2.5 models (local manifest):"
-    python3 "$SCRIPT_DIR/download_ltx25_models.py" \
+    python3 "$SCRIPT_DIR/download_models.py" \
         --manifest "$PROJECT_ROOT/config/ltx-2.5-models.json" --list
     exit 0
 fi

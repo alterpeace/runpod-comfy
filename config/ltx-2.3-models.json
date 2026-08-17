@@ -1,5 +1,5 @@
 {
-  "_comment": "Model manifest for LTX-2.3 V2V / IC-LoRA support. Consumed by scripts/models/install_ltx23.sh. Each entry downloads a single file from a Hugging Face repo into models/<dest>/<filename>. Sets marked \"gated\": true require HF_TOKEN and clicking 'Agree and Access' on the repo page at least once.",
+  "_comment": "Model manifest for LTX-2.3 V2V / IC-LoRA support. Consumed by scripts/models/install_models.sh --version 23. Each entry downloads a single file from a Hugging Face repo into models/<dest>/<filename>. Sets marked \"gated\": true require HF_TOKEN and clicking 'Agree and Access' on the repo page at least once.",
   "profiles": {
     "minimal": ["text_encoder", "checkpoint_fp8", "distilled_lora"],
     "low_vram_8gb": ["text_encoder", "gguf_dev_q4", "gguf_distilled_q4", "video_vae", "audio_vae", "tiny_vae", "iclora_deblur", "omninft_rl_lora"],

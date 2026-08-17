@@ -44,7 +44,7 @@ Usage:
     # 5. Open http://localhost:5173
 
 Or use the one-command script:
-    ./scripts/build/run_frontend.sh --mock
+    ./scripts/build/frontend.sh --mock
 """
 
 import asyncio
@@ -391,7 +391,7 @@ Setup:
   5. Open:                 http://localhost:5173
 
 Or use the one-command script:
-  ./scripts/build/run_frontend.sh --mock
+  ./scripts/build/frontend.sh --mock
         """
     )
     parser.add_argument("--port", type=int, default=DEFAULT_PORT,
