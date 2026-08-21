@@ -1,9 +1,9 @@
 {
   "_comment": "Model manifest for LTX-2.5 V2V / IC-LoRA / audio support. Consumed by scripts/models/download_models.py. Each entry downloads a single file from a Hugging Face repo into models/<dest>/<filename>. LTX-2.5 is auto-gated on HuggingFace — visit https://huggingface.co/Lightricks/LTX-2.5 and click 'Agree and Access' once, then set HF_TOKEN. LTX-2.5 uses Gemma 4 (not Gemma 3) and has native audio generation, temporal upscaler, and duration head patch. NOTE: LTX-2.3 IC-LoRAs and the 2.3 spatial upscaler ARE compatible with 2.5 (confirmed by official Lightricks workflows). Cross-referenced with official workflows at https://github.com/Lightricks/ComfyUI-LTXVideo/tree/master/example_workflows/2.5 and Kijai's repos.",
   "profiles": {
-    "minimal": ["text_encoder_int8", "text_encoder_tokenizer", "text_encoder_tokenizer_config", "text_encoder_tokenizer_json", "text_encoder_chat_template", "text_encoder_generation_config", "text_encoder_processor_config", "text_encoder_model_symlink", "checkpoint_dev_int8", "distilled_lora"],
-    "low_vram_8gb": ["text_encoder_int8", "text_encoder_tokenizer", "text_encoder_tokenizer_config", "text_encoder_tokenizer_json", "text_encoder_chat_template", "text_encoder_generation_config", "text_encoder_processor_config", "text_encoder_model_symlink", "gguf_distilled_q4", "video_vae", "audio_vae", "distilled_lora"],
-    "mid_vram_24gb": ["text_encoder_int8", "text_encoder_tokenizer", "text_encoder_tokenizer_config", "text_encoder_tokenizer_json", "text_encoder_chat_template", "text_encoder_generation_config", "text_encoder_processor_config", "text_encoder_model_symlink", "checkpoint_dev_int8", "distilled_lora", "video_vae", "audio_vae", "spatial_upscaler", "temporal_upscaler", "iclora_pixel_upscaler", "text_enhancer"],
+    "minimal": ["text_encoder_int8", "text_encoder_tokenizer", "text_encoder_tokenizer_config", "text_encoder_tokenizer_json", "text_encoder_chat_template", "text_encoder_generation_config", "text_encoder_processor_config", "text_encoder_model_symlink", "checkpoint_distilled_int8", "distilled_lora"],
+    "low_vram_8gb": ["text_encoder_int8", "text_encoder_tokenizer", "text_encoder_tokenizer_config", "text_encoder_tokenizer_json", "text_encoder_chat_template", "text_encoder_generation_config", "text_encoder_processor_config", "text_encoder_model_symlink", "gguf_distilled_q3ks", "video_vae", "audio_vae", "distilled_lora"],
+    "mid_vram_24gb": ["text_encoder_int8", "text_encoder_tokenizer", "text_encoder_tokenizer_config", "text_encoder_tokenizer_json", "text_encoder_chat_template", "text_encoder_generation_config", "text_encoder_processor_config", "text_encoder_model_symlink", "checkpoint_distilled_int8", "distilled_lora", "video_vae", "audio_vae", "spatial_upscaler", "temporal_upscaler", "iclora_pixel_upscaler", "text_enhancer"],
     "full": ["all"]
   },
   "models": [
@@ -121,16 +121,40 @@
       "gated": true
     },
     {
+      "id": "gguf_distilled_q3ks",
+      "desc": "LTX-2.5 distilled GGUF Q3_K_S — community quant, 12.6GB, smallest available, for 8GB VRAM with --lowvram streaming",
+      "repo": "Abiray/LTX-2.5-Distilled-GGUF",
+      "file": "LTX-2.5-Distilled-Q3_K_S.gguf",
+      "dest": "unet",
+      "gated": false
+    },
+    {
+      "id": "gguf_distilled_q3km",
+      "desc": "LTX-2.5 distilled GGUF Q3_K_M — community quant, 12.9GB, slightly better quality than Q3_K_S, for 8-12GB VRAM with --lowvram",
+      "repo": "Abiray/LTX-2.5-Distilled-GGUF",
+      "file": "LTX-2.5-Distilled-Q3_K_M.gguf",
+      "dest": "unet",
+      "gated": false
+    },
+    {
       "id": "gguf_distilled_q4",
-      "desc": "LTX-2.5 distilled GGUF Q4_K_M — community quant, fits ~8-12GB VRAM with ComfyUI-GGUF UnetLoaderGGUF",
+      "desc": "LTX-2.5 distilled GGUF Q4_K_M — community quant, 15.7GB, good quality/size balance, for 12-24GB VRAM",
       "repo": "Abiray/LTX-2.5-Distilled-GGUF",
       "file": "LTX-2.5-Distilled-Q4_K_M.gguf",
       "dest": "unet",
       "gated": false
     },
     {
+      "id": "gguf_distilled_q5",
+      "desc": "LTX-2.5 distilled GGUF Q5_K_M — community quant, 18.1GB, higher quality, for 24GB VRAM",
+      "repo": "Abiray/LTX-2.5-Distilled-GGUF",
+      "file": "LTX-2.5-Distilled-Q5_K_M.gguf",
+      "dest": "unet",
+      "gated": false
+    },
+    {
       "id": "gguf_distilled_q8",
-      "desc": "LTX-2.5 distilled GGUF Q8_0 — community quant, higher quality, needs ~20GB VRAM",
+      "desc": "LTX-2.5 distilled GGUF Q8_0 — community quant, 23.6GB, highest quality GGUF, for 48GB+ VRAM",
       "repo": "Abiray/LTX-2.5-Distilled-GGUF",
       "file": "LTX-2.5-Distilled-Q8_0.gguf",
       "dest": "unet",

@@ -5,7 +5,7 @@ Set up a 48GB RunPod serverless endpoint for LTX-2.5 near-1080p generation.
 Steps:
   1. List current models on the volume (via existing endpoint diagnostic)
   2. Purge unnecessary models (FP8, GGUF Q8, LTX-2.3 models)
-  3. Create a new 48GB (A6000) serverless endpoint
+  3. Create a new 48GB (L40S) serverless endpoint
   4. Download required models (int8-convrot dev, upscalers, IC-LoRAs)
   5. Test the new endpoint with a simple workflow
   6. Optionally destroy the old 24GB endpoint
@@ -34,7 +34,7 @@ import time
 from pathlib import Path
 
 # Load .env
-env_file = Path(__file__).parent.parent / ".env"
+env_file = Path(__file__).parent.parent.parent / ".env"
 if env_file.exists():
     for line in env_file.read_text().splitlines():
         line = line.strip()
@@ -89,8 +89,8 @@ PURGE_PATTERNS = [
 # Models to DOWNLOAD for the 48GB workflow
 DOWNLOAD_MODELS = [
     {
-        "name": "int8-convrot dev transformer",
-        "file": "ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors",
+        "name": "int8-convrot distilled transformer (official ComfyUI standard)",
+        "file": "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
         "repo": "Lightricks/LTX-2.5",
         "path": "diffusion_models/",
         "dest": "checkpoints",
@@ -235,8 +235,16 @@ def purge_models(endpoint_id, dry_run=False):
 
 
 def create_48gb_endpoint():
-    """Create a new 48GB serverless endpoint via RunPod GraphQL API."""
-    log_info("Creating 48GB (A6000) serverless endpoint...")
+    """Create a new 48GB serverless endpoint via RunPod REST API v1.
+
+    Uses the two-step flow:
+      1. POST /v1/templates — create a serverless template
+      2. POST /v1/endpoints — create an endpoint using the templateId
+
+    REST API v1 is deprecated (retiring Nov 15, 2026) but still works.
+    Migration to v2 will be needed before that date.
+    """
+    log_info("Creating 48GB (L40S) serverless endpoint...")
 
     import requests
 
@@ -245,69 +253,80 @@ def create_48gb_endpoint():
         "Content-Type": "application/json",
     }
 
-    # GPU type for 48GB: NVIDIA RTX A6000
-    gpu_type = "NVIDIA RTX A6000"
+    # GPU type for 48GB: L40S (Ada Lovelace, AI-optimized, widely available)
+    # Alternatives: "NVIDIA RTX PRO 5000 Blackwell" (newest, fastest),
+    #               "NVIDIA RTX 6000 Ada Generation" (Ada workstation),
+    #               "NVIDIA L40" (Ada, slightly cheaper than L40S)
+    gpu_type = "NVIDIA L40S"
+    endpoint_name = "sofaking-comfy"
+    template_name = "sofaking-comfy-48gb"
 
-    # Use RunPod REST API to create serverless endpoint
-    # The SDK's create_endpoint requires a template_id (different flow)
-    payload = {
-        "name": "comfyui-48gb",
+    # Step 1: Create template
+    template_payload = {
+        "name": template_name,
         "imageName": DOCKER_IMAGE,
-        "gpuTypeId": gpu_type,
-        "scalerType": "QUEUE_DELAY",
-        "scalerValue": 5,
-        "workersMin": 0,
-        "workersMax": 3,
+        "isServerless": True,
         "volumeMountPath": "/runpod-volume",
-        "networkVolumeId": VOLUME_ID,
-        "env": [
-            {"key": "MODE", "value": "serverless"},
-            {"key": "COMFYUI_PORT", "value": "8188"},
+        "env": {
+            "MODE": "serverless",
+            "COMFYUI_PORT": "8188",
             # NO --lowvram on 48GB — model fits in VRAM at full speed
-            {"key": "COMFYUI_ARGS", "value": ""},
-        ],
+            "COMFYUI_ARGS": " ",
+        },
     }
 
     try:
-        # Try the RunPod v2 API first
-        response = requests.post(
-            "https://api.runpod.ai/v2/serverless/create",
-            json=payload,
+        log_info(f"Step 1: Creating template '{template_name}'...")
+        resp = requests.post(
+            "https://rest.runpod.io/v1/templates",
+            json=template_payload,
             headers=headers,
             timeout=30,
         )
-        if response.status_code == 200:
-            data = response.json()
-            endpoint_id = data.get("id", data.get("endpointId", "N/A"))
-        else:
-            # Fallback: use GraphQL
-            log_info("REST API failed, trying GraphQL...")
-            query = """
-            mutation CreateEndpoint($input: EndpointCreateInput!) {
-                createEndpoint(input: $input) {
-                    id
-                    name
-                    status
-                }
-            }
-            """
-            gql_response = requests.post(
-                "https://api.runpod.ai/graphql",
-                json={"query": query, "variables": {"input": payload}},
-                headers=headers,
-                timeout=30,
-            )
-            gql_data = gql_response.json()
-            if "errors" in gql_data:
-                raise Exception(gql_data["errors"][0].get("message", "GraphQL error"))
-            endpoint_data = gql_data.get("data", {}).get("createEndpoint", {})
-            endpoint_id = endpoint_data.get("id", "N/A")
+        if resp.status_code not in (200, 201):
+            log_err(f"Template creation failed: {resp.status_code} {resp.text[:200]}")
+            return None
+
+        template_data = resp.json()
+        template_id = template_data.get("id", "")
+        if not template_id:
+            log_err(f"No template ID in response: {template_data}")
+            return None
+        log_ok(f"Template created: {template_id}")
+
+        # Step 2: Create endpoint
+        endpoint_payload = {
+            "name": endpoint_name,
+            "templateId": template_id,
+            "gpuTypeIds": [gpu_type],
+            "networkVolumeId": VOLUME_ID,
+            "scalerType": "QUEUE_DELAY",
+            "scalerValue": 5,
+            "workersMin": 0,
+            "workersMax": 2,  # Max 5 workers total across all endpoints (quota)
+        }
+
+        log_info(f"Step 2: Creating endpoint '{endpoint_name}'...")
+        resp = requests.post(
+            "https://rest.runpod.io/v1/endpoints",
+            json=endpoint_payload,
+            headers=headers,
+            timeout=30,
+        )
+        if resp.status_code not in (200, 201):
+            log_err(f"Endpoint creation failed: {resp.status_code} {resp.text[:200]}")
+            return None
+
+        endpoint_data = resp.json()
+        endpoint_id = endpoint_data.get("id", "N/A")
 
         log_ok(f"Endpoint created: {endpoint_id}")
-        log_info(f"  GPU: NVIDIA RTX A6000 (48GB)")
+        log_info(f"  GPU: {gpu_type} (48GB, Ada Lovelace)")
         log_info(f"  Image: {DOCKER_IMAGE}")
         log_info(f"  Volume: {VOLUME_ID}")
+        log_info(f"  Template: {template_id}")
         log_info(f"  COMFYUI_ARGS: (empty — no --lowvram, model fits in VRAM)")
+        log_info(f"  Workers: 0-2 (scale to zero when idle)")
         return endpoint_id
     except Exception as e:
         log_err(f"Failed to create endpoint: {e}")
@@ -391,8 +410,8 @@ def test_endpoint(endpoint_id):
 
     # Check if GPU has 48GB
     gpu_info = results[0].get("stdout", "")
-    if "A6000" in gpu_info or "48" in gpu_info:
-        log_ok("GPU verified: 48GB A6000")
+    if any(g in gpu_info for g in ["L40S", "A6000", "A40", "6000", "PRO 5000", "48"]):
+        log_ok("GPU verified: 48GB")
         return True
     else:
         log_warn(f"GPU info: {gpu_info.strip()}")
@@ -442,7 +461,7 @@ def main():
     print(f"{C.BOLD}48GB Serverless Endpoint Setup{C.NC}")
     print(f"Old endpoint: {args.old_endpoint_id}")
     print(f"Volume: {args.volume_id}")
-    print(f"New GPU: NVIDIA RTX A6000 (48GB)")
+    print(f"New GPU: NVIDIA L40S (48GB, Ada Lovelace)")
     print(f"COMFYUI_ARGS: (empty — no --lowvram)")
     print("=" * 70)
 

@@ -81,7 +81,7 @@ NEGATIVE_PROMPT = (
     "deformed, distorted, blurry, jpeg artifacts, ugly, duplicate, "
     "mutated hands, poorly drawn hands, poorly drawn face, bad anatomy, "
     "extra limbs, extra fingers, fused fingers, missing limbs, long neck, "
-    "text, watermark, signature, low resolution, "
+    "text, watermark, signature, low resolution, logos"
     "cropped, shaking, jittery, oversharpened, banding, scan lines"
 )
 
@@ -103,11 +103,13 @@ NEGATIVE_PROMPT = (
 # - Quality markers (ultra detailed, sharp focus) for clean renders
 BASE_VISUALS = (
     "volumetric fog, atmospheric haze, light shafts, "
-    "floating particles, dust motes, "
+    "floating particles, dust motes, holographic"
     "liquid metal, iridescent, holographic, "
     "glass refraction, crystalline, "
     "chromatic aberration, light leaks, prismatic, "
     "glowing, radiant, luminous, "
+    "high contrast, dramatic shadows, "
+    "flowing organic shapes, morphing, hypnotic, "
     "ultra detailed, sharp focus, clean render"
 )
 # ---------------------------------------------------------------------------
@@ -116,8 +118,8 @@ VARIATIONS = [
     {
         "name": "obsidian",
         "seed": 1337,
-        "denoise": 0.3,
-        "lora_strength": 0.5,
+        "denoise": 0.25,
+        "lora_strength": 1.0,
         "prompt": (
             f"high contrast, neon glow, dramatic shadows, "
             f"glossy black surfaces, reflective, "
@@ -128,14 +130,47 @@ VARIATIONS = [
     {
         "name": "mirage",
         "seed": 36963,
-        "denoise": 0.3,
-        "lora_strength": 0.5,
+        "denoise": 0.25,
+        "lora_strength": 1.0,
         "prompt": (
             f"liquid metal, iridescent, holographic, prismatic refraction, "
             f"chromatic aberration, light leaks, "
             f"flowing organic shapes, morphing, hypnotic, "
             f"natural sunlight, dramatic shadows, worn fabric, "
             f"muted color palette, film grain, {BASE_VISUALS}"
+        ),
+    },
+    {
+        "name": "obsidian_mirage",
+        "seed": 77777,
+        "denoise": 0.25,
+        "lora_strength": 1.0,
+        "prompt": (
+            f"high contrast, neon glow, dramatic shadows, "
+            f"glossy black surfaces with liquid metal sheen, reflective, "
+            f"dark tones with electric iridescent highlights, "
+            f"sharp edges dissolving into flowing organic shapes, "
+            f"geometric morphing into hypnotic prismatic refraction, "
+            f"chromatic aberration, light leaks, holographic, "
+            f"film grain, muted color palette with electric accents, "
+            f"{BASE_VISUALS}"
+        ),
+    },
+    {
+        "name": "refine",
+        "seed": 369,
+        "denoise": 0.15,
+        "lora_strength": 1.0,
+        "prompt": (
+            f"high quality video, smooth motion, sharp focus, "
+            f"detailed textures, clean render, "
+            f"enhanced detail in flat areas, refined edges, "
+            f"professional post-production, 4k detail"
+        ),
+        "negative_prompt": (
+            "blurry, low quality, distorted, artifacts, "
+            "flickering, jerky motion, banding, "
+            "compression artifacts, noise"
         ),
     },
 ]
@@ -237,7 +272,7 @@ def generate_variation(endpoint, workflow, video_path, variation,
     # frame_load_cap: 0 means load all frames; otherwise load exactly N
     wf["7"]["inputs"]["frame_load_cap"] = frame_count
     wf["5"]["inputs"]["text"] = variation["prompt"]
-    wf["6"]["inputs"]["text"] = NEGATIVE_PROMPT
+    wf["6"]["inputs"]["text"] = variation.get("negative_prompt", NEGATIVE_PROMPT)
     wf["13"]["inputs"]["noise_seed"] = variation["seed"]
     wf["11"]["inputs"]["denoise"] = variation["denoise"]
     wf["3"]["inputs"]["strength_model"] = variation["lora_strength"]
@@ -601,7 +636,11 @@ Communities for LTX prompt engineering:
         print(f"Batch directory: {args.batch_dir}")
         print(f"Found {len(videos)} videos")
     else:
-        videos = [args.video]
+        # Apply volume_prefix to single --video path
+        if args.volume_prefix and "/" not in args.video:
+            videos = [f"{args.volume_prefix}/{args.video}"]
+        else:
+            videos = [args.video]
 
     # Load workflow
     with open(args.workflow) as f:

@@ -1,9 +1,12 @@
 {
   "1": {
     "inputs": {
-      "ckpt_name": "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors"
+      "unet_name": "LTX-2.5-Distilled-Q3_K_S.gguf"
     },
-    "class_type": "CheckpointLoaderSimple"
+    "class_type": "UnetLoaderGGUF",
+    "_meta": {
+      "title": "Load GGUF Diffusion Model (Q3_K_S — smallest, 8GB VRAM)"
+    }
   },
   "2": {
     "inputs": {
@@ -11,7 +14,10 @@
       "type": "ltxv",
       "device": "default"
     },
-    "class_type": "CLIPLoader"
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP - Text Encoder (int8-convrot, offloaded after encoding)"
+    }
   },
   "3": {
     "inputs": {
@@ -27,7 +33,10 @@
       "strength_model": 1.0,
       "strength_clip": 1.0
     },
-    "class_type": "LoraLoader"
+    "class_type": "LoraLoader",
+    "_meta": {
+      "title": "Load Distilled LoRA (8-step sampling)"
+    }
   },
   "4": {
     "inputs": {
@@ -37,7 +46,10 @@
       ],
       "text": "cinematic drone shot over a misty mountain range at sunrise, golden light breaking through clouds, highly detailed, 4k, professional cinematography"
     },
-    "class_type": "CLIPTextEncode"
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive Prompt"
+    }
   },
   "5": {
     "inputs": {
@@ -47,16 +59,22 @@
       ],
       "text": "blurry, low quality, distorted, glitch, artifacts, flickering, jerky motion, watermark, noisy, grainy, washed out, banding"
     },
-    "class_type": "CLIPTextEncode"
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative Prompt"
+    }
   },
   "6": {
     "inputs": {
-      "width": 768,
-      "height": 448,
-      "length": 97,
+      "width": 640,
+      "height": 352,
+      "length": 65,
       "batch_size": 1
     },
-    "class_type": "EmptyLTXVLatentVideo"
+    "class_type": "EmptyLTXVLatentVideo",
+    "_meta": {
+      "title": "Empty Latent Video (640x352, 65 frames — reduced for 8GB VRAM)"
+    }
   },
   "7": {
     "inputs": {
@@ -83,7 +101,10 @@
         0
       ]
     },
-    "class_type": "KSampler"
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler (8 steps, distilled)"
+    }
   },
   "8": {
     "inputs": {
@@ -96,7 +117,10 @@
         0
       ]
     },
-    "class_type": "VAEDecode"
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
   },
   "9": {
     "inputs": {
@@ -106,17 +130,23 @@
       ],
       "frame_rate": 24,
       "loop_count": 0,
-      "filename_prefix": "ltx25_t2v",
+      "filename_prefix": "ltx25_t2v_q3_8gb",
       "format": "video/h264-mp4",
       "pingpong": false,
       "save_output": true
     },
-    "class_type": "VHS_VideoCombine"
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Save Video"
+    }
   },
   "10": {
     "inputs": {
       "vae_name": "ltx-2.5-video-vae-bf16.safetensors"
     },
-    "class_type": "VAELoader"
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
   }
 }

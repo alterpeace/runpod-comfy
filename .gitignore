@@ -1,6 +1,9 @@
 # Environment variables with secrets
 .env
 
+# MCP configs (contain local paths, session IDs, API keys)
+.mcp.json
+
 # Python
 __pycache__/
 *.py[cod]
@@ -9,7 +12,7 @@ __pycache__/
 .Python
 *.egg-info/
 dist/
-build/
+/build/
 
 # Testing
 .pytest_cache/

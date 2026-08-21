@@ -62,12 +62,15 @@ See: [`.kilocode/rules/model-loading.md`](.kilocode/rules/model-loading.md)
 
 | Model | Size | Fits 24GB? |
 |---|---|---|
-| int8-convrot transformer | 21.5 GB | ❌ OOM |
-| GGUF Q4_K_M | ~6 GB | ✅ |
-| gemma4-12b int8-convrot (text encoder) | 15 GB | ✅ with `--lowvram` |
+| dev int8-convrot transformer | 21.5 GB | ❌ OOM (at 768×448 two-pass) |
+| distilled int8-convrot transformer | 21.5 GB | ⚠️ UNTESTED (official ComfyUI standard) |
+| GGUF Q4_K_M | 15.7 GB | ✅ with `--lowvram` |
+| GGUF Q3_K_S | 12.6 GB | ✅ with `--lowvram` (8GB GPUs, slow) |
+| gemma4-12b int8-convrot (text encoder) | 15 GB | ✅ with `--lowvram` (offloaded after encoding) |
 
-For 24GB GPUs: use `UnetLoaderGGUF` with the Q4 model.
-For 48GB+ GPUs: use `CheckpointLoaderSimple` with the int8 model.
+For 8GB GPUs: use `UnetLoaderGGUF` with Q3_K_S.
+For 24GB GPUs: use `UnetLoaderGGUF` with Q4_K_M, or try distilled int8-convrot (untested).
+For 48GB+ GPUs: use `CheckpointLoaderSimple` with the dev int8 model.
 
 ### 5. COMFYUI_ARGS — `--lowvram` only
 
