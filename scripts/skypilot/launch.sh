@@ -51,7 +51,7 @@ fi
 # Parse arguments
 ACTION="launch"
 CLOUD_ARG=""
-GPU_TYPE="L40S:1"
+GPU_TYPE=""   # empty = let the yaml's accelerator list decide (L40S -> RTX6000Ada -> A6000 -> A40)
 EXTRA_ARGS=""
 
 while [[ $# -gt 0 ]]; do
@@ -74,14 +74,14 @@ TASK_FILE="$SCRIPT_DIR/ltx25-48gb.yaml"
 
 case "$ACTION" in
     launch)
-        echo "=== Launching SkyPilot LTX-2.5 ($GPU_TYPE) ==="
+        echo "=== Launching SkyPilot LTX-2.5 (${GPU_TYPE:-any 48GB from yaml list}) ==="
         echo "  Cluster: $CLUSTER_NAME"
-        echo "  GPU: $GPU_TYPE"
+        [ -n "$GPU_TYPE" ] && echo "  GPU: $GPU_TYPE"
         echo "  HF Token: set"
         ${CLOUD_ARG:+echo "  Cloud: $CLOUD_ARG"}
         echo ""
         sky launch -c "$CLUSTER_NAME" "$TASK_FILE" \
-            --gpus "$GPU_TYPE" \
+            ${GPU_TYPE:+--gpus "$GPU_TYPE"} \
             --env HF_TOKEN="$HF_TOKEN" \
             $CLOUD_ARG $EXTRA_ARGS
         ;;

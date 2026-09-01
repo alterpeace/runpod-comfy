@@ -49,14 +49,15 @@ resources:
   # onto the cloud's default Ubuntu image, which works on every supported
   # cloud and keeps multi-DC cheapest-first picking functional.
 
-  # Request a 48GB GPU. SkyPilot will find the cheapest available.
-  # Options (in priority order):
-  #   "L40S:1"        — 48GB, Ada Lovelace (best for LTX-2.5)
-  #   "A6000:1"       — 48GB, Ampere (older but capable)
-  #   "RTX6000Ada:1" — 48GB, Ada workstation
-  #   "A100-80GB:1"  — 80GB (overkill but works)
-  #   "RTX4090:1"    — 24GB (fallback, needs --lowvram)
-  accelerators: "L40S:1"  # Change to "A6000:1" or "RTX4090:1" as fallback
+  # Request a 48GB GPU. SkyPilot considers ALL of these and picks the
+  # cheapest one actually available — if L40S Secure is sold out everywhere
+  # (it happens), it falls back to the others instead of failing.
+  #   L40S         — 48GB Ada, best for LTX-2.5
+  #   RTX6000Ada   — 48GB Ada workstation
+  #   A6000        — 48GB Ampere, slower but often available
+  #   A40          — 48GB Ampere datacenter
+  # (RTX 4090 24GB fallback: use launch.sh --24gb)
+  accelerators: ["L40S:1", "RTX6000Ada:1", "A6000:1", "A40:1"]
 
   # 48GB VRAM is enough for the int8-convrot models without --lowvram
   # But we need enough system RAM for model loading
