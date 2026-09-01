@@ -282,14 +282,23 @@ case "$STORAGE_BACKEND" in
     "network-volume")
         log_success "Using network volume storage (default)"
         log_info "Models will be loaded from /runpod-volume/models"
-        # Symlink network volume model dirs into /comfyui/models so ComfyUI
-        # can discover them. Without this, CheckpointLoaderSimple and other
-        # model loaders see empty directories and reject workflows with
-        # "Value not in list" validation errors.
+        # Symlink the ENTIRE /comfyui/models directory to /runpod-volume/models.
+        # This ensures ALL model files on the volume are visible to ComfyUI,
+        # including ones added after the worker started (e.g. GGUF files
+        # downloaded via diagnostic actions). Individual subdirectory symlinks
+        # don't work because the Dockerfile creates real directories (like unet/)
+        # that shadow the volume's contents.
+        #
+        # Same approach as input/output directories — see symlink strategy in
+        # .kilocode/rules/container-layout.md: "entire-directory symlinks" pass
+        # ComfyUI's is_within_directory() realpath check, individual-file symlinks
+        # don't.
         if [ -d "/runpod-volume/models" ]; then
             # First: ensure the gemma4-12b-ltx-2.5 tokenizer directory exists
             # with the correct text-only config (not the multimodal one from
             # LTX-2.5-Pre-Trained which causes StrictDataclassFieldValidationError).
+            # This must happen BEFORE the symlink is created, since the symlink
+            # will point /comfyui/models -> /runpod-volume/models.
             GEMMA_DEST="/runpod-volume/models/text_encoders/gemma4-12b-ltx-2.5"
             GEMMA_SRC="/workspace/config/gemma4-12b-ltx-2.5"
             if [ -d "$GEMMA_SRC" ]; then
@@ -316,29 +325,20 @@ case "$STORAGE_BACKEND" in
                 log_success "Gemma 4 tokenizer directory ready at $GEMMA_DEST"
             fi
 
-            for subdir in /runpod-volume/models/*/; do
-                [ -d "$subdir" ] || continue
-                name="$(basename "$subdir")"
-                target="/comfyui/models/$name"
-                if [ ! -e "$target" ]; then
-                    # Target doesn't exist — symlink the whole subdirectory
-                    ln -sf "$subdir" "$target" 2>/dev/null && \
-                        log_info "  Linked: /comfyui/models/$name -> /runpod-volume/models/$name"
-                else
-                    # Target already exists (created by Dockerfile) —
-                    # symlink individual files from the volume subdirectory
-                    # into the existing target so both are accessible
-                    for item in "$subdir"/*; do
-                        [ -e "$item" ] || continue
-                        itemname="$(basename "$item")"
-                        itemtarget="$target/$itemname"
-                        if [ ! -e "$itemtarget" ]; then
-                            ln -sf "$item" "$itemtarget" 2>/dev/null && \
-                                log_info "  Linked: $itemtarget -> $item"
-                        fi
-                    done
-                fi
-            done
+            # Replace /comfyui/models with a symlink to /runpod-volume/models.
+            # The Dockerfile creates /comfyui/models/ with empty placeholder
+            # subdirectories — these are safe to remove since all real model
+            # files live on the network volume.
+            if [ -L "/comfyui/models" ]; then
+                log_info "  /comfyui/models already symlinked to volume"
+            elif [ -d "/comfyui/models" ]; then
+                rm -rf /comfyui/models
+                ln -sf /runpod-volume/models /comfyui/models
+                log_info "  Replaced: /comfyui/models -> /runpod-volume/models symlink"
+            else
+                ln -sf /runpod-volume/models /comfyui/models
+                log_info "  Linked: /comfyui/models -> /runpod-volume/models"
+            fi
             log_success "Network volume models linked to /comfyui/models/"
         else
             log_warning "No /runpod-volume/models directory found — models will be empty"

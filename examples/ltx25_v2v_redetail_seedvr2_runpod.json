@@ -1,11 +1,21 @@
 {
+  "_metadata": {
+    "gpu_tier": "24GB+",
+    "vram_required": "24GB",
+    "gpu_examples": "RTX 4090, L40S, A6000",
+    "model": "GGUF Q5_K_M + SeedVR2 3B FP16",
+    "resolution": "640x352 redetail -> SeedVR2 restore/upscale to 1080p",
+    "passes": "LTX single-pass (8 steps) + SeedVR2 restoration",
+    "encoding": "h264 all-intra (CRF 18, keyframe every frame - no motion artifacts)",
+    "note": "Chains LTX-2.5 V2V redetail with SeedVR2 diffusion restoration. SeedVR2 cleans quantization/motion artifacts AND upscales to 1080p in one pass. Requires ComfyUI-SeedVR2_VideoUpscaler (in add-dependancies.sh) and models from prepopulate_serverless.py --seedvr2-only."
+  },
   "1": {
     "inputs": {
-      "unet_name": "LTX-2.5-Distilled-Q4_K_M.gguf"
+      "unet_name": "LTX-2.5-Distilled-Q5_K_M.gguf"
     },
     "class_type": "UnetLoaderGGUF",
     "_meta": {
-      "title": "Load GGUF Diffusion Model (Q4_K_M)"
+      "title": "Load GGUF Diffusion Model (Q5)"
     }
   },
   "2": {
@@ -27,7 +37,7 @@
       ],
       "clip": [
         "2",
-        0
+        1
       ],
       "lora_name": "ltx-2.5-22b-distilled-lora-450-bf16.safetensors",
       "strength_model": 1.0,
@@ -70,13 +80,13 @@
       "force_rate": 24,
       "custom_width": 0,
       "custom_height": 0,
-      "frame_load_cap": 193,
+      "frame_load_cap": 361,
       "skip_first_frames": 0,
       "select_every_nth": 1
     },
     "class_type": "VHS_LoadVideo",
     "_meta": {
-      "title": "Load Input Video"
+      "title": "Load Input Video (15s @ 24fps)"
     }
   },
   "8": {
@@ -108,7 +118,7 @@
     },
     "class_type": "VAEEncode",
     "_meta": {
-      "title": "VAE Encode Input Video"
+      "title": "VAE Encode"
     }
   },
   "11": {
@@ -123,26 +133,20 @@
     },
     "class_type": "BasicScheduler",
     "_meta": {
-      "title": "Pass 1 Scheduler (8 steps, 0.3 denoise)"
+      "title": "Scheduler (8 steps, 0.3 denoise)"
     }
   },
   "12": {
     "inputs": {
       "sampler_name": "euler"
     },
-    "class_type": "KSamplerSelect",
-    "_meta": {
-      "title": "Pass 1 Sampler Select"
-    }
+    "class_type": "KSamplerSelect"
   },
   "13": {
     "inputs": {
       "noise_seed": 42
     },
-    "class_type": "RandomNoise",
-    "_meta": {
-      "title": "Pass 1 Noise"
-    }
+    "class_type": "RandomNoise"
   },
   "14": {
     "inputs": {
@@ -160,10 +164,7 @@
       ],
       "cfg": 1.0
     },
-    "class_type": "CFGGuider",
-    "_meta": {
-      "title": "Pass 1 CFG Guider"
-    }
+    "class_type": "CFGGuider"
   },
   "15": {
     "inputs": {
@@ -190,112 +191,7 @@
     },
     "class_type": "SamplerCustomAdvanced",
     "_meta": {
-      "title": "Pass 1 — Base Generation (8 steps, 640x352)"
-    }
-  },
-  "21": {
-    "inputs": {
-      "model_name": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
-    },
-    "class_type": "LatentUpscaleModelLoader",
-    "_meta": {
-      "title": "Load Latent Spatial Upscaler (2x)"
-    }
-  },
-  "16": {
-    "inputs": {
-      "samples": [
-        "15",
-        0
-      ],
-      "upscale_model": [
-        "21",
-        0
-      ],
-      "vae": [
-        "26",
-        0
-      ]
-    },
-    "class_type": "LTXVLatentUpsampler",
-    "_meta": {
-      "title": "2x Latent Upscale (640x352 -> 1280x704)"
-    }
-  },
-  "17": {
-    "inputs": {
-      "sigmas": "0.85, 0.725, 0.4219, 0.0"
-    },
-    "class_type": "ManualSigmas",
-    "_meta": {
-      "title": "Pass 2 Manual Sigmas (3 refinement steps)"
-    }
-  },
-  "18": {
-    "inputs": {
-      "sampler_name": "euler"
-    },
-    "class_type": "KSamplerSelect",
-    "_meta": {
-      "title": "Pass 2 Sampler Select"
-    }
-  },
-  "22": {
-    "inputs": {
-      "noise_seed": 42
-    },
-    "class_type": "RandomNoise",
-    "_meta": {
-      "title": "Pass 2 Noise"
-    }
-  },
-  "23": {
-    "inputs": {
-      "model": [
-        "3",
-        0
-      ],
-      "positive": [
-        "5",
-        0
-      ],
-      "negative": [
-        "6",
-        0
-      ],
-      "cfg": 1.0
-    },
-    "class_type": "CFGGuider",
-    "_meta": {
-      "title": "Pass 2 CFG Guider"
-    }
-  },
-  "24": {
-    "inputs": {
-      "noise": [
-        "22",
-        0
-      ],
-      "guider": [
-        "23",
-        0
-      ],
-      "sampler": [
-        "18",
-        0
-      ],
-      "sigmas": [
-        "17",
-        0
-      ],
-      "latent_image": [
-        "16",
-        0
-      ]
-    },
-    "class_type": "SamplerCustomAdvanced",
-    "_meta": {
-      "title": "Pass 2 — Refinement (3 steps, 1280x704)"
+      "title": "Single Pass Sampler (8 steps, 640x352)"
     }
   },
   "19": {
@@ -305,31 +201,13 @@
         0
       ],
       "samples": [
-        "24",
+        "15",
         0
       ]
     },
     "class_type": "VAEDecode",
     "_meta": {
-      "title": "VAE Decode (1280x704)"
-    }
-  },
-  "20": {
-    "inputs": {
-      "images": [
-        "19",
-        0
-      ],
-      "frame_rate": 24,
-      "loop_count": 0,
-      "filename_prefix": "ltx25_v2v_twopass_24gb",
-      "format": "video/h264-allintra",
-      "pingpong": false,
-      "save_output": true
-    },
-    "class_type": "VHS_VideoCombine",
-    "_meta": {
-      "title": "Save Output Video"
+      "title": "VAE Decode (redetailed 640x352)"
     }
   },
   "26": {
@@ -339,6 +217,93 @@
     "class_type": "VAELoader",
     "_meta": {
       "title": "Load Video VAE"
+    }
+  },
+  "30": {
+    "inputs": {
+      "model": "seedvr2_ema_3b_fp16.safetensors",
+      "device": "cuda:0",
+      "offload_device": "cpu",
+      "blocks_to_swap": 0,
+      "swap_io_components": false,
+      "cache_model": false,
+      "attention_mode": "sdpa"
+    },
+    "class_type": "SeedVR2LoadDiTModel",
+    "_meta": {
+      "title": "SeedVR2 DiT 3B FP16 (restoration)"
+    }
+  },
+  "31": {
+    "inputs": {
+      "model": "ema_vae_fp16.safetensors",
+      "device": "cuda:0",
+      "offload_device": "cpu",
+      "cache_model": false,
+      "encode_tiled": true,
+      "encode_tile_size": 512,
+      "encode_tile_overlap": 64,
+      "decode_tiled": true,
+      "decode_tile_size": 512,
+      "decode_tile_overlap": 64
+    },
+    "class_type": "SeedVR2LoadVAEModel",
+    "_meta": {
+      "title": "SeedVR2 VAE (Tiled 512px)"
+    }
+  },
+  "32": {
+    "inputs": {
+      "image": [
+        "19",
+        0
+      ],
+      "dit": [
+        "30",
+        0
+      ],
+      "vae": [
+        "31",
+        0
+      ],
+      "seed": 42,
+      "resolution": 1080,
+      "max_resolution": 0,
+      "batch_size": 5,
+      "uniform_batch_size": false,
+      "color_correction": "lab",
+      "temporal_overlap": 0,
+      "prepend_frames": 0,
+      "input_noise_scale": 0.0,
+      "latent_noise_scale": 0.0,
+      "offload_device": "cpu",
+      "enable_debug": false
+    },
+    "class_type": "SeedVR2VideoUpscaler",
+    "_meta": {
+      "title": "SeedVR2 Restore + Upscale to 1080p"
+    }
+  },
+  "33": {
+    "inputs": {
+      "images": [
+        "32",
+        0
+      ],
+      "audio": [
+        "7",
+        2
+      ],
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "ltx25_v2v_seedvr2",
+      "format": "video/h264-allintra",
+      "pingpong": false,
+      "save_output": true
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Save Output Video (all-intra h264, source audio)"
     }
   }
 }

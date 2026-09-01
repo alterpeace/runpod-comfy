@@ -208,6 +208,13 @@ for installation instructions.
 | [`ltx25_v2v_redetail_24gb.json`](ltx25_v2v_redetail_24gb.json) | V2V redetail with IC-LoRA + spatial upscale | 24GB | API |
 | [`ltx25_v2v_redetail_8gb.json`](ltx25_v2v_redetail_8gb.json) | V2V redetail with GGUF Q4 (low VRAM) | 8GB | API |
 | [`ltx25_animatediff_restyle_upscale_24gb.json`](ltx25_animatediff_restyle_upscale_24gb.json) | Creative restyle + spatial + temporal upscale | 24GB | API |
+| [`ltx25_v2v_redetail_seedvr2_runpod.json`](ltx25_v2v_redetail_seedvr2_runpod.json) | **Recommended**: LTX redetail → SeedVR2 restore → 1080p all-intra h264 | 24GB | API |
+
+All LTX-2.5 workflows output `video/h264-allintra` (keyframe every frame,
+CRF 18) — this eliminates the motion-dependent compression artifacts produced
+by the default long-GOP `video/h264-mp4` format. Use `video/ProRes` (see
+[`ltx25_v2v_redetail_recommended_runpod.json`](ltx25_v2v_redetail_recommended_runpod.json))
+for archival masters.
 
 **Install LTX-2.5 models:**
 ```bash

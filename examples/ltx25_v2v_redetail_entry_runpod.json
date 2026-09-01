@@ -1,7 +1,7 @@
 {
   "1": {
     "inputs": {
-      "unet_name": "LTX-2.5-Distilled-Q4_K_M.gguf"
+      "unet_name": "LTX-2.5-Distilled-Q5_K_M.gguf"
     },
     "class_type": "UnetLoaderGGUF",
     "_meta": {
@@ -209,7 +209,7 @@
       "frame_rate": 24,
       "loop_count": 0,
       "filename_prefix": "ltx25_v2v_entry",
-      "format": "video/h264-mp4",
+      "format": "video/h264-allintra",
       "pingpong": false,
       "save_output": true
     },

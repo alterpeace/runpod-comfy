@@ -1,0 +1,259 @@
+# =============================================================================
+# SkyPilot task file for LTX-2.5 video generation on 48GB GPUs.
+#
+# Usage:
+#   # Install SkyPilot first: pip install skypilot
+#
+#   # Set your API keys
+#   export RUNPOD_API_KEY=your_key
+#   export HF_TOKEN=your_hf_token
+#
+#   # Launch on RunPod (cheapest available 48GB GPU)
+#   sky launch -c ltx25 scripts/skypilot/ltx25-48gb.yaml
+#
+#   # Launch on Lambda Labs
+#   sky launch -c ltx25 --cloud lambda scripts/skypilot/ltx25-48gb.yaml
+#
+#   # Launch on Vast.ai (cheapest)
+#   sky launch -c ltx25 --cloud vast scripts/skypilot/ltx25-48gb.yaml
+#
+#   # Check status
+#   sky status
+#
+#   # SSH into the machine
+#   sky ssh ltx25
+#
+#   # Port-forward ComfyUI WebUI
+#   sky port-forward ltx25 8188
+#
+#   # Stop when done (saves cost, keeps disk)
+#   sky stop ltx25
+#
+#   # Resume later
+#   sky start ltx25
+#
+#   # Terminate (destroys disk)
+#   sky down ltx25
+#
+# Environment variables:
+#   HF_TOKEN          HuggingFace token for gated LTX-2.5 repos (required)
+#   RUNPOD_API_KEY    RunPod API key (if using RunPod)
+#   LAMBDA_CLOUD_API_KEY  Lambda Labs API key (if using Lambda)
+#   VAST_API_KEY      Vast.ai API key (if using Vast.ai)
+# =============================================================================
+
+resources:
+  # Use a CUDA 12.9 image that matches our ComfyUI setup
+  image_id: docker.io/nvidia/cuda:12.9.0-cudnn-devel-ubuntu22.04
+
+  # Request a 48GB GPU. SkyPilot will find the cheapest available.
+  # Options (in priority order):
+  #   "L40S:1"        — 48GB, Ada Lovelace (best for LTX-2.5)
+  #   "A6000:1"       — 48GB, Ampere (older but capable)
+  #   "RTX6000Ada:1" — 48GB, Ada workstation
+  #   "A100-80GB:1"  — 80GB (overkill but works)
+  #   "RTX4090:1"    — 24GB (fallback, needs --lowvram)
+  accelerators: "L40S:1"  # Change to "A6000:1" or "RTX4090:1" as fallback
+
+  # 48GB VRAM is enough for the int8-convrot models without --lowvram
+  # But we need enough system RAM for model loading
+  memory: 32+
+
+  # Large disk for model downloads (~88GB)
+  disk_size: 200
+
+# Note: For sky launch, use `sky port-forward ltx25 8188` to access the WebUI.
+#
+# SERVERLESS-LIKE AUTOSCALING (sky serve):
+# Uncomment the `service` block below, then boot with:
+#   sky serve up ltx25-service scripts/skypilot/ltx25-48gb.yaml
+# This runs an autoscaled endpoint behind a load balancer: replicas scale
+# between min and max based on request load, and scale back down when idle.
+# Query it with: sky serve status ltx25-service
+# The endpoint URL is printed by `sky serve status` (e.g. http://<lb-ip>:30001).
+#
+# service:
+#   readiness_probe:
+#     path: /
+#     initial_delay_seconds: 120
+#     post_data: ''
+#   replica_policy:
+#     min_replicas: 0        # scale to zero when idle (true pay-per-use)
+#     max_replicas: 2
+#     target_qps_per_replica: 0.5
+#     dynamic_ondemand_fallback: true
+
+# Environment variables to pass to the container
+envs:
+  HF_TOKEN: "${HF_TOKEN}"
+  COMFYUI_ARGS: " "  # Empty = no --lowvram (48GB fits models in VRAM)
+  # For 24GB GPUs, set: COMFYUI_ARGS: "--lowvram"
+
+# Setup runs ONCE on first launch (or when setup changes)
+# This is where we install deps and download models
+setup: |
+  set -e
+
+  echo "=== SkyPilot LTX-2.5 48GB Setup ==="
+
+  # Install system dependencies
+  apt-get update && apt-get install -y \
+    git wget curl python3 python3-pip python3-venv \
+    libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
+    ffmpeg pkg-config
+
+  # Install uv (project package manager — fast, no pip needed)
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  export PATH="$HOME/.local/bin:$PATH"
+
+  # Create Python venv with uv
+  uv venv /opt/venv --python 3.12
+  source /opt/venv/bin/activate
+
+  # Install PyTorch with CUDA 12.9
+  uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu129
+
+  # Install ComfyUI
+  git clone https://github.com/comfyanonymous/ComfyUI.git /opt/ComfyUI
+  cd /opt/ComfyUI
+  uv pip install -r requirements.txt
+
+  # Install custom nodes
+  cd /opt/ComfyUI/custom_nodes
+
+  # ComfyUI-LTXVideo (LTX-2.5 support, IC-LoRA nodes)
+  git clone https://github.com/Lightricks/ComfyUI-LTXVideo.git
+  if [ -f ComfyUI-LTXVideo/requirements.txt ]; then
+    uv pip install -r ComfyUI-LTXVideo/requirements.txt
+  fi
+
+  # ComfyUI-GGUF (GGUF model support)
+  git clone https://github.com/city96/ComfyUI-GGUF.git
+
+  # ComfyUI-VideoHelperSuite (video output)
+  git clone https://github.com/Kosinkadank/ComfyUI-VideoHelperSuite.git
+  if [ -f ComfyUI-VideoHelperSuite/requirements.txt ]; then
+    uv pip install -r ComfyUI-VideoHelperSuite/requirements.txt
+  fi
+
+  # ComfyUI-SeedVR2_VideoUpscaler (diffusion video restoration)
+  git clone https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler.git
+  if [ -f ComfyUI-SeedVR2_VideoUpscaler/requirements.txt ]; then
+    uv pip install -r ComfyUI-SeedVR2_VideoUpscaler/requirements.txt
+  fi
+
+  # Install HuggingFace CLI for model downloads
+  uv pip install huggingface_hub hf_transfer
+
+  # Enable hf_transfer for faster downloads
+  export HF_HUB_ENABLE_HF_TRANSFER=1
+
+  # Clone this project for workflow examples + video format configs
+  git clone https://github.com/${GITHUB_REPO:-alterpeace/runpod-comfy}.git /opt/runpod-comfy || true
+
+  # Install all-intra h264 video format (keyframe every frame — no motion artifacts)
+  if [ -f /opt/runpod-comfy/config/video_formats/h264-allintra.json ]; then
+    mkdir -p /opt/ComfyUI/custom_nodes/ComfyUI-VideoHelperSuite/video_formats
+    cp -f /opt/runpod-comfy/config/video_formats/h264-allintra.json \
+      /opt/ComfyUI/custom_nodes/ComfyUI-VideoHelperSuite/video_formats/
+    echo "Installed h264-allintra video format"
+  fi
+
+  # Create model directories
+  mkdir -p /opt/ComfyUI/models/{checkpoints,text_encoders,vae,loras,latent_upscale_models,model_patches,unet}
+  mkdir -p /opt/ComfyUI/models/SEEDVR2
+
+  echo "=== Downloading LTX-2.5 models ==="
+
+  # Download models from HuggingFace
+  # LTX-2.5 is gated — HF_TOKEN must be set
+  HF_TOKEN="${HF_TOKEN}"
+
+  # --- Text encoder (int8-convrot) ---
+  hf download Lightricks/LTX-2.5 \
+    text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors \
+    --local-dir /opt/ComfyUI/models/text_encoders
+
+  # --- Text encoder tokenizer files ---
+  hf download Lightricks/LTX-2.5-Pre-Trained \
+    ltx-2.5-22b-gemma4-12b/config.json \
+    ltx-2.5-22b-gemma4-12b/tokenizer_config.json \
+    ltx-2.5-22b-gemma4-12b/tokenizer.json \
+    ltx-2.5-22b-gemma4-12b/chat_template.jinja \
+    ltx-2.5-22b-gemma4-12b/generation_config.json \
+    ltx-2.5-22b-gemma4-12b/processor_config.json \
+    --local-dir /opt/ComfyUI/models/text_encoders/gemma4-12b-ltx-2.5
+
+  # Create model.safetensors symlink (for LTXVGemmaCLIPModelLoader)
+  ln -sf ../gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors \
+    /opt/ComfyUI/models/text_encoders/gemma4-12b-ltx-2.5/model.safetensors
+
+  # --- Dev transformer (int8-convrot, ~22GB) ---
+  hf download Lightricks/LTX-2.5 \
+    diffusion_models/ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors \
+    --local-dir /opt/ComfyUI/models/checkpoints
+
+  # --- Distilled transformer (int8-convrot, ~22GB) ---
+  hf download Lightricks/LTX-2.5 \
+    diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors \
+    --local-dir /opt/ComfyUI/models/checkpoints
+
+  # --- VAEs ---
+  hf download Lightricks/LTX-2.5 \
+    vae/ltx-2.5-video-vae-bf16.safetensors \
+    vae/ltx-2.5-audio-vae-bf16.safetensors \
+    --local-dir /opt/ComfyUI/models/vae
+
+  # --- LoRAs ---
+  hf download Lightricks/LTX-2.5 \
+    loras/ltx-2.5-22b-distilled-lora-450-bf16.safetensors \
+    --local-dir /opt/ComfyUI/models/loras
+
+  # --- IC-LoRA pixel upscaler ---
+  hf download Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler \
+    ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors \
+    --local-dir /opt/ComfyUI/models/loras
+
+  # --- Latent upscalers ---
+  hf download Lightricks/LTX-2.5 \
+    latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors \
+    latent_upscale_models/ltx-2.5-latent-temporal-upscaler-x2-bf16-1.0.safetensors \
+    --local-dir /opt/ComfyUI/models/latent_upscale_models
+
+  # --- Duration head patch ---
+  hf download Lightricks/LTX-2.5 \
+    model_patches/ltx-2.5-duration-head-bf16.safetensors \
+    --local-dir /opt/ComfyUI/models/model_patches
+
+  # --- Text enhancer (Gemma 4 E2B) ---
+  hf download Comfy-Org/gemma-4 \
+    text_encoders/gemma4_e2b_it_bf16.safetensors \
+    --local-dir /opt/ComfyUI/models/text_encoders
+
+  # --- Distilled GGUF Q5_K_M (for entry + SeedVR2-chained V2V workflows) ---
+  hf download Abiray/LTX-2.5-Distilled-GGUF \
+    LTX-2.5-Distilled-Q5_K_M.gguf \
+    --local-dir /opt/ComfyUI/models/unet
+
+  echo "=== Downloading SeedVR2 ==="
+
+  # --- SeedVR2 3B + VAE ---
+  hf download numz/SeedVR2_comfyUI \
+    seedvr2_ema_3b_fp16.safetensors \
+    ema_vae_fp16.safetensors \
+    --local-dir /opt/ComfyUI/models/SEEDVR2
+
+  echo "=== Setup complete! ==="
+  echo "Models in /opt/ComfyUI/models/"
+  du -sh /opt/ComfyUI/models/*/
+
+# Run starts ComfyUI on every launch (including resume from stop)
+run: |
+  source /opt/venv/bin/activate
+  cd /opt/ComfyUI
+
+  # ComfyUI args:
+  # - --listen 0.0.0.0  : allow external connections (for port-forward)
+  # - --port 8188       : ComfyUI port
+  # - COMFYUI_ARGS      : extra args from env (empty for 48GB, --lowvram for 24GB)
+  python main.py --listen 0.0.0.0 --port 8188 ${COMFYUI_ARGS}
