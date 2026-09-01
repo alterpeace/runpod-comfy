@@ -43,8 +43,11 @@
 # =============================================================================
 
 resources:
-  # Use a CUDA 12.9 image that matches our ComfyUI setup
-  image_id: docker.io/nvidia/cuda:12.9.0-cudnn-devel-ubuntu22.04
+  # NOTE: no `image_id` here — SkyPilot refuses to auto-pick a cloud when a
+  # custom docker image is pinned ("Cloud must be specified when image_id is
+  # provided"). The setup script installs CUDA 12.9 PyTorch from pip wheels
+  # onto the cloud's default Ubuntu image, which works on every supported
+  # cloud and keeps multi-DC cheapest-first picking functional.
 
   # Request a 48GB GPU. SkyPilot will find the cheapest available.
   # Options (in priority order):
@@ -97,7 +100,7 @@ setup: |
   echo "=== SkyPilot LTX-2.5 48GB Setup ==="
 
   # Install system dependencies
-  apt-get update && apt-get install -y \
+  sudo apt-get update && sudo apt-get install -y \
     git wget curl python3 python3-pip python3-venv \
     libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
     ffmpeg pkg-config
