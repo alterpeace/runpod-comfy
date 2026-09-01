@@ -102,22 +102,43 @@ curl http://<endpoint>:30001/history
 Replicas scale 0→2 with load (`min_replicas: 0` = scale to zero = pay only
 when processing), across DCs if multiple clouds are configured.
 
-### Processing video (either option)
+### Processing video (the old serverless flow, SkyPilot style)
 
-1. Get the video onto the machine:
-   ```bash
-   # single instance
-   sky ssh ltx25
-   # then from your laptop: scp myvideo.mp4 <user>@<head-ip>:/tmp/ && mv it to /opt/ComfyUI/input/
-   ```
-   (For `sky serve`, upload via the WebUI file manager or bake an upload step
-   into your client script.)
-2. Load [`examples/ltx25_v2v_redetail_seedvr2_runpod.json`](../examples/ltx25_v2v_redetail_seedvr2_runpod.json)
-   (recommended: LTX redetail → SeedVR2 restore → 1080p all-intra h264) or
-   [`examples/ltx25_v2v_redetail_entry_runpod.json`](../examples/ltx25_v2v_redetail_entry_runpod.json)
-   (fast preview).
-3. Point the `VHS_LoadVideo` node at your filename, queue, collect output from
-   `/opt/ComfyUI/output/` (or the WebUI gallery).
+The old RunPod flow was: upload to S3 → invoke endpoint → poll → download
+from S3. The SkyPilot equivalent is one script that does upload → queue →
+wait → download over the port-forwarded API:
+
+```bash
+# Terminal 1: boot + forward (leave running)
+./scripts/skypilot/launch.sh
+./scripts/skypilot/launch.sh port-forward
+
+# Terminal 2: process videos — same UX as the old invoke_v2v_with_upload.py
+uv run python scripts/invoke/invoke_skypilot.py --video rhizome.mp4
+
+# Options: custom workflow, prompt, seed, output dir
+uv run python scripts/invoke/invoke_skypilot.py --video clip.mp4 \
+    --workflow examples/ltx25_v2v_redetail_entry_runpod.json \
+    --prompt "cinematic, moody lighting" --seed 123 --out output/
+```
+
+The script ([`scripts/invoke/invoke_skypilot.py`](../scripts/invoke/invoke_skypilot.py))
+uploads the video to ComfyUI's input, patches the workflow's `VHS_LoadVideo`
+node, queues it, polls until done, and downloads the resulting MP4(s) to
+`output/`. Default workflow: the SeedVR2-chained 1080p all-intra pipeline.
+
+Batch processing = loop it:
+
+```bash
+for f in clips/*.mp4; do
+  uv run python scripts/invoke/invoke_skypilot.py --video "$f"
+done
+./scripts/skypilot/launch.sh stop    # stop billing when the batch is done
+```
+
+Manual alternative: the WebUI (Step 2, Option A) — upload via the input
+panel, load a workflow from [`examples/`](../examples/), queue, download
+from the gallery.
 
 ---
 

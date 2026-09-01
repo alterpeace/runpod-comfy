@@ -70,13 +70,20 @@ runpodctl ssh <pod-id>
 
 ### Project-specific notes
 
-- This project's endpoint ID: `taea2mhlwbdkuq` (set in `.env` as
-  `RUNPOD_ENDPOINT_ID`)
-- Network volume ID: `el6aj9vatl` (set in `.env` as needed)
+> **⚠️ DECOMMISSIONED 2026-09-01:** The RunPod serverless endpoint
+> (`taea2mhlwbdkuq`) and network volume (`el6aj9vatl`) were deleted. The
+> project now runs on **SkyPilot** (multi-cloud, autoscaling) — see
+> [`SKYPILOT_SETUP.md`](SKYPILOT_SETUP.md) for the current workflow. The
+> RunPod scripts in [`lifecycle/`](../lifecycle/) remain usable if you
+> recreate an endpoint, but nothing is deployed on RunPod anymore.
+
 - The Python lifecycle scripts in [`lifecycle/runpod_pods.py`](../lifecycle/runpod_pods.py)
   and [`lifecycle/runpod_serverless.py`](../lifecycle/runpod_serverless.py) wrap
-  the RunPod SDK and are preferred for scripted operations
+  the RunPod SDK and are preferred for scripted operations (if RunPod is used again)
 - `runpodctl` is useful for ad-hoc debugging and file transfers
+- Video processing now goes through
+  [`scripts/invoke/invoke_skypilot.py`](../scripts/invoke/invoke_skypilot.py)
+  against a SkyPilot-hosted ComfyUI instance
 
 ---
 

@@ -173,7 +173,7 @@ Key nodes:
 ```python
 import runpod, os
 runpod.api_key = os.environ['RUNPOD_API_KEY']
-endpoint = runpod.Endpoint('taea2mhlwbdkuq')
+endpoint = runpod.Endpoint(os.environ['RUNPOD_ENDPOINT_ID'])  # DECOMMISSIONED — see docs/SKYPILOT_SETUP.md
 
 job = endpoint.run({
     "input": {
