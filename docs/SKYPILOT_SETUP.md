@@ -36,6 +36,52 @@ VAST_API_KEY=...           # for Vast.ai DCs (optional)
 Get the HF token at <https://huggingface.co/Lightricks/LTX-2.5> →
 "Agree and Access and get token".
 
+### Enabling additional providers (multi-cloud cheapest-first)
+
+SkyPilot only considers **enabled** clouds. `sky status` showed
+`Enabled Infra: runpod` — that's why every candidate was RunPod. To add more:
+
+```bash
+# 1. Put each provider's credentials where SkyPilot expects them
+#    Lambda Labs (cloud.lambda.ai → API keys):
+export LAMBDA_CLOUD_API_KEY=...
+#    Vast.ai (console.vast.ai → API keys):
+export VAST_API_KEY=...
+#    AWS (any region with GPU capacity):
+aws configure
+#    GCP: gcloud auth application-default login  (or a service account)
+#    Azure: az login
+
+# 2. Re-scan — SkyPilot enables every cloud it finds credentials for
+sky check
+
+# 3. Confirm
+sky status          # "Enabled Infra" should now list all of them
+sky gpus L40S --all # browse L40S prices/availability across ALL enabled clouds
+```
+
+Once two or more clouds are enabled, `./scripts/skypilot/launch.sh` (no
+`--cloud` flag) automatically considers **every enabled cloud and every
+region** and provisions the cheapest GPU that's actually in stock — the
+14-region sweep you saw was RunPod-only; with Lambda/Vast enabled the same
+sweep covers their DCs too. Pin one with `--cloud lambda` / `--cloud vast`
+when you want to force it.
+
+Notes per provider:
+
+| Provider | 48GB GPUs | Setup notes |
+|---|---|---|
+| RunPod | L40S, RTX 6000 Ada, A6000, A40 | Secure Cloud only via SkyPilot; keys in `.env` |
+| Lambda | L40S, A100, H100 | Simple API key; on-demand only |
+| Vast.ai | L40S, RTX 6000 Ada, A6000, 4090... | Usually cheapest; interruptible pricing |
+| AWS | A10G, L4, A100, H100 | No 48GB single-die GPU except A100 80GB (pricier) |
+| GCP | L4, A100 | Same as AWS |
+| Azure | A100, NC-series | Same as AWS |
+
+The task yaml is cloud-agnostic (no pinned image, driver installed by
+SkyPilot), so nothing else changes — the same setup script runs on any of
+them.
+
 ---
 
 ## Step 1 — Boot (multi-DC)
