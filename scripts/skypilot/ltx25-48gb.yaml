@@ -125,7 +125,7 @@ setup: |
   sudo apt-get update && sudo apt-get install -y \
     git wget curl python3 python3-pip python3-venv \
     libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
-    ffmpeg pkg-config
+    ffmpeg pkg-config socat
 
   # Install uv (project package manager — fast, no pip needed)
   curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -281,4 +281,14 @@ run: |
   # - --listen 0.0.0.0  : allow external connections (for port-forward)
   # - --port 8188       : ComfyUI port
   # - COMFYUI_ARGS      : extra args from env (empty for 48GB, --lowvram for 24GB)
-  python main.py --listen 0.0.0.0 --port 8188 ${COMFYUI_ARGS}
+  python main.py --listen 0.0.0.0 --port 8188 ${COMFYUI_ARGS} &
+  COMFY_PID=$!
+
+  # Bridge ComfyUI onto RunPod's pre-registered Jupyter HTTP port (19123) so
+  # the WebUI is reachable at https://<pod-hostname>-19123.proxy.runpod.net
+  # (RUNPOD_POD_HOSTNAME from /proc/1/environ) without editing pod ports.
+  sleep 2
+  socat TCP-LISTEN:19123,fork,reuseaddr TCP:127.0.0.1:8188 \
+    > /workspace/logs/socat-19123.log 2>&1 &
+
+  wait $COMFY_PID
