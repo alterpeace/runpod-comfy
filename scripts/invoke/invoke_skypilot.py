@@ -5,7 +5,7 @@ Invoke a V2V workflow against a SkyPilot-hosted ComfyUI instance.
 This is the SkyPilot-style replacement for invoke_v2v_with_upload.py (which
 targeted the now-deleted RunPod serverless endpoint). Same UX — upload video,
 queue workflow, wait, download output — but against a ComfyUI instance
-running on a SkyPilot GPU instance, reached through `sky port-forward`.
+running on a SkyPilot GPU instance, reached through an SSH tunnel (launch.sh port-forward).
 
 Prerequisites:
     ./scripts/skypilot/launch.sh            # boot the instance (once)
@@ -63,7 +63,7 @@ def main():
     parser.add_argument("--video", required=True, type=Path, help="Local video file to process")
     parser.add_argument("--workflow", type=Path, default=DEFAULT_WORKFLOW, help="Workflow JSON (API format)")
     parser.add_argument("--url", default="http://localhost:8188",
-                        help="ComfyUI base URL (default: http://localhost:8188 via sky port-forward)")
+                        help="ComfyUI base URL (default: http://localhost:8188 via ssh tunnel: launch.sh port-forward)")
     parser.add_argument("--prompt", help="Override positive prompt")
     parser.add_argument("--negative", help="Override negative prompt")
     parser.add_argument("--seed", type=int, help="Override noise seed")
@@ -78,6 +78,10 @@ def main():
         raise SystemExit(f"ERROR: workflow not found: {args.workflow}")
 
     workflow = json.loads(args.workflow.read_text())
+
+    # Strip metadata blocks — ComfyUI expects only {node_id: {class_type, ...}}
+    workflow = {k: v for k, v in workflow.items()
+                if isinstance(v, dict) and "class_type" in v}
 
     # Point the video loader at the file we will upload
     loader_id = find_video_loader_node(workflow)

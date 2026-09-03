@@ -1,0 +1,206 @@
+# =============================================================================
+# SkyPilot serve file: scale-to-zero LTX-2.5 endpoint on RunPod 48GB GPUs.
+#
+# Same stack as scripts/skypilot/ltx25-48gb.yaml but with the `service` block
+# active (SkyPilot's serverless mode) and cloud pinned to RunPod.
+#
+# Usage:
+#   set -a && source .env && set +a
+#   sky serve up ltx25-service scripts/skypilot/ltx25-48gb-serve.yaml
+#
+#   sky serve status ltx25-service            # readiness + endpoint URL
+#   sky serve logs ltx25-service              # controller logs
+#   sky serve down ltx25-service              # terminate everything
+# =============================================================================
+
+service:
+  readiness_probe:
+    path: /
+    initial_delay_seconds: 120
+  replica_policy:
+    min_replicas: 0      # scale to zero when idle (true pay-per-use)
+    max_replicas: 1      # one 48GB worker; raise if you need throughput
+    target_qps_per_replica: 0.5
+    # dynamic_ondemand_fallback requires use_spot: true (RunPod Community Cloud).
+    # Leave off for on-demand Secure Cloud replicas like the launch yaml.
+
+resources:
+  cloud: runpod
+  # Replica MUST sit in the volume's datacenter — RunPod network volumes only
+  # attach to pods in the same DC (SkyServe ignores volume topology otherwise).
+  region: NL
+  zone: EU-NL-1
+  ports: 8188
+  # SkyPilot considers ALL of these and picks the cheapest actually available:
+  #   L40S — 48GB Ada, best for LTX-2.5 | L40 | RTX6000Ada | A6000 | A40 | PRO-6000 MIG
+  accelerators: ["L40S:1", "L40:1", "RTX6000Ada:1", "A6000:1", "A40:1", "PRO-6000-MIG-48GB:1"]
+  memory: 32+
+  # RunPod caps CONTAINER disk at 40GB — models live on the network volume
+  # below; the container disk only holds the venv + ComfyUI code (~15GB).
+  disk_size: 40
+
+# Persistent RunPod network volume (200GB, created via:
+#   sky volumes apply -n ltx25-vol --infra runpod/NL/EU-NL-1 \
+#     --type runpod-network-volume --size 200)
+# Pins replicas to US-CA-2. Survives scale-to-zero and pod replacement.
+volumes:
+  /workspace:
+    name: ltx25-vol
+
+envs:
+  HF_TOKEN: "${HF_TOKEN}"
+  COMFYUI_ARGS: " "  # Empty = no --lowvram (48GB fits models in VRAM)
+
+# Setup runs ONCE on first provision (persists across scale-to-zero — the pod
+# is autostopped, not terminated, so disk and downloaded models are kept).
+setup: |
+  set -e
+
+  # Datacenter IPs get rate-limited by GitHub; retry clones.
+  gitc() { for i in 1 2 3 4 5; do git clone "$@" && return 0; echo "git clone retry $i"; sleep 10; done; return 1; }
+
+  echo "=== SkyPilot LTX-2.5 48GB Setup (serve) ==="
+
+  sudo apt-get update && sudo apt-get install -y \
+    git wget curl python3 python3-pip python3-venv \
+    libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
+    ffmpeg pkg-config
+
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  export PATH="$HOME/.local/bin:$PATH"
+
+  # Idempotent: reuse existing venv from a previous partial setup
+  if [ ! -d /opt/venv ]; then uv venv /opt/venv --python 3.12; fi
+  source /opt/venv/bin/activate
+
+  # PyTorch with CUDA 12.9
+  uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu129
+
+  rm -rf /opt/ComfyUI
+  gitc https://github.com/comfyanonymous/ComfyUI.git /opt/ComfyUI
+  cd /opt/ComfyUI
+  uv pip install -r requirements.txt
+
+  cd /opt/ComfyUI/custom_nodes
+
+  gitc https://github.com/Lightricks/ComfyUI-LTXVideo.git
+  if [ -f ComfyUI-LTXVideo/requirements.txt ]; then
+    uv pip install -r ComfyUI-LTXVideo/requirements.txt
+  fi
+
+  gitc https://github.com/city96/ComfyUI-GGUF.git
+
+  gitc https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git
+  if [ -f ComfyUI-VideoHelperSuite/requirements.txt ]; then
+    uv pip install -r ComfyUI-VideoHelperSuite/requirements.txt
+  fi
+
+  gitc https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler.git
+  if [ -f ComfyUI-SeedVR2_VideoUpscaler/requirements.txt ]; then
+    uv pip install -r ComfyUI-SeedVR2_VideoUpscaler/requirements.txt
+  fi
+
+  uv pip install huggingface_hub hf_transfer
+  export HF_HUB_ENABLE_HF_TRANSFER=1
+
+  gitc https://github.com/${GITHUB_REPO:-alterpeace/runpod-comfy}.git /opt/runpod-comfy || true
+
+  if [ -f /opt/runpod-comfy/config/video_formats/h264-allintra.json ]; then
+    mkdir -p /opt/ComfyUI/custom_nodes/ComfyUI-VideoHelperSuite/video_formats
+    cp -f /opt/runpod-comfy/config/video_formats/h264-allintra.json \
+      /opt/ComfyUI/custom_nodes/ComfyUI-VideoHelperSuite/video_formats/
+    echo "Installed h264-allintra video format"
+  fi
+
+  # Models live on the 200GB network volume mounted at /workspace (container
+  # disk is capped at 40GB on RunPod). Symlink ComfyUI's models dir onto it.
+  mkdir -p /workspace/models
+  rm -rf /opt/ComfyUI/models
+  ln -s /workspace/models /opt/ComfyUI/models
+  mkdir -p /workspace/models/{checkpoints,text_encoders,vae,loras,latent_upscale_models,model_patches,unet}
+  mkdir -p /workspace/models/SEEDVR2
+
+  echo "=== Downloading LTX-2.5 models ==="
+
+  HF_TOKEN="${HF_TOKEN}"
+
+  # --- Text encoder (int8-convrot) ---
+  hf download Lightricks/LTX-2.5 \
+    text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors \
+    --local-dir /opt/ComfyUI/models/text_encoders
+
+  # --- Text encoder tokenizer files ---
+  hf download Lightricks/LTX-2.5-Pre-Trained \
+    ltx-2.5-22b-gemma4-12b/config.json \
+    ltx-2.5-22b-gemma4-12b/tokenizer_config.json \
+    ltx-2.5-22b-gemma4-12b/tokenizer.json \
+    ltx-2.5-22b-gemma4-12b/chat_template.jinja \
+    ltx-2.5-22b-gemma4-12b/generation_config.json \
+    ltx-2.5-22b-gemma4-12b/processor_config.json \
+    --local-dir /opt/ComfyUI/models/text_encoders/gemma4-12b-ltx-2.5
+
+  ln -sf ../gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors \
+    /opt/ComfyUI/models/text_encoders/gemma4-12b-ltx-2.5/model.safetensors
+
+  # --- Dev transformer (int8-convrot, ~22GB) ---
+  hf download Lightricks/LTX-2.5 \
+    diffusion_models/ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors \
+    --local-dir /opt/ComfyUI/models/checkpoints
+
+  # --- Distilled transformer (int8-convrot, ~22GB) ---
+  hf download Lightricks/LTX-2.5 \
+    diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors \
+    --local-dir /opt/ComfyUI/models/checkpoints
+
+  # --- VAEs ---
+  hf download Lightricks/LTX-2.5 \
+    vae/ltx-2.5-video-vae-bf16.safetensors \
+    vae/ltx-2.5-audio-vae-bf16.safetensors \
+    --local-dir /opt/ComfyUI/models/vae
+
+  # --- LoRAs ---
+  hf download Lightricks/LTX-2.5 \
+    loras/ltx-2.5-22b-distilled-lora-450-bf16.safetensors \
+    --local-dir /opt/ComfyUI/models/loras
+
+  # --- IC-LoRA pixel upscaler ---
+  hf download Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler \
+    ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors \
+    --local-dir /opt/ComfyUI/models/loras
+
+  # --- Latent upscalers ---
+  hf download Lightricks/LTX-2.5 \
+    latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors \
+    latent_upscale_models/ltx-2.5-latent-temporal-upscaler-x2-bf16-1.0.safetensors \
+    --local-dir /opt/ComfyUI/models/latent_upscale_models
+
+  # --- Duration head patch ---
+  hf download Lightricks/LTX-2.5 \
+    model_patches/ltx-2.5-duration-head-bf16.safetensors \
+    --local-dir /opt/ComfyUI/models/model_patches
+
+  # --- Text enhancer (Gemma 4 E2B) ---
+  hf download Comfy-Org/gemma-4 \
+    text_encoders/gemma4_e2b_it_bf16.safetensors \
+    --local-dir /opt/ComfyUI/models/text_encoders
+
+  # --- Distilled GGUF Q5_K_M ---
+  hf download Abiray/LTX-2.5-Distilled-GGUF \
+    LTX-2.5-Distilled-Q5_K_M.gguf \
+    --local-dir /opt/ComfyUI/models/unet
+
+  echo "=== Downloading SeedVR2 ==="
+
+  hf download numz/SeedVR2_comfyUI \
+    seedvr2_ema_3b_fp16.safetensors \
+    ema_vae_fp16.safetensors \
+    --local-dir /opt/ComfyUI/models/SEEDVR2
+
+  echo "=== Setup complete! ==="
+  du -sh /opt/ComfyUI/models/*/
+
+# Run starts ComfyUI on every replica boot (including resume from scale-to-zero)
+run: |
+  source /opt/venv/bin/activate
+  cd /opt/ComfyUI
+  python main.py --listen 0.0.0.0 --port 8188 ${COMFYUI_ARGS}

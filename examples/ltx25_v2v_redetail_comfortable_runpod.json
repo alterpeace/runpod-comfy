@@ -259,8 +259,8 @@
   "15": {
     "inputs": {
       "samples": [
-        "14",
-        0
+        "27",
+        2
       ],
       "upscale_model": [
         "21",
@@ -307,11 +307,11 @@
         0
       ],
       "positive": [
-        "10",
+        "27",
         0
       ],
       "negative": [
-        "10",
+        "27",
         1
       ],
       "cfg": 1.0
@@ -387,6 +387,26 @@
     "class_type": "VAELoader",
     "_meta": {
       "title": "Load Video VAE"
+    }
+  },
+  "27": {
+    "inputs": {
+      "positive": [
+        "10",
+        0
+      ],
+      "negative": [
+        "10",
+        1
+      ],
+      "latent": [
+        "14",
+        0
+      ]
+    },
+    "class_type": "LTXVCropGuides",
+    "_meta": {
+      "title": "Crop Guides Before Upscale"
     }
   }
 }

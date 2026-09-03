@@ -92,8 +92,10 @@ case "$ACTION" in
         sky ssh "$CLUSTER_NAME"
         ;;
     port-forward)
-        echo "Port-forwarding ComfyUI WebUI at http://localhost:8188"
-        sky port-forward "$CLUSTER_NAME" 8188
+        echo "Forwarding ComfyUI WebUI at http://localhost:8188 (Ctrl-C to stop)"
+        # NOTE: `sky port-forward` was removed in SkyPilot 0.13 — plain SSH tunnel.
+        ssh -N -L 8188:localhost:8188 \
+            -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes "$CLUSTER_NAME"
         ;;
     stop)
         echo "Stopping $CLUSTER_NAME (disk is preserved)..."

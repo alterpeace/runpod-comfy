@@ -70,3 +70,6 @@ tools/
 # Creative/experimental workflows (not part of the standard pipeline)
 examples/apz-creative-ltx.json
 examples/apz-creative-ltx-local-test.json
+
+sample/
+output/

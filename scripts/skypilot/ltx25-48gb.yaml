@@ -24,7 +24,7 @@
 #   sky ssh ltx25
 #
 #   # Port-forward ComfyUI WebUI
-#   sky port-forward ltx25 8188
+#   ssh -N -L 8188:localhost:8188 ltx25
 #
 #   # Stop when done (saves cost, keeps disk)
 #   sky stop ltx25
@@ -43,6 +43,8 @@
 # =============================================================================
 
 resources:
+  cloud: runpod
+
   # NOTE: no `image_id` here — SkyPilot refuses to auto-pick a cloud when a
   # custom docker image is pinned ("Cloud must be specified when image_id is
   # provided"). The setup script installs CUDA 12.9 PyTorch from pip wheels
@@ -53,20 +55,36 @@ resources:
   # cheapest one actually available — if L40S Secure is sold out everywhere
   # (it happens), it falls back to the others instead of failing.
   #   L40S         — 48GB Ada, best for LTX-2.5
-  #   RTX6000Ada   — 48GB Ada workstation
-  #   A6000        — 48GB Ampere, slower but often available
+  #   RTX6000-Ada  — 48GB Ada workstation
+  #   RTXA6000     — 48GB Ampere, slower but often available
   #   A40          — 48GB Ampere datacenter
   # (RTX 4090 24GB fallback: use launch.sh --24gb)
-  accelerators: ["L40S:1", "RTX6000Ada:1", "A6000:1", "A40:1"]
+  # NOTE: PRO-6000-MIG-48GB removed — SkyPilot 0.13 crashes with KeyError
+  # when trying to acquire it on RunPod, aborting the whole provision attempt.
+  accelerators: ["L40S:1", "L40:1", "RTX6000-Ada:1", "RTXA6000:1", "A40:1"]
+
+  # Replica MUST sit in the volume's datacenter — RunPod network volumes only
+  # attach to pods in the same DC.
+  region: NL
+  zone: EU-NL-1
 
   # 48GB VRAM is enough for the int8-convrot models without --lowvram
   # But we need enough system RAM for model loading
   memory: 32+
 
-  # Large disk for model downloads (~88GB)
-  disk_size: 200
+  # RunPod caps CONTAINER disk at 40GB — models, inputs and outputs live on
+  # the 200GB network volume below; container disk holds venv + code (~15GB).
+  disk_size: 40
 
-# Note: For sky launch, use `sky port-forward ltx25 8188` to access the WebUI.
+# Persistent RunPod network volume (200GB in US-CA-2, created via:
+#   sky volumes apply -n ltx25-vol --infra runpod/NL/EU-NL-1 \
+#     --type runpod-network-volume --size 200)
+# Survives stop/start and pod replacement. Mounted at /workspace.
+volumes:
+  /workspace:
+    name: ltx25-vol
+
+# Note: For sky launch, use `ssh -N -L 8188:localhost:8188 ltx25` (or ./scripts/skypilot/launch.sh port-forward) to access the WebUI.
 #
 # SERVERLESS-LIKE AUTOSCALING (sky serve):
 # Uncomment the `service` block below, then boot with:
@@ -98,6 +116,9 @@ envs:
 setup: |
   set -e
 
+  # Datacenter IPs get rate-limited by GitHub; retry clones.
+  gitc() { for i in 1 2 3 4 5; do git clone "$@" && return 0; echo "git clone retry $i"; sleep 10; done; return 1; }
+
   echo "=== SkyPilot LTX-2.5 48GB Setup ==="
 
   # Install system dependencies
@@ -111,14 +132,17 @@ setup: |
   export PATH="$HOME/.local/bin:$PATH"
 
   # Create Python venv with uv
-  uv venv /opt/venv --python 3.12
+  # Idempotent: reuse existing venv from a previous partial setup
+  if [ ! -d /opt/venv ]; then uv venv /opt/venv --python 3.12; fi
   source /opt/venv/bin/activate
 
   # Install PyTorch with CUDA 12.9
   uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu129
 
-  # Install ComfyUI
-  git clone https://github.com/comfyanonymous/ComfyUI.git /opt/ComfyUI
+  # Install ComfyUI (skip if already cloned — setup re-runs on resume)
+  if [ ! -d /opt/ComfyUI/.git ]; then
+    gitc https://github.com/comfyanonymous/ComfyUI.git /opt/ComfyUI
+  fi
   cd /opt/ComfyUI
   uv pip install -r requirements.txt
 
@@ -126,25 +150,30 @@ setup: |
   cd /opt/ComfyUI/custom_nodes
 
   # ComfyUI-LTXVideo (LTX-2.5 support, IC-LoRA nodes)
-  git clone https://github.com/Lightricks/ComfyUI-LTXVideo.git
+  if [ ! -d ComfyUI-LTXVideo/.git ]; then
+    gitc https://github.com/Lightricks/ComfyUI-LTXVideo.git
+  fi
   if [ -f ComfyUI-LTXVideo/requirements.txt ]; then
     uv pip install -r ComfyUI-LTXVideo/requirements.txt
   fi
-
-  # ComfyUI-GGUF (GGUF model support)
-  git clone https://github.com/city96/ComfyUI-GGUF.git
+  # LTXVideo's requirements.txt pulls latest kornia, whose
+  # kornia.geometry.transform.pyramid no longer exports `pad` ->
+  # ImportError -> IC-LoRA nodes unregistered. Pin 0.7.2 like the Dockerfile.
+  uv pip install "kornia==0.7.2" --no-deps --force-reinstall
 
   # ComfyUI-VideoHelperSuite (video output)
-  git clone https://github.com/Kosinkadank/ComfyUI-VideoHelperSuite.git
+  if [ ! -d ComfyUI-VideoHelperSuite/.git ]; then
+    gitc https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git
+  fi
   if [ -f ComfyUI-VideoHelperSuite/requirements.txt ]; then
     uv pip install -r ComfyUI-VideoHelperSuite/requirements.txt
   fi
 
-  # ComfyUI-SeedVR2_VideoUpscaler (diffusion video restoration)
-  git clone https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler.git
-  if [ -f ComfyUI-SeedVR2_VideoUpscaler/requirements.txt ]; then
-    uv pip install -r ComfyUI-SeedVR2_VideoUpscaler/requirements.txt
-  fi
+  # NOTE: ComfyUI-GGUF, ComfyUI-SeedVR2_VideoUpscaler and their models are
+  # intentionally NOT installed on this 48GB build — the int8-convrot
+  # checkpoints fit in VRAM directly; GGUF quants / SeedVR2 restoration are
+  # 8-24GB-tier workarounds. Add them back if entry/seedvr2 workflows are
+  # needed (see git history of this file).
 
   # Install HuggingFace CLI for model downloads
   uv pip install huggingface_hub hf_transfer
@@ -153,7 +182,9 @@ setup: |
   export HF_HUB_ENABLE_HF_TRANSFER=1
 
   # Clone this project for workflow examples + video format configs
-  git clone https://github.com/${GITHUB_REPO:-alterpeace/runpod-comfy}.git /opt/runpod-comfy || true
+  if [ ! -d /opt/runpod-comfy/.git ]; then
+    gitc https://github.com/${GITHUB_REPO:-alterpeace/runpod-comfy}.git /opt/runpod-comfy || true
+  fi
 
   # Install all-intra h264 video format (keyframe every frame — no motion artifacts)
   if [ -f /opt/runpod-comfy/config/video_formats/h264-allintra.json ]; then
@@ -163,17 +194,28 @@ setup: |
     echo "Installed h264-allintra video format"
   fi
 
-  # Create model directories
-  mkdir -p /opt/ComfyUI/models/{checkpoints,text_encoders,vae,loras,latent_upscale_models,model_patches,unet}
-  mkdir -p /opt/ComfyUI/models/SEEDVR2
+  # Models, inputs and outputs live on the network volume mounted at
+  # /workspace (RunPod caps container disk at 40GB). Symlink ComfyUI dirs on.
+  mkdir -p /workspace/models /workspace/input /workspace/output
+  rm -rf /opt/ComfyUI/models
+  ln -s /workspace/models /opt/ComfyUI/models
+  rm -rf /opt/ComfyUI/input /opt/ComfyUI/output
+  ln -s /workspace/input /opt/ComfyUI/input
+  ln -s /workspace/output /opt/ComfyUI/output
+  mkdir -p /workspace/models/{checkpoints,text_encoders,vae,loras,latent_upscale_models}
 
-  echo "=== Downloading LTX-2.5 models ==="
+  echo "=== Downloading LTX-2.5 models (48GB redetail build) ==="
 
   # Download models from HuggingFace
   # LTX-2.5 is gated — HF_TOKEN must be set
   HF_TOKEN="${HF_TOKEN}"
 
-  # --- Text encoder (int8-convrot) ---
+  # Optimized for 48GB VRAM + ltx25_v2v_redetail_comfortable_runpod.json:
+  # dev int8-convrot (21.5G) + gemma int8 (15G) + VAE/LoRAs/upscaler (~5G).
+  # Total ~42GB. Skipped on 48GB (unneeded): distilled int8, Q5_K_M GGUF,
+  # SeedVR2, gemma4_e2b, temporal upscaler, duration head, audio VAE.
+
+  # --- Text encoder (int8-convrot, ~15GB) ---
   hf download Lightricks/LTX-2.5 \
     text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors \
     --local-dir /opt/ComfyUI/models/text_encoders
@@ -192,60 +234,39 @@ setup: |
   ln -sf ../gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors \
     /opt/ComfyUI/models/text_encoders/gemma4-12b-ltx-2.5/model.safetensors
 
-  # --- Dev transformer (int8-convrot, ~22GB) ---
+  # --- Dev transformer (int8-convrot, ~22GB) — this build's checkpoint ---
   hf download Lightricks/LTX-2.5 \
     diffusion_models/ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors \
     --local-dir /opt/ComfyUI/models/checkpoints
 
-  # --- Distilled transformer (int8-convrot, ~22GB) ---
-  hf download Lightricks/LTX-2.5 \
-    diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors \
-    --local-dir /opt/ComfyUI/models/checkpoints
-
-  # --- VAEs ---
+  # --- Video VAE (int8/GGUF checkpoints ship no VAE — always load explicitly) ---
   hf download Lightricks/LTX-2.5 \
     vae/ltx-2.5-video-vae-bf16.safetensors \
-    vae/ltx-2.5-audio-vae-bf16.safetensors \
     --local-dir /opt/ComfyUI/models/vae
 
-  # --- LoRAs ---
+  # --- LoRA: distilled 450 (speed/quality scheduling anchor) ---
   hf download Lightricks/LTX-2.5 \
     loras/ltx-2.5-22b-distilled-lora-450-bf16.safetensors \
     --local-dir /opt/ComfyUI/models/loras
 
-  # --- IC-LoRA pixel upscaler ---
+  # --- IC-LoRA pixel upscaler (pass-2 re-detail conditioning) ---
   hf download Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler \
     ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors \
     --local-dir /opt/ComfyUI/models/loras
 
-  # --- Latent upscalers ---
+  # --- Latent spatial upscaler x2 (pass-1 -> pass-2 bridge) ---
   hf download Lightricks/LTX-2.5 \
     latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors \
-    latent_upscale_models/ltx-2.5-latent-temporal-upscaler-x2-bf16-1.0.safetensors \
     --local-dir /opt/ComfyUI/models/latent_upscale_models
 
-  # --- Duration head patch ---
-  hf download Lightricks/LTX-2.5 \
-    model_patches/ltx-2.5-duration-head-bf16.safetensors \
-    --local-dir /opt/ComfyUI/models/model_patches
-
-  # --- Text enhancer (Gemma 4 E2B) ---
-  hf download Comfy-Org/gemma-4 \
-    text_encoders/gemma4_e2b_it_bf16.safetensors \
-    --local-dir /opt/ComfyUI/models/text_encoders
-
-  # --- Distilled GGUF Q5_K_M (for entry + SeedVR2-chained V2V workflows) ---
-  hf download Abiray/LTX-2.5-Distilled-GGUF \
-    LTX-2.5-Distilled-Q5_K_M.gguf \
-    --local-dir /opt/ComfyUI/models/unet
-
-  echo "=== Downloading SeedVR2 ==="
-
-  # --- SeedVR2 3B + VAE ---
-  hf download numz/SeedVR2_comfyUI \
-    seedvr2_ema_3b_fp16.safetensors \
-    ema_vae_fp16.safetensors \
-    --local-dir /opt/ComfyUI/models/SEEDVR2
+  # hf download --local-dir preserves the repo's subfolder layout
+  # (checkpoints/diffusion_models/...), but ComfyUI workflows reference bare
+  # filenames inside category dirs — flatten one nesting level. -type f skips
+  # the tokenizer-dir symlink; mv -n keeps files already in place.
+  for cat in checkpoints vae loras text_encoders latent_upscale_models; do
+    find /opt/ComfyUI/models/$cat -mindepth 2 -type f -name "*.safetensors" \
+      -exec mv -n {} /opt/ComfyUI/models/$cat/ \;
+  done
 
   echo "=== Setup complete! ==="
   echo "Models in /opt/ComfyUI/models/"

@@ -47,6 +47,7 @@ facexlib==0.3.0  # pulid_comfyui
 ffmpeg-python==0.2.0
 fvcore==0.1.5.post20221221
 gdown==5.2.0  # comfy-mtb
+requirements-parser  # comfy-mtb (imports the `requirements` module at startup)
 gguf
 insightface==0.7.3
 iopath==0.1.10  # comfyui-rmbg
