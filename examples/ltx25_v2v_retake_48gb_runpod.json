@@ -133,7 +133,7 @@
       ],
       "scheduler": "linear_quadratic",
       "steps": 8,
-      "denoise": 0.3
+      "denoise": 0.5
     },
     "class_type": "BasicScheduler",
     "_meta": {
@@ -319,6 +319,8 @@
       "2x latent upscale",
       "ManualSigmas detail pass"
     ],
-    "output": "1536x896, h264 all-intra, 8s (193 frames)"
+    "output": "1536x896, h264 all-intra, 8s (193 frames)",
+    "default_denoise": 0.5,
+    "note": "denoise raised 0.3->0.5 for more creative retakes; sweep via alt_retake still overrides"
   }
 }
