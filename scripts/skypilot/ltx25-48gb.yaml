@@ -169,6 +169,21 @@ setup: |
     uv pip install -r ComfyUI-VideoHelperSuite/requirements.txt
   fi
 
+  # ComfyUI-Manager (node manager UI) + Crystools (GPU/RAM monitor widgets)
+  if [ ! -d ComfyUI-Manager/.git ]; then
+    gitc https://github.com/Comfy-Org/ComfyUI-Manager.git
+  fi
+  if [ -f ComfyUI-Manager/requirements.txt ]; then
+    uv pip install -r ComfyUI-Manager/requirements.txt
+  fi
+  if [ ! -d ComfyUI-Crystools/.git ]; then
+    gitc https://github.com/crystian/ComfyUI-Crystools.git
+  fi
+  if [ -f ComfyUI-Crystools/requirements.txt ]; then
+    uv pip install -r ComfyUI-Crystools/requirements.txt
+  fi
+  sudo apt-get install -y -q nginx apache2-utils
+
   # NOTE: ComfyUI-GGUF, ComfyUI-SeedVR2_VideoUpscaler and their models are
   # intentionally NOT installed on this 48GB build — the int8-convrot
   # checkpoints fit in VRAM directly; GGUF quants / SeedVR2 restoration are
@@ -283,12 +298,47 @@ run: |
   # - COMFYUI_ARGS      : extra args from env (empty for 48GB, --lowvram for 24GB)
   python main.py --listen 0.0.0.0 --port 8188 ${COMFYUI_ARGS} &
   COMFY_PID=$!
-
-  # Bridge ComfyUI onto RunPod's pre-registered Jupyter HTTP port (19123) so
-  # the WebUI is reachable at https://<pod-hostname>-19123.proxy.runpod.net
-  # (RUNPOD_POD_HOSTNAME from /proc/1/environ) without editing pod ports.
   sleep 2
-  socat TCP-LISTEN:19123,fork,reuseaddr TCP:127.0.0.1:8188 \
-    > /workspace/logs/socat-19123.log 2>&1 &
+
+  # Expose the WebUI on RunPod's pre-registered Jupyter HTTP port (19123):
+  #   https://<RUNPOD_POD_HOSTNAME>-19123.proxy.runpod.net
+  # With COMFYUI_WEBUI_USER/COMFYUI_WEBUI_PASS set (via --env), nginx adds
+  # basic auth (websockets + 2G uploads supported). Without them, fall back
+  # to an unauthenticated socat bridge.
+  if [ -n "${COMFYUI_WEBUI_USER:-}" ] && [ -n "${COMFYUI_WEBUI_PASS:-}" ]; then
+    htpasswd -bc /etc/nginx/.htpasswd "$COMFYUI_WEBUI_USER" "$COMFYUI_WEBUI_PASS"
+    python3 - << 'PYEOF'
+conf = open("/etc/nginx/nginx.conf").read()
+block = """
+    map $http_upgrade $connection_upgrade { default upgrade; '' close; }
+    server {
+        listen 19123;
+        client_max_body_size 2G;
+        auth_basic "ComfyUI";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+        location / {
+            proxy_pass http://127.0.0.1:8188;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
+        }
+    }
+"""
+start = conf.find("\n    map $http_upgrade $connection_upgrade")
+if start != -1:
+    conf = conf[:start] + conf[conf.find("\n}", start) + 1:]
+if "listen 19123" not in conf:
+    idx = conf.rstrip().rfind("\n}")
+    conf = conf[:idx + 1] + block + conf[idx + 1:]
+open("/etc/nginx/nginx.conf", "w").write(conf)
+PYEOF
+    nginx -t && (nginx -s reload 2>/dev/null || service nginx start || nginx)
+  else
+    socat TCP-LISTEN:19123,fork,reuseaddr TCP:127.0.0.1:8188 \
+      > /workspace/logs/socat-19123.log 2>&1 &
+  fi
 
   wait $COMFY_PID
