@@ -47,6 +47,8 @@ def main():
     parser.add_argument("--url", default="http://localhost:8188")
     parser.add_argument("--out", type=Path, default=Path("output/redetail_batch"))
     parser.add_argument("--timeout", type=int, default=1800, help="Per-clip wait in seconds")
+    parser.add_argument("--no-random-seed", action="store_true",
+                        help="Keep the workflow's fixed seed instead of randomizing per clip")
     parser.add_argument("--dry-run", action="store_true", help="List clips and exit")
     args = parser.parse_args()
 
@@ -78,6 +80,17 @@ def main():
         print(f"\n=== [{i}/{len(pending)}] {clip.name} ({clip.stat().st_size / 1e6:.0f} MB) ===")
         wf = json.loads(json.dumps(workflow))  # deep copy
         wf[loader_id]["inputs"]["video"] = f"{args.dir}/{clip.name}"
+        if not args.no_random_seed:
+            import random
+            seed = random.randint(1, 2**31 - 1)
+            for node in wf.values():
+                if node.get("class_type") == "RandomNoise":
+                    node["inputs"]["noise_seed"] = seed
+            if "SeedVR2VideoUpscaler" in [n.get("class_type") for n in wf.values()]:
+                for node in wf.values():
+                    if node.get("class_type") == "SeedVR2VideoUpscaler":
+                        node["inputs"]["seed"] = seed
+            print(f"  seed: {seed}")
         try:
             t0 = time.time()
             prompt_id = client.queue_prompt(wf)

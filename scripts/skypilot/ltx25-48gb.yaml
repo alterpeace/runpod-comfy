@@ -274,6 +274,20 @@ setup: |
     latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors \
     --local-dir /opt/ComfyUI/models/latent_upscale_models
 
+  # --- SeedVR2 3B fp16 (restoration + 2K upscale stage after LTX) ---
+  hf download numz/SeedVR2_comfyUI \
+    seedvr2_ema_3b_fp16.safetensors \
+    ema_vae_fp16.safetensors \
+    --local-dir /opt/ComfyUI/models/SEEDVR2
+
+  # ComfyUI-SeedVR2_VideoUpscaler node
+  if [ ! -d ComfyUI-SeedVR2_VideoUpscaler/.git ]; then
+    gitc https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler.git
+  fi
+  if [ -f ComfyUI-SeedVR2_VideoUpscaler/requirements.txt ]; then
+    uv pip install -r ComfyUI-SeedVR2_VideoUpscaler/requirements.txt
+  fi
+
   # hf download --local-dir preserves the repo's subfolder layout
   # (checkpoints/diffusion_models/...), but ComfyUI workflows reference bare
   # filenames inside category dirs — flatten one nesting level. -type f skips
