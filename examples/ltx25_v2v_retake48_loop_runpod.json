@@ -1,0 +1,353 @@
+{
+  "1": {
+    "inputs": {
+      "ckpt_name": "ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint (dev int8)"
+    }
+  },
+  "2": {
+    "inputs": {
+      "clip_name": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+      "type": "ltxv",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader"
+  },
+  "3": {
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "clip": [
+        "2",
+        0
+      ],
+      "lora_name": "ltx-2.5-22b-distilled-lora-450-bf16.safetensors",
+      "strength_model": 1.0,
+      "strength_clip": 1.0
+    },
+    "class_type": "LoraLoader",
+    "_meta": {
+      "title": "Distilled LoRA (swept)"
+    }
+  },
+  "4": {
+    "inputs": {
+      "model": [
+        "3",
+        0
+      ],
+      "lora_name": "ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors",
+      "strength_model": 0.7
+    },
+    "class_type": "LTXICLoRALoaderModelOnly",
+    "_meta": {
+      "title": "IC-LoRA Pixel Upscaler (detailer)"
+    }
+  },
+  "5": {
+    "inputs": {
+      "clip": [
+        "3",
+        1
+      ],
+      "text": "high quality video, sharp focus, clean render, detailed textures, cinematic lighting, professional post-production, 4k detail"
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive Prompt (swept)"
+    }
+  },
+  "6": {
+    "inputs": {
+      "clip": [
+        "3",
+        1
+      ],
+      "text": "blurry, low quality, distorted, glitch, artifacts, flickering, jerky motion, compression artifacts, watermark, noisy, grainy, washed out, banding"
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative Prompt"
+    }
+  },
+  "7": {
+    "inputs": {
+      "video": "rhizome.mp4",
+      "force_rate": 24,
+      "custom_width": 0,
+      "custom_height": 0,
+      "frame_load_cap": 193,
+      "skip_first_frames": 0,
+      "select_every_nth": 1
+    },
+    "class_type": "VHS_LoadVideo",
+    "_meta": {
+      "title": "Load Input Video (frame_count swept)"
+    }
+  },
+  "8": {
+    "inputs": {
+      "image": [
+        "7",
+        0
+      ],
+      "width": 768,
+      "height": 448,
+      "upscale_method": "lanczos",
+      "crop": "disabled"
+    },
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "Resize to 768x448"
+    }
+  },
+  "10": {
+    "inputs": {
+      "pixels": [
+        "8",
+        0
+      ],
+      "vae": [
+        "26",
+        0
+      ],
+      "tile_size": 256,
+      "overlap": 64,
+      "temporal_size": 97,
+      "temporal_overlap": 24
+    },
+    "class_type": "VAEEncodeTiled",
+    "_meta": {
+      "title": "Encode Source (v2v base + loop guide)"
+    }
+  },
+  "11": {
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "scheduler": "linear_quadratic",
+      "steps": 8,
+      "denoise": 0.5
+    },
+    "class_type": "BasicScheduler",
+    "_meta": {
+      "title": "Pass 1 Scheduler (denoise sweep)"
+    }
+  },
+  "12": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect"
+  },
+  "13": {
+    "inputs": {
+      "noise_seed": 42
+    },
+    "class_type": "RandomNoise"
+  },
+  "14a": {
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "cfg": 1.0,
+      "stg": "perturbated",
+      "sigma_start": 0.0,
+      "sigma_end": 1.0,
+      "block_indices": "0"
+    },
+    "class_type": "LTXVApplySTG",
+    "_meta": {
+      "title": "Apply STG (for looping sampler)"
+    }
+  },
+  "14": {
+    "inputs": {
+      "model": [
+        "14a",
+        0
+      ],
+      "positive": [
+        "5",
+        0
+      ],
+      "negative": [
+        "6",
+        0
+      ],
+      "cfg": 1.0
+    },
+    "class_type": "CFGGuider",
+    "_meta": {
+      "title": "CFG Guider (STG-aware)"
+    }
+  },
+  "15": {
+    "inputs": {
+      "model": [
+        "14a",
+        0
+      ],
+      "vae": [
+        "26",
+        0
+      ],
+      "noise": [
+        "13",
+        0
+      ],
+      "sampler": [
+        "12",
+        0
+      ],
+      "sigmas": [
+        "11",
+        0
+      ],
+      "guider": [
+        "14",
+        0
+      ],
+      "latents": [
+        "10",
+        0
+      ],
+      "temporal_tile_size": 56,
+      "temporal_overlap": 24,
+      "guiding_strength": 1.0,
+      "temporal_overlap_cond_strength": 0.5,
+      "cond_image_strength": 1.0,
+      "horizontal_tiles": 1,
+      "vertical_tiles": 1,
+      "spatial_overlap": 1,
+      "optional_guiding_latents": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "LTXVLoopingSampler",
+    "_meta": {
+      "title": "Pass 1: looping retake (perfect loop)"
+    }
+  },
+  "21": {
+    "inputs": {
+      "model_name": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
+    },
+    "class_type": "LatentUpscaleModelLoader"
+  },
+  "16": {
+    "inputs": {
+      "samples": [
+        "15",
+        0
+      ],
+      "upscale_model": [
+        "21",
+        0
+      ],
+      "vae": [
+        "26",
+        0
+      ]
+    },
+    "class_type": "LTXVLatentUpsampler",
+    "_meta": {
+      "title": "2x Latent Upscale"
+    }
+  },
+  "18": {
+    "inputs": {
+      "sigmas": "0.85, 0.725, 0.4219, 0.0"
+    },
+    "class_type": "ManualSigmas"
+  },
+  "17": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect"
+  },
+  "24": {
+    "inputs": {
+      "noise_seed": 42
+    },
+    "class_type": "RandomNoise"
+  },
+  "25": {
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "5",
+        0
+      ],
+      "negative": [
+        "6",
+        0
+      ],
+      "cfg": 1.0
+    },
+    "class_type": "CFGGuider"
+  },
+  "22": {
+    "inputs": {
+      "vae": [
+        "26",
+        0
+      ],
+      "samples": [
+        "16",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode (1536x896)"
+    }
+  },
+  "20": {
+    "inputs": {
+      "images": [
+        "22",
+        0
+      ],
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "ltx25_v2v_retake48_loop",
+      "format": "video/h264-allintra",
+      "pingpong": false,
+      "save_output": true
+    },
+    "class_type": "VHS_VideoCombine"
+  },
+  "26": {
+    "inputs": {
+      "vae_name": "ltx-2.5-video-vae-bf16.safetensors"
+    },
+    "class_type": "VAELoader"
+  },
+  "_metadata": {
+    "gpu_tier": "48GB retake (looping)",
+    "patch_points": {
+      "denoise": "node 11",
+      "lora_strength": "node 3",
+      "seed": "node 13 + 24",
+      "frames": "node 7 frame_load_cap",
+      "prompt": "node 5"
+    },
+    "loops": "LTXVLoopingSampler wraps source latent around: first frame == last frame",
+    "output": "1536x896, h264 all-intra, perfect loops"
+  }
+}
