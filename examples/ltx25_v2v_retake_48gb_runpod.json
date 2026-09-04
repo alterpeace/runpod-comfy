@@ -84,7 +84,7 @@
       "force_rate": 24,
       "custom_width": 0,
       "custom_height": 0,
-      "frame_load_cap": 193,
+      "frame_load_cap": 360,
       "skip_first_frames": 0,
       "select_every_nth": 1
     },
@@ -287,7 +287,7 @@
       ],
       "frame_rate": 24,
       "loop_count": 0,
-      "filename_prefix": "ltx25_v2v_retake48",
+      "filename_prefix": "ltx25_retake_inherit",
       "format": "video/h264-allintra",
       "pingpong": false,
       "save_output": true
@@ -321,6 +321,6 @@
     ],
     "output": "1536x896, h264 all-intra, 8s (193 frames)",
     "default_denoise": 0.5,
-    "note": "denoise raised 0.3->0.5 for more creative retakes; sweep via alt_retake still overrides"
+    "note": "denoise 0.5 default (0.35 loop-inheritance test made quality worse)"
   }
 }
