@@ -131,6 +131,8 @@
         <div class="text-sm space-y-1">
           <div class="flex justify-between"><span class="text-zinc-500">Frame diff:</span><span :class="frameDiffClass">{{ frameDiffText }}</span></div>
           <div class="flex justify-between"><span class="text-zinc-500">Duration diff:</span><span class="font-mono">{{ Math.abs(orig.duration - retake.duration).toFixed(3) }}s {{ durationMatch ? '✓' : '✗' }}</span></div>
+          <div class="flex justify-between"><span class="text-zinc-500">Start match (retake↔orig first):</span><span :class="startMatchClass">{{ startMatchText }}</span></div>
+          <div class="flex justify-between"><span class="text-zinc-500">End match (retake↔orig last):</span><span :class="endMatchClass">{{ endMatchText }}</span></div>
           <div class="flex justify-between"><span class="text-zinc-500">Verdict:</span><span :class="verdictClass" class="font-bold">{{ verdict }}</span></div>
         </div>
       </div>
@@ -197,7 +199,7 @@
       return {
         loaded: false, url: '', fileName: '', duration: 0,
         currentTime: 0, loopCount: 0, frameDiff: null,
-        estimatedFrames: 0,
+        estimatedFrames: 0, firstData: null, lastData: null,
       };
     }
 
@@ -262,9 +264,25 @@
           if (!orig.value.loaded || !retake.value.loaded) return '—';
           const frameOk = Math.abs(orig.value.estimatedFrames - retake.value.estimatedFrames) <= 1;
           const durOk = durationMatch.value;
-          return frameOk && durOk ? 'PASS ✓' : 'FAIL ✗';
+          const loopOk = retake.value.frameDiff !== null && retake.value.frameDiff < 0.05;
+          const startOk = startMatch.value !== null && startMatch.value < 0.05;
+          const endOk = endMatch.value !== null && endMatch.value < 0.15;
+          return frameOk && durOk && loopOk && startOk && endOk ? 'PASS ✓' : 'FAIL ✗';
         });
         const verdictClass = computed(() => verdict.value.startsWith('PASS') ? 'text-green-400' : 'text-red-400');
+
+        const startMatch = computed(() => {
+          if (!orig.value.loaded || !retake.value.loaded) return null;
+          return compareFrames(orig.value.firstData, retake.value.firstData);
+        });
+        const endMatch = computed(() => {
+          if (!orig.value.loaded || !retake.value.loaded) return null;
+          return compareFrames(orig.value.lastData, retake.value.lastData);
+        });
+        const startMatchText = computed(() => diffText(startMatch.value));
+        const startMatchClass = computed(() => diffClass(startMatch.value));
+        const endMatchText = computed(() => diffText(endMatch.value));
+        const endMatchClass = computed(() => diffClass(endMatch.value));
 
         function handleDrop(e, which) {
           if (which === 'orig') dragoverOrig.value = false;
@@ -288,6 +306,8 @@
           state.frameDiff = null;
           state.duration = 0;
           state.estimatedFrames = 0;
+          state.firstData = null;
+          state.lastData = null;
         }
 
         function onVideoLoaded(e, which) {
@@ -314,12 +334,14 @@
             video.removeEventListener('seeked', onFirst);
             drawFrame(firstCanvas, video);
             const firstData = getFrameData(firstCanvas);
+            state.firstData = firstData;
 
             video.currentTime = Math.max(0, state.duration - 0.04);
             video.addEventListener('seeked', function onLast() {
               video.removeEventListener('seeked', onLast);
               drawFrame(lastCanvas, video);
               const lastData = getFrameData(lastCanvas);
+              state.lastData = lastData;
               state.frameDiff = compareFrames(firstData, lastData);
               video.currentTime = 0;
             });
@@ -416,6 +438,7 @@
           hasAnyVideo, origProgress, retakeProgress,
           origDiffText, origDiffClass, retakeDiffText, retakeDiffClass,
           frameDiffText, frameDiffClass, durationMatch, verdict, verdictClass,
+          startMatch, endMatch, startMatchText, startMatchClass, endMatchText, endMatchClass,
           handleDrop, handleFileSelect, onVideoLoaded, onTimeUpdate,
           togglePlayAll, restartAll, updatePlaybackRate, testSeamlessLoop, resetAll,
         };

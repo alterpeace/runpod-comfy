@@ -586,10 +586,21 @@ install_custom_node_deps() {
     # transitive dependencies. This prevents pulling in incompatible packages
     # (e.g. wheels compiled against NumPy 1.x) that break already-working nodes.
     # Transitive deps should already be in the image via extra-requirements.txt.
-    local uv_cmd="uv pip install --no-deps"
+    #
+    # Constraints: torch_lock.txt protects the torch stack; opencv.txt forbids
+    # opencv-python/opencv-python-headless (uv ignores the PIP_CONSTRAINT env
+    # var, and without this a full-deps install will replace
+    # opencv-contrib-python's cv2 with an old numpy-1.x headless build,
+    # breaking every node that imports cv2 — observed 2026-09-10).
+    local constraint_args=""
     if [ -f "$constraint_file" ]; then
-        uv_cmd="$uv_cmd --constraint $constraint_file"
+        constraint_args="--constraint $constraint_file"
     fi
+    local opencv_constraint="/comfyui/venv/constraints/opencv.txt"
+    if [ -f "$opencv_constraint" ]; then
+        constraint_args="$constraint_args --constraint $opencv_constraint"
+    fi
+    local uv_cmd="uv pip install --no-deps $constraint_args"
     uv_cmd="$uv_cmd --python /comfyui/venv/bin/python"
 
     # Some custom nodes have complex dependency trees that need transitive deps
@@ -614,20 +625,31 @@ install_custom_node_deps() {
 
         local install_cmd
         if [ "$use_full_deps" = true ]; then
-            # Full deps install (with torch lock constraints to prevent torch upgrades)
-            install_cmd="uv pip install"
-            if [ -f "$constraint_file" ]; then
-                install_cmd="$install_cmd --constraint $constraint_file"
-            fi
+            # Full deps install (with torch lock + opencv constraints)
+            install_cmd="uv pip install $constraint_args"
             install_cmd="$install_cmd --python /comfyui/venv/bin/python"
         else
             install_cmd="$uv_cmd"
         fi
 
-        if eval "$install_cmd -r \"$req\"" 2>&1 | grep -q "Installed\|Downloaded"; then
+        # Filter out git+ requirements: uv re-resolves them from the network on
+        # EVERY boot, and a stalled GitHub fetch hangs the whole scan (observed
+        # with sam2 in comfyui-impact-pack and img2texture/cstr/ffmpy in
+        # was-node-suite). All git deps used by these nodes are pre-installed
+        # in the image (see "Install git dependencies" in the Dockerfile).
+        local filtered_req="/tmp/reqs-$node_name.txt"
+        grep -v -E '^[[:space:]]*(-e[[:space:]]+)?git\+' "$req" > "$filtered_req" 2>/dev/null || true
+        if [ ! -s "$filtered_req" ]; then
+            rm -f "$filtered_req"
+            continue
+        fi
+
+        # timeout: a hung install must not block boot indefinitely
+        if eval "timeout 240 $install_cmd -r \"$filtered_req\"" 2>&1 | grep -q "Installed\|Downloaded"; then
             installed=$((installed + 1))
             log_info "  Installed deps for: $node_name$( [ "$use_full_deps" = true ] && echo " (full deps)" )"
         fi
+        rm -f "$filtered_req"
     done
 
     if [ "$installed" -gt 0 ]; then

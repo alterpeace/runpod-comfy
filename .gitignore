@@ -73,3 +73,6 @@ examples/apz-creative-ltx-local-test.json
 
 sample/
 output/
+
+# write-probe artifacts
+.rwtest

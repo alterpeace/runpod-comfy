@@ -81,7 +81,7 @@
       "force_rate": 24,
       "custom_width": 0,
       "custom_height": 0,
-      "frame_load_cap": 193,
+      "frame_load_cap": 360,
       "skip_first_frames": 0,
       "select_every_nth": 1
     },
@@ -93,7 +93,7 @@
   "8": {
     "inputs": {
       "image": [
-        "7",
+        "41",
         0
       ],
       "width": 768,
@@ -221,7 +221,7 @@
         "10",
         0
       ],
-      "temporal_tile_size": 56,
+      "temporal_tile_size": 72,
       "temporal_overlap": 24,
       "guiding_strength": 1.0,
       "temporal_overlap_cond_strength": 0.5,
@@ -232,7 +232,11 @@
       "optional_guiding_latents": [
         "10",
         0
-      ]
+      ],
+      "adain_factor": 0.0,
+      "guiding_start_step": 0,
+      "guiding_end_step": 1000,
+      "optional_cond_image_indices": "0"
     },
     "class_type": "LTXVLoopingSampler",
     "_meta": {
@@ -320,7 +324,7 @@
   "20": {
     "inputs": {
       "images": [
-        "22",
+        "42",
         0
       ],
       "frame_rate": 24,
@@ -348,6 +352,55 @@
       "prompt": "node 5"
     },
     "loops": "LTXVLoopingSampler wraps source latent around: first frame == last frame",
-    "output": "1536x896, h264 all-intra, perfect loops"
+    "output": "1536x896, h264 all-intra, perfect loops",
+    "frame_count": "336 = 6x temporal_tile_size (56) so chunks divide evenly",
+    "denoise": "0.65 raised for creativity; wrap guarantees loop closure",
+    "frames": "probed per clip, rounded down to multiple of temporal_tile_size (72)",
+    "note": "exact tile division removes the 7-frame trim; denoise vs loop-closure tradeoff",
+    "frame_pad": "pad 8x last frame: 368 in -> 46 latents -> decode 361 -> trim 360 (LTX VAE: decode = latents*8-7)"
+  },
+  "40": {
+    "inputs": {
+      "image": [
+        "7",
+        0
+      ],
+      "batch_index": 359,
+      "length": 8
+    },
+    "class_type": "ImageFromBatch",
+    "_meta": {
+      "title": "Extract Last Frame"
+    }
+  },
+  "41": {
+    "inputs": {
+      "image1": [
+        "7",
+        0
+      ],
+      "image2": [
+        "40",
+        0
+      ]
+    },
+    "class_type": "ImageBatch",
+    "_meta": {
+      "title": "Pad to 361 (46 latents)"
+    }
+  },
+  "42": {
+    "inputs": {
+      "image": [
+        "22",
+        0
+      ],
+      "batch_index": 0,
+      "length": 360
+    },
+    "class_type": "ImageFromBatch",
+    "_meta": {
+      "title": "Trim 361 -> 360"
+    }
   }
 }

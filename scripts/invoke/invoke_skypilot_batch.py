@@ -50,6 +50,7 @@ def main():
     parser.add_argument("--no-random-seed", action="store_true",
                         help="Keep the workflow's fixed seed instead of randomizing per clip")
     parser.add_argument("--dry-run", action="store_true", help="List clips and exit")
+    parser.add_argument("clips", nargs="*", help="Optional: specific clip filenames (default: all in --dir)")
     args = parser.parse_args()
 
     workflow = json.loads(args.workflow.read_text())
@@ -59,6 +60,12 @@ def main():
     clips = sorted(Path("sample").glob("*.mp4"))
     if not clips:
         raise SystemExit("ERROR: no clips found under sample/")
+    if args.clips:
+        wanted = {Path(c).name for c in args.clips}
+        clips = [c for c in clips if c.name in wanted]
+        missing = wanted - {c.name for c in clips}
+        if missing:
+            print(f"WARNING: not found in {args.dir}/: {sorted(missing)}")
     pending = [c for c in clips if not (args.out / f"{c.stem}.mp4").exists()]
     print(f"{len(clips)} clips total, {len(clips) - len(pending)} already done, {len(pending)} to process")
     if args.dry_run:
