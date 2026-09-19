@@ -2,20 +2,23 @@
 # SkyPilot task: LTX-2.5 on RunPod 48GB using the PREBUILT ghcr image
 # (ghcr.io/alterpeace/runpod-comfy — ComfyUI + venv + custom nodes baked in).
 #
-# No apt/torch/clone phase: the pod boots the image straight into "download
-# models to the network volume, start ComfyUI". Models (~71GB, dev int8
-# transformer omitted) land on the 100GB network volume (ltx25-vol, EU-NL-1)
-# and survive stop/start.
+# Volume mounts at /runpod-volume — the image's entrypoint symlinks
+# /comfyui/{models,input,output} there at boot (the same layout RunPod
+# native pods use). Do NOT mount at /workspace: that shadows the image's
+# project dir and the entrypoint dies with
+# "exec /workspace/entrypoint.sh failed: No such file or directory".
+#
+# Model set aligned with examples/ltx25_v2v_retake48_loop_runpod.json
+# (dev int8 + gemma int8 + distilled LoRA + IC-LoRA + latent upscaler + VAE)
+# plus the distilled int8 transformer and audio VAE for default templates.
 #
 # Usage:
 #   set -a && source .env && set +a
 #   sky launch -c ltx25 -y scripts/skypilot/ltx25-image-48gb.yaml \
-#       --env HF_TOKEN="$HF_TOKEN" --idle-minutes-to-autostop 60
+#       --env HF_TOKEN="$HF_TOKEN"
 #
-#   sky ssh ltx25                    # shell into the pod
 #   ssh -N -L 8188:localhost:8188 ltx25   # WebUI at http://localhost:8188
-#   ./scripts/skypilot/launch.sh stop|start   # stop/resume billing
-#   sky down ltx25                   # terminate (volume keeps models)
+#   sky down ltx25                        # terminate (volume keeps models)
 # =============================================================================
 
 resources:
@@ -23,20 +26,13 @@ resources:
   # Must match the volume's datacenter (RunPod network volumes are per-DC).
   region: NL
   zone: EU-NL-1
-  accelerators: ["L40S:1", "L40:1", "RTX6000Ada:1", "A6000:1", "A40:1"]
+  accelerators: ["L40S:1", "L40:1", "RTX6000-Ada:1", "RTXA6000:1", "A40:1"]
   memory: 32+
-  # RunPod caps container disk at 40GB; the uncompressed image is ~30GB.
-  # Everything else (models ~90GB, inputs, outputs) lives on the volume.
   disk_size: 40
   image_id: docker:ghcr.io/alterpeace/runpod-comfy:latest
 
-# Persistent 100GB network volume in EU-NL-1 (created via:
-#   sky volumes apply -n ltx25-vol --infra runpod/NL/EU-NL-1 \
-#     --type runpod-network-volume --size 100)
-# Mounted at /workspace, which shadows the image's project dir (not needed
-# on a pod — invocation runs from the local machine).
 volumes:
-  /workspace:
+  /runpod-volume:
     name: ltx25-vol
 
 file_mounts:
@@ -45,20 +41,67 @@ file_mounts:
 envs:
   HF_TOKEN: "${HF_TOKEN}"
   COMFYUI_ARGS: " "  # empty = no --lowvram (48GB fits int8 models in VRAM)
+  # The image's entrypoint defaults to MODE=serverless when it sees
+  # RUNPOD_POD_ID — that starts the serverless worker loop. Force pods mode:
+  MODE: "pods"
 
 setup: |
   set -e
 
-  echo "=== LTX-2.5 model setup on prebuilt image ==="
+  echo "=== LTX-2.5 model verification on prebuilt image ==="
 
-  # Repoint ComfyUI dirs onto the network volume (image symlinks point at
-  # /runpod-volume, which only exists in the serverless layout).
-  mkdir -p /workspace/models/{checkpoints,text_encoders,vae,loras,latent_upscale_models,model_patches,unet}
-  mkdir -p /workspace/models/SEEDVR2 /workspace/input /workspace/output
-  rm -rf /comfyui/models /comfyui/input /comfyui/output
-  ln -s /workspace/models /comfyui/models
-  ln -s /workspace/input /comfyui/input
-  ln -s /workspace/output /comfyui/output
+  MODELS=/runpod-volume/models
+  mkdir -p $MODELS/{checkpoints,text_encoders,vae,loras,latent_upscale_models}
+  mkdir -p /runpod-volume/input /runpod-volume/output
+
+  export HF_HUB_ENABLE_HF_TRANSFER=1
+  export HF_TOKEN
+  HF=/comfyui/venv/bin/hf
+  REPO=Lightricks/LTX-2.5
+
+  # hf download with --local-dir nests repo subfolders under the target dir
+  # (checkpoints/diffusion_models/...). ComfyUI wants flat category dirs, and
+  # the volume already holds flattened files from previous runs — so guard
+  # every download on the FLAT path to avoid re-fetching duplicates.
+  ensure() {  # ensure <repo> <repo_file> <category_dir>
+    local dest="$3/$(basename "$2")"
+    if [ -f "$dest" ]; then
+      echo "present: $dest"
+    else
+      $HF download "$1" "$2" --local-dir "$3"
+      find "$3" -mindepth 2 -type f -name "*.safetensors" \
+        -exec mv -n {} "$3/" \;
+    fi
+  }
+
+  ensure $REPO text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors \
+    $MODELS/text_encoders
+  ensure $REPO diffusion_models/ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors \
+    $MODELS/checkpoints
+  ensure $REPO diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors \
+    $MODELS/checkpoints
+  ensure $REPO vae/ltx-2.5-video-vae-bf16.safetensors $MODELS/vae
+  ensure $REPO vae/ltx-2.5-audio-vae-bf16.safetensors $MODELS/vae
+  ensure $REPO loras/ltx-2.5-22b-distilled-lora-450-bf16.safetensors $MODELS/loras
+  ensure Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler \
+    ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors $MODELS/loras
+  ensure $REPO latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors \
+    $MODELS/latent_upscale_models
+
+  # Tokenizer files for the text encoder (nested dir is intentional —
+  # CLIPLoader type=ltxv expects the gemma4-12b-ltx-2.5/ subfolder).
+  if [ ! -f $MODELS/text_encoders/gemma4-12b-ltx-2.5/tokenizer.json ]; then
+    $HF download Lightricks/LTX-2.5-Pre-Trained \
+      ltx-2.5-22b-gemma4-12b/config.json \
+      ltx-2.5-22b-gemma4-12b/tokenizer_config.json \
+      ltx-2.5-22b-gemma4-12b/tokenizer.json \
+      ltx-2.5-22b-gemma4-12b/chat_template.jinja \
+      ltx-2.5-22b-gemma4-12b/generation_config.json \
+      ltx-2.5-22b-gemma4-12b/processor_config.json \
+      --local-dir $MODELS/text_encoders/gemma4-12b-ltx-2.5
+    ln -sf ../gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors \
+      $MODELS/text_encoders/gemma4-12b-ltx-2.5/model.safetensors
+  fi
 
   # h264-allintra video format (all-intra h264 — no motion artifacts)
   VHS_FORMATS=/comfyui/custom_nodes/ComfyUI-VideoHelperSuite/video_formats
@@ -67,85 +110,18 @@ setup: |
     echo "Installed h264-allintra video format"
   fi
 
-  export HF_HUB_ENABLE_HF_TRANSFER=1
-  export HF_TOKEN
-  HF=/comfyui/venv/bin/hf
-
-  echo "=== Downloading LTX-2.5 models to /workspace/models ==="
-
-  # --- Text encoder (int8-convrot, ~15GB) ---
-  $HF download Lightricks/LTX-2.5 \
-    text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors \
-    --local-dir /workspace/models/text_encoders
-
-  # --- Text encoder tokenizer files ---
-  $HF download Lightricks/LTX-2.5-Pre-Trained \
-    ltx-2.5-22b-gemma4-12b/config.json \
-    ltx-2.5-22b-gemma4-12b/tokenizer_config.json \
-    ltx-2.5-22b-gemma4-12b/tokenizer.json \
-    ltx-2.5-22b-gemma4-12b/chat_template.jinja \
-    ltx-2.5-22b-gemma4-12b/generation_config.json \
-    ltx-2.5-22b-gemma4-12b/processor_config.json \
-    --local-dir /workspace/models/text_encoders/gemma4-12b-ltx-2.5
-
-  ln -sf ../gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors \
-    /workspace/models/text_encoders/gemma4-12b-ltx-2.5/model.safetensors
-
-  # --- Distilled transformer (int8-convrot, ~21.5GB) ---
-  $HF download Lightricks/LTX-2.5 \
-    diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors \
-    --local-dir /workspace/models/checkpoints
-
-  # NOTE: the dev int8 transformer (~21.5GB) is deliberately NOT downloaded —
-  # the volume is sized 100GB for the distilled + GGUF model set. Re-add it
-  # (and resize the volume) if dev-quality two-pass workflows are needed.
-
-  # --- VAEs ---
-  $HF download Lightricks/LTX-2.5 \
-    vae/ltx-2.5-video-vae-bf16.safetensors \
-    vae/ltx-2.5-audio-vae-bf16.safetensors \
-    --local-dir /workspace/models/vae
-
-  # --- LoRAs ---
-  $HF download Lightricks/LTX-2.5 \
-    loras/ltx-2.5-22b-distilled-lora-450-bf16.safetensors \
-    --local-dir /workspace/models/loras
-
-  # --- IC-LoRA pixel upscaler ---
-  $HF download Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler \
-    ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors \
-    --local-dir /workspace/models/loras
-
-  # --- Latent upscalers ---
-  $HF download Lightricks/LTX-2.5 \
-    latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors \
-    latent_upscale_models/ltx-2.5-latent-temporal-upscaler-x2-bf16-1.0.safetensors \
-    --local-dir /workspace/models/latent_upscale_models
-
-  # --- Duration head patch ---
-  $HF download Lightricks/LTX-2.5 \
-    model_patches/ltx-2.5-duration-head-bf16.safetensors \
-    --local-dir /workspace/models/model_patches
-
-  # --- Text enhancer (Gemma 4 E2B) ---
-  $HF download Comfy-Org/gemma-4 \
-    text_encoders/gemma4_e2b_it_bf16.safetensors \
-    --local-dir /workspace/models/text_encoders
-
-  # --- Distilled GGUF Q5_K_M ---
-  $HF download Abiray/LTX-2.5-Distilled-GGUF \
-    LTX-2.5-Distilled-Q5_K_M.gguf \
-    --local-dir /workspace/models/unet
-
-  # --- SeedVR2 3B + VAE ---
-  $HF download numz/SeedVR2_comfyUI \
-    seedvr2_ema_3b_fp16.safetensors \
-    ema_vae_fp16.safetensors \
-    --local-dir /workspace/models/SEEDVR2
-
   echo "=== Setup complete ==="
-  du -sh /workspace/models/*/
+  du -sh $MODELS/*/
 
 run: |
-  cd /comfyui
-  /comfyui/venv/bin/python main.py --listen 0.0.0.0 --port 8188 ${COMFYUI_ARGS}
+  # The image's entrypoint (PID 1, MODE=pods) already launched ComfyUI on
+  # 8188 with its own env and the /runpod-volume symlinks. Starting a second
+  # instance would collide on the port — wait for the existing one instead.
+  for i in $(seq 1 120); do
+    if curl -s -o /dev/null http://127.0.0.1:8188/; then
+      echo "ComfyUI is up (served by the image entrypoint)"
+      break
+    fi
+    sleep 5
+  done
+  sleep infinity

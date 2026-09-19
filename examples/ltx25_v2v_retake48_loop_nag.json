@@ -142,7 +142,7 @@
   "14a": {
     "inputs": {
       "model": [
-        "3",
+        "14b",
         0
       ],
       "cfg": 1.0,
@@ -351,7 +351,8 @@
       "timing": "IC-LoRA ~neutral; NAG adds attention guidance per step (~+20-40% pass-1 time)",
       "validate_after": "1 clip -> tools/loop-checker.html (Start/End/Loop diffs) before batch",
       "disable_again": "revert the rewires above; dormant nodes can stay in the file"
-    }
+    },
+    "variant": "B: NAG enabled (14a.model <- 14b)"
   },
   "40": {
     "inputs": {
@@ -395,6 +396,21 @@
     "class_type": "ImageFromBatch",
     "_meta": {
       "title": "Trim 361 -> 360"
+    }
+  },
+  "14b": {
+    "inputs": {
+      "model": [
+        "3",
+        0
+      ],
+      "nag_scale": 11.0,
+      "nag_alpha": 0.25,
+      "nag_tau": 2.5
+    },
+    "class_type": "NAGuidance",
+    "_meta": {
+      "title": "NAG (ComfyUI core NAGuidance)"
     }
   },
   "4": {

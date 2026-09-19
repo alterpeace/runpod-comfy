@@ -49,7 +49,10 @@ volumes:
 
 envs:
   HF_TOKEN: "${HF_TOKEN}"
-  COMFYUI_ARGS: " "  # Empty = no --lowvram (48GB fits models in VRAM)
+  # --cache-none: don't cache models in host RAM (LTXV dynamic loader stages
+  # ~20GB/model; default caching OOM-killed ComfyUI at 105GB on a 116GB node,
+  # 2026-09-19). See ltx25-48gb.yaml for the full note.
+  COMFYUI_ARGS: "--cache-none"
 
 # Setup runs ONCE on first provision (persists across scale-to-zero — the pod
 # is autostopped, not terminated, so disk and downloaded models are kept).

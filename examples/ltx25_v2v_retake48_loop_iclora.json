@@ -115,7 +115,7 @@
   "11": {
     "inputs": {
       "model": [
-        "3",
+        "4",
         0
       ],
       "scheduler": "linear_quadratic",
@@ -142,7 +142,7 @@
   "14a": {
     "inputs": {
       "model": [
-        "3",
+        "4",
         0
       ],
       "cfg": 1.0,
@@ -163,12 +163,12 @@
         0
       ],
       "positive": [
-        "5",
+        "27",
         0
       ],
       "negative": [
-        "6",
-        0
+        "27",
+        1
       ],
       "cfg": 1.0
     },
@@ -276,7 +276,7 @@
   "25": {
     "inputs": {
       "model": [
-        "3",
+        "4",
         0
       ],
       "positive": [
@@ -351,7 +351,8 @@
       "timing": "IC-LoRA ~neutral; NAG adds attention guidance per step (~+20-40% pass-1 time)",
       "validate_after": "1 clip -> tools/loop-checker.html (Start/End/Loop diffs) before batch",
       "disable_again": "revert the rewires above; dormant nodes can stay in the file"
-    }
+    },
+    "variant": "C: IC-LoRA guided (model chain via 4, conditioning via 27)"
   },
   "40": {
     "inputs": {

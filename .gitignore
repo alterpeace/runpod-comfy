@@ -71,7 +71,8 @@ tools/
 examples/apz-creative-ltx.json
 examples/apz-creative-ltx-local-test.json
 
-sample/
+/sample
+/sample_legacy_31set/
 output/
 
 # write-probe artifacts

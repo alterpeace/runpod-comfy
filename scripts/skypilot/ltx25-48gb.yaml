@@ -108,8 +108,13 @@ volumes:
 # Environment variables to pass to the container
 envs:
   HF_TOKEN: "${HF_TOKEN}"
-  COMFYUI_ARGS: " "  # Empty = no --lowvram (48GB fits models in VRAM)
-  # For 24GB GPUs, set: COMFYUI_ARGS: "--lowvram"
+  # --cache-none: don't cache models in host RAM. The LTXV dynamic-VRAM loader
+  # stages ~20GB per model in host RAM; with default caching the retake48
+  # two-pass peaked at 105GB and Ray's 95% memory monitor killed ComfyUI
+  # mid-denoise (2026-09-19, 116GB node, swapon blocked in container).
+  # cache-none reloads per node (+~2min/clip) and keeps the RAM peak safe.
+  # Override with --env COMFYUI_ARGS="..." for VRAM-constrained debugging.
+  COMFYUI_ARGS: "--cache-none"
 
 # Setup runs ONCE on first launch (or when setup changes)
 # This is where we install deps and download models
@@ -196,6 +201,11 @@ setup: |
   # Enable hf_transfer for faster downloads
   export HF_HUB_ENABLE_HF_TRANSFER=1
 
+  # Disable the Xet chunked protocol — its "receiver dropped" reconstruction
+  # errors abort the whole setup mid-download. Plain HTTPS is slower but
+  # resumes reliably on retry.
+  export HF_HUB_DISABLE_XET=1
+
   # Clone this project for workflow examples + video format configs
   if [ ! -d /opt/runpod-comfy/.git ]; then
     gitc https://github.com/${GITHUB_REPO:-alterpeace/runpod-comfy}.git /opt/runpod-comfy || true
@@ -230,55 +240,73 @@ setup: |
   # Total ~42GB. Skipped on 48GB (unneeded): distilled int8, Q5_K_M GGUF,
   # SeedVR2, gemma4_e2b, temporal upscaler, duration head, audio VAE.
 
-  # --- Text encoder (int8-convrot, ~15GB) ---
-  hf download Lightricks/LTX-2.5 \
+  # FLAT-PATH GUARD: hf --local-dir nests repo subfolders under the target
+  # dir (text_encoders/text_encoders/...) while the volume already holds
+  # flattened files from previous runs — re-downloading doubles storage
+  # until the quota blows ("Disk quota exceeded"). Only fetch files missing
+  # at their flat destination, then flatten.
+  ensure() {  # ensure <repo> <repo_file> <category_dir>
+    local dest="$3/$(basename "$2")"
+    if [ -f "$dest" ]; then
+      echo "present: $dest"
+    else
+      hf download "$1" "$2" --local-dir "$3"
+      find "$3" -mindepth 2 -type f -name "*.safetensors" -exec mv -n {} "$3/" \;
+    fi
+  }
+
+  ensure Lightricks/LTX-2.5 \
     text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors \
-    --local-dir /opt/ComfyUI/models/text_encoders
+    /opt/ComfyUI/models/text_encoders
 
-  # --- Text encoder tokenizer files ---
-  hf download Lightricks/LTX-2.5-Pre-Trained \
-    ltx-2.5-22b-gemma4-12b/config.json \
-    ltx-2.5-22b-gemma4-12b/tokenizer_config.json \
-    ltx-2.5-22b-gemma4-12b/tokenizer.json \
-    ltx-2.5-22b-gemma4-12b/chat_template.jinja \
-    ltx-2.5-22b-gemma4-12b/generation_config.json \
-    ltx-2.5-22b-gemma4-12b/processor_config.json \
-    --local-dir /opt/ComfyUI/models/text_encoders/gemma4-12b-ltx-2.5
+  # --- Text encoder tokenizer files (nested dir is intentional for CLIPLoader) ---
+  if [ ! -f /opt/ComfyUI/models/text_encoders/gemma4-12b-ltx-2.5/tokenizer.json ]; then
+    hf download Lightricks/LTX-2.5-Pre-Trained \
+      ltx-2.5-22b-gemma4-12b/config.json \
+      ltx-2.5-22b-gemma4-12b/tokenizer_config.json \
+      ltx-2.5-22b-gemma4-12b/tokenizer.json \
+      ltx-2.5-22b-gemma4-12b/chat_template.jinja \
+      ltx-2.5-22b-gemma4-12b/generation_config.json \
+      ltx-2.5-22b-gemma4-12b/processor_config.json \
+      --local-dir /opt/ComfyUI/models/text_encoders/gemma4-12b-ltx-2.5
 
-  # Create model.safetensors symlink (for LTXVGemmaCLIPModelLoader)
-  ln -sf ../gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors \
-    /opt/ComfyUI/models/text_encoders/gemma4-12b-ltx-2.5/model.safetensors
+    # Create model.safetensors symlink (for LTXVGemmaCLIPModelLoader)
+    ln -sf ../gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors \
+      /opt/ComfyUI/models/text_encoders/gemma4-12b-ltx-2.5/model.safetensors
+  fi
 
   # --- Dev transformer (int8-convrot, ~22GB) — this build's checkpoint ---
-  hf download Lightricks/LTX-2.5 \
+  ensure Lightricks/LTX-2.5 \
     diffusion_models/ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors \
-    --local-dir /opt/ComfyUI/models/checkpoints
+    /opt/ComfyUI/models/checkpoints
 
   # --- Video VAE (int8/GGUF checkpoints ship no VAE — always load explicitly) ---
-  hf download Lightricks/LTX-2.5 \
+  ensure Lightricks/LTX-2.5 \
     vae/ltx-2.5-video-vae-bf16.safetensors \
-    --local-dir /opt/ComfyUI/models/vae
+    /opt/ComfyUI/models/vae
 
   # --- LoRA: distilled 450 (speed/quality scheduling anchor) ---
-  hf download Lightricks/LTX-2.5 \
+  ensure Lightricks/LTX-2.5 \
     loras/ltx-2.5-22b-distilled-lora-450-bf16.safetensors \
-    --local-dir /opt/ComfyUI/models/loras
+    /opt/ComfyUI/models/loras
 
   # --- IC-LoRA pixel upscaler (pass-2 re-detail conditioning) ---
-  hf download Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler \
+  ensure Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler \
     ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors \
-    --local-dir /opt/ComfyUI/models/loras
+    /opt/ComfyUI/models/loras
 
   # --- Latent spatial upscaler x2 (pass-1 -> pass-2 bridge) ---
-  hf download Lightricks/LTX-2.5 \
+  ensure Lightricks/LTX-2.5 \
     latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors \
-    --local-dir /opt/ComfyUI/models/latent_upscale_models
+    /opt/ComfyUI/models/latent_upscale_models
 
   # --- SeedVR2 3B fp16 (restoration + 2K upscale stage after LTX) ---
-  hf download numz/SeedVR2_comfyUI \
+  ensure numz/SeedVR2_comfyUI \
     seedvr2_ema_3b_fp16.safetensors \
+    /opt/ComfyUI/models/SEEDVR2
+  ensure numz/SeedVR2_comfyUI \
     ema_vae_fp16.safetensors \
-    --local-dir /opt/ComfyUI/models/SEEDVR2
+    /opt/ComfyUI/models/SEEDVR2
 
   # ComfyUI-SeedVR2_VideoUpscaler node
   if [ ! -d ComfyUI-SeedVR2_VideoUpscaler/.git ]; then
@@ -288,10 +316,8 @@ setup: |
     uv pip install -r ComfyUI-SeedVR2_VideoUpscaler/requirements.txt
   fi
 
-  # hf download --local-dir preserves the repo's subfolder layout
-  # (checkpoints/diffusion_models/...), but ComfyUI workflows reference bare
-  # filenames inside category dirs — flatten one nesting level. -type f skips
-  # the tokenizer-dir symlink; mv -n keeps files already in place.
+  # Safety net: flatten any nested leftovers from older runs (tokenizers and
+  # the .cache metadata are exempt — only loose .safetensors move).
   for cat in checkpoints vae loras text_encoders latent_upscale_models; do
     find /opt/ComfyUI/models/$cat -mindepth 2 -type f -name "*.safetensors" \
       -exec mv -n {} /opt/ComfyUI/models/$cat/ \;
@@ -316,43 +342,12 @@ run: |
 
   # Expose the WebUI on RunPod's pre-registered Jupyter HTTP port (19123):
   #   https://<RUNPOD_POD_HOSTNAME>-19123.proxy.runpod.net
-  # With COMFYUI_WEBUI_USER/COMFYUI_WEBUI_PASS set (via --env), nginx adds
-  # basic auth (websockets + 2G uploads supported). Without them, fall back
-  # to an unauthenticated socat bridge.
-  if [ -n "${COMFYUI_WEBUI_USER:-}" ] && [ -n "${COMFYUI_WEBUI_PASS:-}" ]; then
-    htpasswd -bc /etc/nginx/.htpasswd "$COMFYUI_WEBUI_USER" "$COMFYUI_WEBUI_PASS"
-    python3 - << 'PYEOF'
-conf = open("/etc/nginx/nginx.conf").read()
-block = """
-    map $http_upgrade $connection_upgrade { default upgrade; '' close; }
-    server {
-        listen 19123;
-        client_max_body_size 2G;
-        auth_basic "ComfyUI";
-        auth_basic_user_file /etc/nginx/.htpasswd;
-        location / {
-            proxy_pass http://127.0.0.1:8188;
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection $connection_upgrade;
-            proxy_set_header Host $host;
-            proxy_read_timeout 3600s;
-            proxy_send_timeout 3600s;
-        }
-    }
-"""
-start = conf.find("\n    map $http_upgrade $connection_upgrade")
-if start != -1:
-    conf = conf[:start] + conf[conf.find("\n}", start) + 1:]
-if "listen 19123" not in conf:
-    idx = conf.rstrip().rfind("\n}")
-    conf = conf[:idx + 1] + block + conf[idx + 1:]
-open("/etc/nginx/nginx.conf", "w").write(conf)
-PYEOF
-    nginx -t && (nginx -s reload 2>/dev/null || service nginx start || nginx)
-  else
-    socat TCP-LISTEN:19123,fork,reuseaddr TCP:127.0.0.1:8188 \
-      > /workspace/logs/socat-19123.log 2>&1 &
-  fi
+  # Primary access path is the SSH tunnel (launch.sh port-forward) — this
+  # bridge is a convenience fallback. (An earlier nginx basic-auth variant
+  # of this block was removed: its column-1 heredoc made the whole task
+  # file invalid YAML. See git history if it's ever needed again.)
+  mkdir -p /workspace/logs
+  socat TCP-LISTEN:19123,fork,reuseaddr TCP:127.0.0.1:8188 \
+    > /workspace/logs/socat-19123.log 2>&1 &
 
   wait $COMFY_PID
