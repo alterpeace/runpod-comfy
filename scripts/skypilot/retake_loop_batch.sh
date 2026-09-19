@@ -27,7 +27,8 @@ VOL="ltx25-vol"
 VOL_INFRA="runpod/NL/EU-NL-1"
 VOL_SIZE="${VOL_SIZE:-100}"   # GB; export VOL_SIZE=200 for more headroom
 SAMPLE_SRC="${SAMPLE_SRC:-$HOME/Desktop/sample}"
-OUT_DIR="output/retake_loop_batch"
+OUT_DIR="${OUT_DIR:-output/retake_loop_batch}"
+WORKFLOW="${WORKFLOW:-examples/ltx25_v2v_retake48_loop_runpod.json}"   # e.g. WORKFLOW=examples/ltx25_v2v_retake48_loop_nag.json OUT_DIR=output/retake48_nag_batch
 PER_CLIP_TIMEOUT="${PER_CLIP_TIMEOUT:-3600}"
 
 KEEP_UP=0
@@ -154,7 +155,7 @@ SEED_ARGS=""
 [ "$RANDOM_SEEDS" -eq 0 ] && SEED_ARGS="--no-random-seed"
 uv run python scripts/invoke/invoke_skypilot_batch.py \
   --dir sample \
-  --workflow examples/ltx25_v2v_retake48_loop_runpod.json \
+  --workflow "$WORKFLOW" \
   --out "$OUT_DIR" \
   --timeout "$PER_CLIP_TIMEOUT" \
   $SEED_ARGS \
