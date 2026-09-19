@@ -102,6 +102,13 @@ ensure Lightricks/LTX-2.5 \
   diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors \
   "$MODELS/checkpoints"
 
+# Hard-link into diffusion_models/ too — workflows loading via UNETLoader look
+# there (CheckpointLoaderSimple looks in checkpoints/); a hard link costs
+# nothing and keeps both categories in sync.
+mkdir -p "$MODELS/diffusion_models"
+ln -f "$MODELS/checkpoints/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors" \
+  "$MODELS/diffusion_models/" 2>/dev/null || true
+
 ensure Lightricks/LTX-2.5 \
   vae/ltx-2.5-audio-vae-bf16.safetensors \
   "$MODELS/vae"
