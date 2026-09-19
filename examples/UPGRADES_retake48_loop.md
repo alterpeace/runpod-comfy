@@ -12,6 +12,22 @@ or not), so it 400-rejected EVERY run of all four files. Fixes applied:
   (comfy_extras/nodes_nag.py: model + nag_scale/nag_alpha/nag_tau; the
   invented `nag_cond_video` input dropped). Knobs preserved.
 
+2026-09-19 UPDATE 2 (A/B test results):
+- **NAG variant: WORKS** — 4/4 clips rendered via core `NAGuidance`.
+- **IC-LoRA variants (iclora/both): NOT RUNNABLE on this graph.** The
+  looping sampler (15 LTXVLoopingSampler) chunks the sequence and builds a
+  per-chunk keyframe grid via its own in-context guidance
+  (`optional_guiding_latents` → `LTXVInContextSampler`), while
+  `LTXAddVideoICLoRAGuide` (27) appends WHOLE-SEQUENCE guide token entries to
+  the conditioning. ComfyUI core's IC-LoRA attention validation rejects the
+  combination: `guide pre_filter_counts (18480) != keyframe grid mask length
+  (6048)`. Wiring 27's extended latents into the sampler instead fails the
+  other way (`latents and optional_guiding_latents must be the same length`).
+  IC-LoRA's attention only activates through those guide entries, so the LoRA
+  alone is inert. No pack example combines IC-LoRA with the looping sampler
+  (all 16 use standard/two-stage samplers). Needs an upstream pack fix
+  (per-chunk guide-entry remapping) — filed as a future Lightricks request.
+
 ## Ready-made variant files (2026-09-18) — no manual rewiring needed:
 - `examples/ltx25_v2v_retake48_loop_nag.json` — NAG on (core NAGuidance)
 - `examples/ltx25_v2v_retake48_loop_iclora.json` — IC-LoRA guided
