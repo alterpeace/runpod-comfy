@@ -122,7 +122,7 @@ fi
 ssh -f -N -L 8188:localhost:8188 \
     -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes \
     -o StrictHostKeyChecking=accept-new \
-    "$CLUSTER" > /dev/null 2>&1
+    "$CLUSTER" > /dev/null 2>&1 || true   # non-fatal: a stale tunnel may hold the port; health loop decides
 TUNNEL_PID=$(pgrep -f "ssh -f -N -L 8188:localhost:8188.*$CLUSTER" | head -1 || true)
 [ -n "$TUNNEL_PID" ] && echo "$TUNNEL_PID" > "$TUNNEL_PIDFILE"
 
