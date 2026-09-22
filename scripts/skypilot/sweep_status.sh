@@ -14,13 +14,13 @@ INTERVAL=15
 [ "${1:-}" = "--watch" ] && { WATCH=1; INTERVAL="${2:-15}"; }
 
 CLUSTER="${CLUSTER:-ltx25}"
-TOTAL="${SWEEP_TOTAL:-8}"   # 2 clips x 4 denoise values
+TOTAL="${SWEEP_TOTAL:-6}"   # 2 clips x 4 denoise values
 
 snapshot() {
   ssh -o ConnectTimeout=10 -o BatchMode=yes "$CLUSTER" "SWEEP_TOTAL=$TOTAL /opt/venv/bin/python3 -" <<'PY' 2>/dev/null
 import glob, json, os, re, urllib.request
 
-log_path = "/workspace/run_variants/denoise_sweep.log"
+log_path = "/workspace/run_variants/bf16_sweep.log"
 bulk_path = "/workspace/run_variants/bulk_sweep.log"
 log = open(log_path).read() if os.path.exists(log_path) else ""
 blog = open(bulk_path).read() if os.path.exists(bulk_path) else ""
@@ -28,7 +28,7 @@ log = log + "\n" + blog if blog else log
 total = int(os.environ.get("SWEEP_TOTAL", "8"))
 started = len(re.findall(r"^=== ", log, re.M))
 failed = len(re.findall(r"^FAILED", log, re.M))
-finished = len(glob.glob("/workspace/run_variants/out/denoise_test/*/*.mp4"))
+finished = len(glob.glob("/workspace/run_variants/out/bf16_sweep/*/*.mp4"))
 times = [float(x) for x in re.findall(r"done in ([\d.]+) min", log)]
 cur_m = re.findall(r"^=== (.+)$", log, re.M)
 current = cur_m[-1] if cur_m else "-"
@@ -52,7 +52,7 @@ render() {
   echo "──────────────────────────────────────────────────────────"
   echo " denoise sweep @ $now"
   echo "──────────────────────────────────────────────────────────"
-  printf " total:      %s   (2 clips x 4 denoise values)\n" "$total"
+  printf " total:      %s   (2 clips x 3 denoise values)\n" "$total"
   printf " finished:   %s\n" "$finished"
   printf " failed:     %s\n" "$failed"
   printf " running:    %s (comfyui queue)   pending: %s (comfyui)\n" "$running" "$pending"
