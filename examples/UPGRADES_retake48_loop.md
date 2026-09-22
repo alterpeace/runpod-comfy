@@ -28,6 +28,19 @@ or not), so it 400-rejected EVERY run of all four files. Fixes applied:
   (all 16 use standard/two-stage samplers). Needs an upstream pack fix
   (per-chunk guide-entry remapping) — filed as a future Lightricks request.
 
+2026-09-22 UPDATE (restyle experiments — verdicts):
+- **bf16-distilled ladder: WIN** — resident model renders ~9.3 min vs ~13.5-15.5
+  for int8-streaming (~30% faster), all 6 renders clean. The denoise knob is a
+  dead knob on the looping sampler (it rebuilds its own full-range sigma
+  schedule); creativity lives in guiding_strength / guiding_end_step.
+- **CQ enhancer V2 + conv-VAE: REJECTED — do not use.** Tested on the retake48
+  loop graph (dev-int8 + CQ@1.0 + conv-VAE, clip_26-08-19): output looked
+  horrible. User directive: never run this combination again. (If ever
+  revisited: CQ recipe halves the distilled LoRA to 0.5 and uses the conv VAE
+  — the double-LoRA and/or conv-VAE on the loop graph are the suspects.)
+- **IC-LoRA post-passes (Deblur/Decompression)**: viable only OUTSIDE the loop
+  (standard sampler on finished retakes); still untested.
+
 ## Ready-made variant files (2026-09-18) — no manual rewiring needed:
 - `examples/ltx25_v2v_retake48_loop_nag.json` — NAG on (core NAGuidance)
 - `examples/ltx25_v2v_retake48_loop_iclora.json` — IC-LoRA guided
