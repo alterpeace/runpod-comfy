@@ -2,7 +2,7 @@
 # =============================================================================
 # denoise_sweep.sh — denoise ladder test, server-side (runs ON THE POD).
 #
-# 3 clips x 7 denoise values (0.50..0.65 step 0.025), NAG workflow.
+# 3 clips x 4 denoise values (0.50/0.55/0.60/0.65), NAG workflow.
 # Each render -> out/denoise_test/d_<value>/<clip>.mp4 (folder-per-value).
 # Resumable: skips renders whose output file already exists.
 # =============================================================================
@@ -11,7 +11,7 @@ cd /workspace/run_variants
 
 CLIPS="clip_26-09-11_20-03-51_00001.mp4 clip_26-09-18_19-36-48_00001.mp4 clip_26-09-18_19-37-30_00001.mp4"
 
-for d in 0.5 0.525 0.55 0.575 0.60 0.625 0.65; do
+for d in 0.5 0.55 0.60 0.65; do
   python3 - <<PY
 import json
 w = json.load(open("examples/ltx25_v2v_retake48_loop_nag.json"))
