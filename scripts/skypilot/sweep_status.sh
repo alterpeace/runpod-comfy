@@ -14,7 +14,7 @@ INTERVAL=15
 [ "${1:-}" = "--watch" ] && { WATCH=1; INTERVAL="${2:-15}"; }
 
 CLUSTER="${CLUSTER:-ltx25}"
-TOTAL="${SWEEP_TOTAL:-12}"   # 3 clips x 4 denoise values
+TOTAL="${SWEEP_TOTAL:-8}"   # 2 clips x 4 denoise values
 
 snapshot() {
   ssh -o ConnectTimeout=10 -o BatchMode=yes "$CLUSTER" /opt/venv/bin/python3 - <<'PY' 2>/dev/null
@@ -49,7 +49,7 @@ render() {
   echo "──────────────────────────────────────────────────────────"
   echo " denoise sweep @ $now"
   echo "──────────────────────────────────────────────────────────"
-  printf " total:      %s   (3 clips x 4 denoise values)\n" "$total"
+  printf " total:      %s   (2 clips x 4 denoise values)\n" "$total"
   printf " finished:   %s\n" "$finished"
   printf " failed:     %s\n" "$failed"
   printf " running:    %s (comfyui queue)   pending: %s (comfyui)\n" "$running" "$pending"

@@ -9,7 +9,7 @@
 set -u
 cd /workspace/run_variants
 
-CLIPS="clip_26-09-11_20-03-51_00001.mp4 clip_26-09-18_19-36-48_00001.mp4 clip_26-09-18_19-37-30_00001.mp4"
+CLIPS="clip_26-09-18_19-36-48_00001.mp4 clip_26-09-18_19-37-30_00001.mp4"
 
 for d in 0.5 0.55 0.60 0.65; do
   python3 - <<PY
