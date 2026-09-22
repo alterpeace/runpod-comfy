@@ -17,12 +17,15 @@ CLUSTER="${CLUSTER:-ltx25}"
 TOTAL="${SWEEP_TOTAL:-8}"   # 2 clips x 4 denoise values
 
 snapshot() {
-  ssh -o ConnectTimeout=10 -o BatchMode=yes "$CLUSTER" /opt/venv/bin/python3 - <<'PY' 2>/dev/null
+  ssh -o ConnectTimeout=10 -o BatchMode=yes "$CLUSTER" "SWEEP_TOTAL=$TOTAL /opt/venv/bin/python3 -" <<'PY' 2>/dev/null
 import glob, json, os, re, urllib.request
 
 log_path = "/workspace/run_variants/denoise_sweep.log"
+bulk_path = "/workspace/run_variants/bulk_sweep.log"
 log = open(log_path).read() if os.path.exists(log_path) else ""
-total = 12
+blog = open(bulk_path).read() if os.path.exists(bulk_path) else ""
+log = log + "\n" + blog if blog else log
+total = int(os.environ.get("SWEEP_TOTAL", "8"))
 started = len(re.findall(r"^=== ", log, re.M))
 failed = len(re.findall(r"^FAILED", log, re.M))
 finished = len(glob.glob("/workspace/run_variants/out/denoise_test/*/*.mp4"))
