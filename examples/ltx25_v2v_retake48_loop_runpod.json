@@ -1,11 +1,11 @@
 {
   "1": {
     "inputs": {
-      "ckpt_name": "ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors"
+      "ckpt_name": "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors"
     },
     "class_type": "CheckpointLoaderSimple",
     "_meta": {
-      "title": "Load Checkpoint (dev int8)"
+      "title": "Load Transformer (distilled int8-convrot, 21.5GB)"
     }
   },
   "2": {
@@ -14,51 +14,61 @@
       "type": "ltxv",
       "device": "default"
     },
-    "class_type": "CLIPLoader"
-  },
-  "3": {
-    "inputs": {
-      "model": [
-        "1",
-        0
-      ],
-      "clip": [
-        "2",
-        0
-      ],
-      "lora_name": "ltx-2.5-22b-distilled-lora-450-bf16.safetensors",
-      "strength_model": 1.0,
-      "strength_clip": 1.0
-    },
-    "class_type": "LoraLoader",
+    "class_type": "CLIPLoader",
     "_meta": {
-      "title": "Distilled LoRA (swept)"
+      "title": "Load Text Encoder (gemma4-12b int8)"
+    }
+  },
+  "26": {
+    "inputs": {
+      "vae_name": "ltx-2.5-video-vae-bf16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load Video VAE"
     }
   },
   "5": {
     "inputs": {
       "clip": [
-        "3",
-        1
+        "2",
+        0
       ],
       "text": "high quality video, sharp focus, clean render, detailed textures, cinematic lighting, professional post-production, 4k detail"
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
-      "title": "Positive Prompt (swept)"
+      "title": "Positive Prompt (describe the NEW content you want)"
     }
   },
   "6": {
     "inputs": {
       "clip": [
-        "3",
-        1
+        "2",
+        0
       ],
       "text": "blurry, low quality, distorted, glitch, artifacts, flickering, jerky motion, compression artifacts, watermark, noisy, grainy, washed out, banding"
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
-      "title": "Negative Prompt"
+      "title": "Negative Prompt (inert at cfg 1.0)"
+    }
+  },
+  "9": {
+    "inputs": {
+      "positive": [
+        "5",
+        0
+      ],
+      "negative": [
+        "6",
+        0
+      ],
+      "frame_rate": 24.0
+    },
+    "class_type": "LTXVConditioning",
+    "_meta": {
+      "title": "Frame-rate Conditioning (24fps)"
     }
   },
   "7": {
@@ -73,7 +83,37 @@
     },
     "class_type": "VHS_LoadVideo",
     "_meta": {
-      "title": "Load Input Video (frame_count swept)"
+      "title": "Load Source (frame_load_cap = exact source length, per clip)"
+    }
+  },
+  "40": {
+    "inputs": {
+      "image": [
+        "7",
+        0
+      ],
+      "batch_index": 0,
+      "length": 1
+    },
+    "class_type": "ImageFromBatch",
+    "_meta": {
+      "title": "Wrap Frames: source 0..p-1 (p per clip)"
+    }
+  },
+  "41": {
+    "inputs": {
+      "image1": [
+        "7",
+        0
+      ],
+      "image2": [
+        "40",
+        0
+      ]
+    },
+    "class_type": "ImageBatch",
+    "_meta": {
+      "title": "Source + Wrap (N+p = 8k+1 frames)"
     }
   },
   "8": {
@@ -82,14 +122,14 @@
         "41",
         0
       ],
-      "width": 768,
-      "height": 448,
       "upscale_method": "lanczos",
+      "width": 960,
+      "height": 544,
       "crop": "disabled"
     },
     "class_type": "ImageScale",
     "_meta": {
-      "title": "Resize to 768x448"
+      "title": "Resize to Pass-1 Res (aspect-matched per clip)"
     }
   },
   "10": {
@@ -102,85 +142,81 @@
         "26",
         0
       ],
-      "tile_size": 256,
+      "tile_size": 1024,
       "overlap": 64,
       "temporal_size": 97,
       "temporal_overlap": 24
     },
     "class_type": "VAEEncodeTiled",
     "_meta": {
-      "title": "Encode Source (v2v base + loop guide)"
+      "title": "Encode Source (init latent only)"
     }
   },
-  "11": {
+  "47": {
     "inputs": {
-      "model": [
-        "3",
+      "image": [
+        "48",
         0
       ],
-      "scheduler": "linear_quadratic",
-      "steps": 8,
-      "denoise": 0.5
+      "amount": 3
     },
-    "class_type": "BasicScheduler",
+    "class_type": "RepeatImageBatch",
     "_meta": {
-      "title": "Pass 1 Scheduler (denoise sweep)"
+      "title": "Keyframes x3 = Restyled Loop Anchor"
     }
   },
   "12": {
     "inputs": {
-      "sampler_name": "euler"
+      "sampler_name": "euler_ancestral"
     },
-    "class_type": "KSamplerSelect"
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "Pass 1 Sampler"
+    }
   },
   "13": {
     "inputs": {
       "noise_seed": 42
     },
-    "class_type": "RandomNoise"
-  },
-  "14a": {
-    "inputs": {
-      "model": [
-        "3",
-        0
-      ],
-      "cfg": 1.0,
-      "stg": "perturbated",
-      "sigma_start": 0.0,
-      "sigma_end": 1.0,
-      "block_indices": "0"
-    },
-    "class_type": "LTXVApplySTG",
+    "class_type": "RandomNoise",
     "_meta": {
-      "title": "Apply STG (for looping sampler)"
+      "title": "Pass 1 Seed"
+    }
+  },
+  "11": {
+    "inputs": {
+      "sigmas": "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
+    },
+    "class_type": "ManualSigmas",
+    "_meta": {
+      "title": "Pass 1 Sigmas (t2v from noise: 1.0 = full restyle; lower = keep more source look)"
     }
   },
   "14": {
     "inputs": {
       "model": [
-        "14a",
+        "1",
         0
       ],
       "positive": [
-        "5",
+        "9",
         0
       ],
       "negative": [
-        "6",
-        0
+        "9",
+        1
       ],
       "cfg": 1.0
     },
     "class_type": "CFGGuider",
     "_meta": {
-      "title": "CFG Guider (STG-aware)"
+      "title": "Pass 1 Guider (distilled: cfg 1)"
     }
   },
   "15": {
     "inputs": {
       "model": [
-        "14a",
+        "1",
         0
       ],
       "vae": [
@@ -207,7 +243,7 @@
         "10",
         0
       ],
-      "temporal_tile_size": 72,
+      "temporal_tile_size": 392,
       "temporal_overlap": 24,
       "guiding_strength": 1.0,
       "temporal_overlap_cond_strength": 0.5,
@@ -215,96 +251,52 @@
       "horizontal_tiles": 1,
       "vertical_tiles": 1,
       "spatial_overlap": 1,
-      "optional_guiding_latents": [
-        "10",
+      "optional_cond_images": [
+        "47",
         0
       ],
       "adain_factor": 0.0,
       "guiding_start_step": 0,
       "guiding_end_step": 1000,
-      "optional_cond_image_indices": "0"
+      "optional_cond_image_indices": "0, 359, 360"
     },
     "class_type": "LTXVLoopingSampler",
     "_meta": {
-      "title": "Pass 1: looping retake (perfect loop)"
+      "title": "Retake @pass-1 res (no source guide, seam-pinned) - the only sampling pass"
     }
   },
-  "21": {
-    "inputs": {
-      "model_name": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
-    },
-    "class_type": "LatentUpscaleModelLoader"
-  },
-  "16": {
+  "22": {
     "inputs": {
       "samples": [
         "15",
         0
       ],
-      "upscale_model": [
-        "21",
-        0
-      ],
       "vae": [
         "26",
         0
-      ]
+      ],
+      "tile_size": 1024,
+      "overlap": 128,
+      "temporal_size": 128,
+      "temporal_overlap": 32
     },
-    "class_type": "LTXVLatentUpsampler",
+    "class_type": "VAEDecodeTiled",
     "_meta": {
-      "title": "2x Latent Upscale"
+      "title": "VAE Decode @ Pass-1 Res (native, no latent upscale)"
     }
   },
-  "18": {
+  "42": {
     "inputs": {
-      "sigmas": "0.85, 0.725, 0.4219, 0.0"
-    },
-    "class_type": "ManualSigmas"
-  },
-  "17": {
-    "inputs": {
-      "sampler_name": "euler"
-    },
-    "class_type": "KSamplerSelect"
-  },
-  "24": {
-    "inputs": {
-      "noise_seed": 42
-    },
-    "class_type": "RandomNoise"
-  },
-  "25": {
-    "inputs": {
-      "model": [
-        "3",
+      "image": [
+        "22",
         0
       ],
-      "positive": [
-        "5",
-        0
-      ],
-      "negative": [
-        "6",
-        0
-      ],
-      "cfg": 1.0
+      "batch_index": 0,
+      "length": 360
     },
-    "class_type": "CFGGuider"
-  },
-  "22": {
-    "inputs": {
-      "vae": [
-        "26",
-        0
-      ],
-      "samples": [
-        "16",
-        0
-      ]
-    },
-    "class_type": "VAEDecode",
+    "class_type": "ImageFromBatch",
     "_meta": {
-      "title": "VAE Decode (1536x896)"
+      "title": "Trim to Source Length N (drops wrap frames)"
     }
   },
   "20": {
@@ -320,130 +312,72 @@
       "pingpong": false,
       "save_output": true
     },
-    "class_type": "VHS_VideoCombine"
-  },
-  "26": {
-    "inputs": {
-      "vae_name": "ltx-2.5-video-vae-bf16.safetensors"
-    },
-    "class_type": "VAELoader"
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Save (h264 all-intra)"
+    }
   },
   "_metadata": {
-    "gpu_tier": "48GB retake (looping)",
+    "gpu_tier": "48GB (L40/L40S/RTX6000-Ada), COMFYUI_ARGS=--cache-none",
+    "length_match": {
+      "mode": "loop_wrap",
+      "wrap": "40",
+      "kf_a": "47",
+      "kf_b": "47",
+      "trim": "42",
+      "samplers": [
+        "15"
+      ],
+      "pass1_resize": [
+        "8"
+      ],
+      "anchor": "48"
+    },
+    "assumes": "the SOURCE already loops (its frame N-1 flows into frame 0)",
+    "pipeline": "source N + wrap 0..p-1 -> LTX t2v-from-noise with loop pinned to a RESTYLED anchor frame (all 3 pins = same anchor) -> native decode -> trim to N. Anchor = frame 0 of a previous sigma-1.0 render with the same prompt (chicken-and-egg solved by bootstrapping from D2-style run).",
+    "loop_mechanism": "All three pins are the SAME restyled anchor image (indices 0, a, b). First and last output frames match the anchor, so the wrap closes on the restyled look. With a sigma-1.0 start the source drives nothing except length; motion is invented from noise + prompt (temporal loop closure is pinned, not copied).",
+    "frames": "driver per clip: node 7 cap=N, 40 len=p, 43/44 = seam pins a/b, sampler 15 indices, 42 len=N; nodes 8/30 = aspect-matched pass-1 WxH (mult of 32, ~960x544 area)",
+    "creativity_knobs": {
+      "node 11 sigmas": "1.0 (default now): prompt-driven invention, anchor provides look+loop | 0.99375: slightly more coherent motion | below ~0.99: source palette leaks back in (low-frequency SNR, measured 2026-09-23)",
+      "node 15 cond_image_strength": "loop-pin strength: 1.0 = seam frames forced to the source's look; lower lets the restyle reach the seam (loop closes by similarity)",
+      "node 5 prompt": "what the DiT invents toward: describe the new look/content (--prompt per batch)",
+      "source guide": "removed: LTXVLoopingSampler attends to optional_guiding_latents at full attention strength regardless of guiding_strength, which copied the source",
+      "anchor": "the pinned anchor frame defines the look AND the loop: restyle it (image edit / different prompt render) and the whole clip follows"
+    },
     "patch_points": {
-      "denoise": "node 11",
-      "lora_strength": "node 3",
-      "seed": "node 13 + 24",
-      "frames": "node 7 frame_load_cap",
-      "prompt": "node 5"
+      "seed": "nodes 13 + 24 (driver randomizes)",
+      "prompt": "node 5 (driver walks CFGGuider -> LTXVConditioning)"
     },
-    "loops": "LTXVLoopingSampler wraps source latent around: first frame == last frame",
-    "output": "1536x896, h264 all-intra, perfect loops",
-    "frame_count": "336 = 6x temporal_tile_size (56) so chunks divide evenly",
-    "denoise": "0.65 raised for creativity; wrap guarantees loop closure",
-    "frames": "probed per clip, rounded down to multiple of temporal_tile_size (72)",
-    "note": "IC-LoRA loader bypassed 2026-09-17: was in model chain but never driven by LTXAddVideoICLoRAGuide, so it only perturbed pass-1 sampling. Re-add node 4 + guide (strength 0.8, per ltx25_v2v_redetail_comfortable_runpod.json) to restore guided upscaling.",
-    "frame_pad": "pad 8x last frame: 368 in -> 46 latents -> decode 361 -> trim 360 (LTX VAE: decode = latents*8-7)",
-    "upgrades": {
-      "state": "BOTH DORMANT (validated but unreachable from outputs \u2014 zero runtime cost)",
-      "enable_nag": "node 14a (LTXVApplySTG) model: ['3',0] -> ['14b',0]",
-      "enable_iclora": "nodes 11/14a/25 model: ['3',0] -> ['4',0]; node 14 (CFGGuider) positive: ['5',0] -> ['27',0], negative: ['6',0] -> ['27',1]",
-      "timing": "IC-LoRA ~neutral; NAG adds attention guidance per step (~+20-40% pass-1 time)",
-      "validate_after": "1 clip -> tools/loop-checker.html (Start/End/Loop diffs) before batch",
-      "disable_again": "revert the rewires above; dormant nodes can stay in the file"
-    }
+    "oom_fallbacks": "n/a at 960x544 single tile (~28GB VRAM observed)",
+    "validate_after": "loop-checker + visual: anchor_s100 measured seam 1.13% vs source 3.42%",
+    "removed_pass2": "2026-09-23: the IC-LoRA pixel-upscaler refine at 1920x1088 rendered the dilated reference's sparse grid literally (brown background + grid of small squares) and cost ~7 min/clip. Pass 2 is gone; git history has it.",
+    "timing": "L40S 288f: ~4.8-5.1 min/clip (8-9 steps), no guide tokens",
+    "removed_latent_upscaler": "2026-09-23: decoding the LTX 2x latent upscaler output without a re-sample pass smears motion into a crosshatch texture; it must be followed by a refine pass or not used.",
+    "creativity": "Creativity = where pass 1 starts on the distilled schedule '1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0'. Composition, colour and lighting are decided in the 1.0-0.975 steps; starting at 0.909 skips them and only redraws detail on the source (2026-09-23 diagnostics: 0.909 = 7-9% change and prompt ignored, 1.0 = 25% change and prompt fully applied)."
   },
-  "40": {
+  "48": {
     "inputs": {
       "image": [
-        "7",
+        "49",
         0
       ],
-      "batch_index": 359,
-      "length": 8
+      "upscale_method": "lanczos",
+      "width": 928,
+      "height": 576,
+      "crop": "disabled"
     },
-    "class_type": "ImageFromBatch",
+    "class_type": "ImageScale",
     "_meta": {
-      "title": "Extract Last Frame"
+      "title": "Restyled Loop Anchor @ pass-1 res"
     }
   },
-  "41": {
+  "49": {
     "inputs": {
-      "image1": [
-        "7",
-        0
-      ],
-      "image2": [
-        "40",
-        0
-      ]
+      "image": "loop_anchor.png"
     },
-    "class_type": "ImageBatch",
+    "class_type": "LoadImage",
     "_meta": {
-      "title": "Pad to 361 (46 latents)"
-    }
-  },
-  "42": {
-    "inputs": {
-      "image": [
-        "22",
-        0
-      ],
-      "batch_index": 0,
-      "length": 360
-    },
-    "class_type": "ImageFromBatch",
-    "_meta": {
-      "title": "Trim 361 -> 360"
-    }
-  },
-  "4": {
-    "inputs": {
-      "model": [
-        "3",
-        0
-      ],
-      "lora_name": "ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors",
-      "strength_model": 0.7
-    },
-    "class_type": "LTXICLoRALoaderModelOnly",
-    "_meta": {
-      "title": "IC-LoRA Pixel Upscaler (DORMANT \u2014 enable: 11/14a/25 model <- 4)"
-    }
-  },
-  "27": {
-    "inputs": {
-      "positive": [
-        "5",
-        0
-      ],
-      "negative": [
-        "6",
-        0
-      ],
-      "vae": [
-        "26",
-        0
-      ],
-      "latent": [
-        "10",
-        0
-      ],
-      "image": [
-        "8",
-        0
-      ],
-      "frame_idx": 0,
-      "strength": 0.8,
-      "latent_downscale_factor": 1.0,
-      "crop": "disabled",
-      "use_tiled_encode": false,
-      "tile_size": 256,
-      "tile_overlap": 64
-    },
-    "class_type": "LTXAddVideoICLoRAGuide",
-    "_meta": {
-      "title": "IC-LoRA Guide (DORMANT \u2014 enable: 14.positive <- 27.0, 14.negative <- 27.1)"
+      "title": "Restyled Loop Anchor (driver-uploaded)"
     }
   }
 }

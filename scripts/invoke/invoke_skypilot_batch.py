@@ -32,11 +32,22 @@ def find_video_loader_node(workflow: dict) -> str:
 
 def find_cond_nodes(workflow: dict) -> tuple[str, str]:
     """Node ids of the positive / negative CLIPTextEncode via the CFGGuider."""
+    def to_text_node(ref: list) -> str:
+        # Walk up through conditioning pass-throughs (e.g. LTXVConditioning,
+        # whose outputs 0/1 = positive/negative) to the CLIPTextEncode.
+        nid, slot = ref[0], ref[1]
+        for _ in range(10):
+            node = workflow[nid]
+            if node.get("class_type") == "CLIPTextEncode":
+                return nid
+            key = "negative" if slot == 1 else "positive"
+            nid, slot = node["inputs"][key][0], node["inputs"][key][1]
+        raise SystemExit(f"ERROR: no CLIPTextEncode upstream of {ref}")
+
     for node_id, node in workflow.items():
         if node.get("class_type") == "CFGGuider":
-            pos = node["inputs"]["positive"][0]
-            neg = node["inputs"]["negative"][0]
-            return pos, neg
+            return (to_text_node(node["inputs"]["positive"]),
+                    to_text_node(node["inputs"]["negative"]))
     raise SystemExit("ERROR: workflow has no CFGGuider to locate prompt nodes")
 
 
@@ -66,6 +77,32 @@ def probe_frames(clip: Path) -> int:
     if st.get("nb_frames"):
         return round(int(st["nb_frames"]) * 24 / fps)
     return round(float(st["duration"]) * 24)
+
+
+def probe_size(clip: Path) -> tuple[int, int]:
+    import subprocess
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "stream=width,height", "-of", "json", str(clip)],
+        capture_output=True, text=True, check=True).stdout
+    st = json.loads(out)["streams"][0]
+    return int(st["width"]), int(st["height"])
+
+
+def pass1_size(w: int, h: int, area: int = 960 * 544) -> tuple[int, int]:
+    """Multiple-of-32 size near `area` pixels with the source's aspect ratio."""
+    ar = w / h
+    pw = max(32, round((area * ar) ** 0.5 / 32) * 32)
+    ph = max(32, round(pw / ar / 32) * 32)
+    return pw, ph
+
+
+def match_size_nodes(wf: dict, roles: dict, w: int, h: int) -> tuple[int, int]:
+    """Aspect-matched sampling size for the loop_wrap pass-1 resize nodes."""
+    pw, ph = pass1_size(w, h)
+    for nid in roles.get("pass1_resize", []):
+        wf[nid]["inputs"]["width"], wf[nid]["inputs"]["height"] = pw, ph
+    return pw, ph
 
 
 def match_length_nodes(wf: dict, loader_id: str, n: int) -> tuple[int, int]:
@@ -120,6 +157,44 @@ def match_length_nodes(wf: dict, loader_id: str, n: int) -> tuple[int, int]:
     wf[trim]["inputs"]["length"] = n
     return n, pad
 
+
+LOOP_MAX_FRAMES = 384  # N + wrap <= 385 keeps both passes in one temporal tile
+
+
+def match_loop_wrap_nodes(wf: dict, loader_id: str, n: int, roles: dict) -> tuple[int, int, str]:
+    """Exact-length seam pinning for sources that already loop.
+
+    Loads all N source frames, appends source frames 0..p-1 (the loop's own
+    continuation) so N+p ≡ 1 (mod 8), pins output 0 -> source 0, a -> source
+    N-1, b -> source 0 (wrap copy), and trims to N. The output's N-1 -> 0 wrap
+    is then the source's own seam. With guiding latents a pin at 8k+1 raises
+    in LTXVInContextSampler, so a shifts to N-2 or b to N+1 (wrap frame 1).
+    Roles (node ids) come from the workflow's _metadata.length_match.
+    """
+    n = min(n, LOOP_MAX_FRAMES)
+    p = (1 - n) % 8 or 8
+    a, b = n - 1, n
+    if a % 8 == 1:
+        a = n - 2
+    if b % 8 == 1:
+        b = n + 1  # p == 8 here, so wrap frame 1 exists
+    wf[loader_id]["inputs"]["frame_load_cap"] = n
+    wf[roles["wrap"]]["inputs"]["batch_index"] = 0
+    wf[roles["wrap"]]["inputs"]["length"] = p
+    if roles.get("anchor"):
+        # Restyled-anchor mode: all three pins are the SAME anchor image,
+        # so the kf batch is a single image repeated 3x and needs no indices.
+        pass
+    else:
+        wf[roles["kf_a"]]["inputs"]["batch_index"] = a
+        wf[roles["kf_b"]]["inputs"]["batch_index"] = b
+    for sid in roles["samplers"]:
+        wf[sid]["inputs"]["optional_cond_image_indices"] = f"0, {a}, {b}"
+    wf[roles["trim"]]["inputs"]["batch_index"] = 0
+    wf[roles["trim"]]["inputs"]["length"] = n
+    return n, p, f"0, {a}, {b}"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--dir", default="sample", help="Subdir of pod input dir holding the clips")
@@ -141,6 +216,9 @@ def main():
     args = parser.parse_args()
 
     workflow = json.loads(args.workflow.read_text())
+    loop_roles = workflow.get("_metadata", {}).get("length_match")
+    if not (isinstance(loop_roles, dict) and loop_roles.get("mode") == "loop_wrap"):
+        loop_roles = None
     workflow = {k: v for k, v in workflow.items() if isinstance(v, dict) and "class_type" in v}
     loader_id = find_video_loader_node(workflow)
     pos_id, neg_id = find_cond_nodes(workflow)
@@ -181,8 +259,16 @@ def main():
             wf[neg_id]["inputs"]["text"] = args.negative
         if not args.no_length_match:
             n24 = probe_frames(clip)
-            n, pad = match_length_nodes(wf, loader_id, min(n24, MAX_FRAMES))
-            note = f"pad {pad}" if pad else f"dropped {min(n24, MAX_FRAMES) - n}"
+            if loop_roles:
+                if n24 > LOOP_MAX_FRAMES:
+                    print(f"  WARNING: {n24} frames > {LOOP_MAX_FRAMES}: truncating breaks the source loop")
+                n, p, pins = match_loop_wrap_nodes(wf, loader_id, n24, loop_roles)
+                sw, sh = probe_size(clip)
+                pw, ph = match_size_nodes(wf, loop_roles, sw, sh)
+                note = f"exact, +{p} wrap frames, pins {pins}; sample/out {pw}x{ph} (source {sw}x{sh})"
+            else:
+                n, pad = match_length_nodes(wf, loader_id, min(n24, MAX_FRAMES))
+                note = f"pad {pad}" if pad else f"dropped {min(n24, MAX_FRAMES) - n}"
             print(f"  length: {n24} frames @24fps -> {n} ({note})")
         if not args.no_random_seed:
             import random
