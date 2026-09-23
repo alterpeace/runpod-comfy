@@ -181,13 +181,12 @@ def match_loop_wrap_nodes(wf: dict, loader_id: str, n: int, roles: dict) -> tupl
     wf[loader_id]["inputs"]["frame_load_cap"] = n
     wf[roles["wrap"]]["inputs"]["batch_index"] = 0
     wf[roles["wrap"]]["inputs"]["length"] = p
-    if roles.get("anchor"):
-        # Restyled-anchor mode: all three pins are the SAME anchor image,
-        # so the kf batch is a single image repeated 3x and needs no indices.
-        pass
-    else:
+    if roles.get("kf_a") and roles.get("kf_b"):
+        # Legacy per-seam-frame pins (source frames N-1 / wrap copy).
         wf[roles["kf_a"]]["inputs"]["batch_index"] = a
         wf[roles["kf_b"]]["inputs"]["batch_index"] = b
+    # else: single-anchor mode -- all three pins are one image repeated 3x
+    # (source frame 0 by default, or --anchor-image), no per-pin indices.
     for sid in roles["samplers"]:
         wf[sid]["inputs"]["optional_cond_image_indices"] = f"0, {a}, {b}"
     wf[roles["trim"]]["inputs"]["batch_index"] = 0
@@ -211,6 +210,12 @@ def main():
                         help="Override the workflow's positive prompt (node via CFGGuider)")
     parser.add_argument("--negative", default=None,
                         help="Override the workflow's negative prompt")
+    parser.add_argument("--denoise", type=float, default=None,
+                        help="loop_wrap workflows: BasicScheduler denoise (0.4 polish, 0.55 default, 0.7 more life, 1.0 full restyle)")
+    parser.add_argument("--anchor-image", default=None,
+                        help="loop_wrap workflows: pod input filename of a still to pin instead of source frame 0 "
+                             "(only coherent at --denoise 1.0; lower denoise snaps)")
+    parser.add_argument("--shuffle", action="store_true", help="Process clips in random order")
     parser.add_argument("--dry-run", action="store_true", help="List clips and exit")
     parser.add_argument("clips", nargs="*", help="Optional: specific clip filenames (default: all in --dir)")
     args = parser.parse_args()
@@ -233,6 +238,9 @@ def main():
         if missing:
             print(f"WARNING: not found in {args.dir}/: {sorted(missing)}")
     pending = [c for c in clips if not (args.out / f"{c.stem}.mp4").exists()]
+    if args.shuffle:
+        import random
+        random.shuffle(pending)
     print(f"{len(clips)} clips total, {len(clips) - len(pending)} already done, {len(pending)} to process")
     if args.dry_run:
         for c in pending:
@@ -257,6 +265,16 @@ def main():
             wf[pos_id]["inputs"]["text"] = args.prompt
         if args.negative:
             wf[neg_id]["inputs"]["text"] = args.negative
+        if loop_roles and args.denoise is not None and loop_roles.get("denoise"):
+            wf[loop_roles["denoise"]]["inputs"]["denoise"] = args.denoise
+        if loop_roles and args.anchor_image and loop_roles.get("anchor_kf"):
+            wf["9001"] = {"inputs": {"image": args.anchor_image}, "class_type": "LoadImage",
+                          "_meta": {"title": "Anchor still (--anchor-image)"}}
+            wf["9002"] = {"inputs": {"image": ["9001", 0], "upscale_method": "lanczos",
+                                     "width": 960, "height": 544, "crop": "disabled"},
+                          "class_type": "ImageScale", "_meta": {"title": "Anchor @ pass-1 res"}}
+            wf[loop_roles["anchor_kf"]]["inputs"]["image"] = ["9002", 0]
+            wf.pop(loop_roles.get("anchor_src", ""), None)
         if not args.no_length_match:
             n24 = probe_frames(clip)
             if loop_roles:
@@ -265,6 +283,8 @@ def main():
                 n, p, pins = match_loop_wrap_nodes(wf, loader_id, n24, loop_roles)
                 sw, sh = probe_size(clip)
                 pw, ph = match_size_nodes(wf, loop_roles, sw, sh)
+                if "9002" in wf:
+                    wf["9002"]["inputs"]["width"], wf["9002"]["inputs"]["height"] = pw, ph
                 note = f"exact, +{p} wrap frames, pins {pins}; sample/out {pw}x{ph} (source {sw}x{sh})"
             else:
                 n, pad = match_length_nodes(wf, loader_id, min(n24, MAX_FRAMES))

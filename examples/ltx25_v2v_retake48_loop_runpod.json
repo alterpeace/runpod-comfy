@@ -38,7 +38,7 @@
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
-      "title": "Positive Prompt (describe the NEW content you want)"
+      "title": "Positive Prompt (generic; --prompt for scene-specific)"
     }
   },
   "6": {
@@ -155,14 +155,14 @@
   "47": {
     "inputs": {
       "image": [
-        "48",
+        "45",
         0
       ],
       "amount": 3
     },
     "class_type": "RepeatImageBatch",
     "_meta": {
-      "title": "Keyframes x3 = Restyled Loop Anchor"
+      "title": "Keyframes x3 = loop anchor"
     }
   },
   "12": {
@@ -185,11 +185,17 @@
   },
   "11": {
     "inputs": {
-      "sigmas": "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
+      "model": [
+        "1",
+        0
+      ],
+      "scheduler": "simple",
+      "steps": 16,
+      "denoise": 0.55
     },
-    "class_type": "ManualSigmas",
+    "class_type": "BasicScheduler",
     "_meta": {
-      "title": "Pass 1 Sigmas (t2v from noise: 1.0 = full restyle; lower = keep more source look)"
+      "title": "Pass 1 Sigmas: DENOISE slider (0.55 light restyle | 0.4 polish | 0.7 more life | 1.0 full restyle)"
     }
   },
   "14": {
@@ -262,7 +268,7 @@
     },
     "class_type": "LTXVLoopingSampler",
     "_meta": {
-      "title": "Retake @pass-1 res (no source guide, seam-pinned) - the only sampling pass"
+      "title": "Retake @pass-1 res (source-anchored loop pins)"
     }
   },
   "22": {
@@ -317,13 +323,25 @@
       "title": "Save (h264 all-intra)"
     }
   },
+  "45": {
+    "inputs": {
+      "image": [
+        "8",
+        0
+      ],
+      "batch_index": 0,
+      "length": 1
+    },
+    "class_type": "ImageFromBatch",
+    "_meta": {
+      "title": "Loop Anchor = source frame 0 (driver --anchor-image swaps in a still)"
+    }
+  },
   "_metadata": {
     "gpu_tier": "48GB (L40/L40S/RTX6000-Ada), COMFYUI_ARGS=--cache-none",
     "length_match": {
       "mode": "loop_wrap",
       "wrap": "40",
-      "kf_a": "47",
-      "kf_b": "47",
       "trim": "42",
       "samplers": [
         "15"
@@ -331,53 +349,29 @@
       "pass1_resize": [
         "8"
       ],
-      "anchor": "48"
+      "anchor_src": "45",
+      "anchor_kf": "47",
+      "denoise": "11"
     },
     "assumes": "the SOURCE already loops (its frame N-1 flows into frame 0)",
-    "pipeline": "source N + wrap 0..p-1 -> LTX t2v-from-noise with loop pinned to a RESTYLED anchor frame (all 3 pins = same anchor) -> native decode -> trim to N. Anchor = frame 0 of a previous sigma-1.0 render with the same prompt (chicken-and-egg solved by bootstrapping from D2-style run).",
-    "loop_mechanism": "All three pins are the SAME restyled anchor image (indices 0, a, b). First and last output frames match the anchor, so the wrap closes on the restyled look. With a sigma-1.0 start the source drives nothing except length; motion is invented from noise + prompt (temporal loop closure is pinned, not copied).",
+    "pipeline": "DEFAULT (light_d55 recipe, locked 2026-09-23): source N + wrap 0..p-1 -> aspect-matched ~0.5MP LTX retake from the source noised by BasicScheduler denoise 0.55 -> loop pinned to the source's own frame 0 at indices 0/a/b -> native decode -> trim to N.",
+    "loop_mechanism": "All three pins are the source's own frame 0 at pass-1 res (node 45). Using the clip's own frame avoids the one-frame snap that a foreign anchor causes at denoise < ~0.95 (measured: neon anchor @0.4 = 20% frame-0->1 jump, 14% seam; source anchor @0.55 = 2.9% jump, 4.4% seam vs source 3.4%).",
     "frames": "driver per clip: node 7 cap=N, 40 len=p, 43/44 = seam pins a/b, sampler 15 indices, 42 len=N; nodes 8/30 = aspect-matched pass-1 WxH (mult of 32, ~960x544 area)",
     "creativity_knobs": {
-      "node 11 sigmas": "1.0 (default now): prompt-driven invention, anchor provides look+loop | 0.99375: slightly more coherent motion | below ~0.99: source palette leaks back in (low-frequency SNR, measured 2026-09-23)",
-      "node 15 cond_image_strength": "loop-pin strength: 1.0 = seam frames forced to the source's look; lower lets the restyle reach the seam (loop closes by similarity)",
-      "node 5 prompt": "what the DiT invents toward: describe the new look/content (--prompt per batch)",
-      "source guide": "removed: LTXVLoopingSampler attends to optional_guiding_latents at full attention strength regardless of guiding_strength, which copied the source",
-      "anchor": "the pinned anchor frame defines the look AND the loop: restyle it (image edit / different prompt render) and the whole clip follows"
+      "node 11 denoise": "0.4 polish (~3-4% change) | 0.55 default light restyle (~9%) | 0.65-0.7 more life (~10-15%) | 1.0 full reinvention (use with --anchor-image)",
+      "node 5 prompt": "generic by default; at cfg 1 it steers gently, describe scene + extras via --prompt for targeted looks",
+      "anchor": "--anchor-image FILE pins a still instead of source frame 0: only coherent at denoise 1.0 (full restyle); at lower denoise it snaps",
+      "seed": "variation within the same recipe (driver randomizes per clip)"
     },
     "patch_points": {
       "seed": "nodes 13 + 24 (driver randomizes)",
       "prompt": "node 5 (driver walks CFGGuider -> LTXVConditioning)"
     },
     "oom_fallbacks": "n/a at 960x544 single tile (~28GB VRAM observed)",
-    "validate_after": "loop-checker + visual: anchor_s100 measured seam 1.13% vs source 3.42%",
+    "validate_after": "light_d55 reference: seam 4.44% (source 3.42%), frame0->1 2.87%, 8.8% mean change",
     "removed_pass2": "2026-09-23: the IC-LoRA pixel-upscaler refine at 1920x1088 rendered the dilated reference's sparse grid literally (brown background + grid of small squares) and cost ~7 min/clip. Pass 2 is gone; git history has it.",
-    "timing": "L40S 288f: ~4.8-5.1 min/clip (8-9 steps), no guide tokens",
+    "timing": "L40S 288f: ~6-8 min/clip at denoise 0.55 (BasicScheduler 16 kept steps)",
     "removed_latent_upscaler": "2026-09-23: decoding the LTX 2x latent upscaler output without a re-sample pass smears motion into a crosshatch texture; it must be followed by a refine pass or not used.",
     "creativity": "Creativity = where pass 1 starts on the distilled schedule '1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0'. Composition, colour and lighting are decided in the 1.0-0.975 steps; starting at 0.909 skips them and only redraws detail on the source (2026-09-23 diagnostics: 0.909 = 7-9% change and prompt ignored, 1.0 = 25% change and prompt fully applied)."
-  },
-  "48": {
-    "inputs": {
-      "image": [
-        "49",
-        0
-      ],
-      "upscale_method": "lanczos",
-      "width": 928,
-      "height": 576,
-      "crop": "disabled"
-    },
-    "class_type": "ImageScale",
-    "_meta": {
-      "title": "Restyled Loop Anchor @ pass-1 res"
-    }
-  },
-  "49": {
-    "inputs": {
-      "image": "loop_anchor.png"
-    },
-    "class_type": "LoadImage",
-    "_meta": {
-      "title": "Restyled Loop Anchor (driver-uploaded)"
-    }
   }
 }
