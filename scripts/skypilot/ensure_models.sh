@@ -24,8 +24,21 @@ MODELS="${COMFYUI_MODELS:-/opt/ComfyUI/models}"
 
 # Guard: models dir MUST be the network-volume symlink, never container disk
 # (container disk is capped at 40GB — a 22GB download there is lost on `sky down`).
-if [ "$(readlink -f "$MODELS")" != "/workspace/models" ]; then
-  echo "ERROR: $MODELS does not resolve to /workspace/models (setup not finished? volume not mounted?)"
+# WAIT for setup: sshd comes up long before setup finishes creating the
+# /opt/ComfyUI/models symlink (torch install + node clones run first, ~5-10
+# min) — this script raced it twice on 2026-09-29 and the batch driver died
+# leaving the pod idle and billing. Wait up to 30 min for the symlink.
+echo "Waiting for setup to create $MODELS -> /workspace/models (up to 30 min)..."
+SETUP_OK=0
+for i in $(seq 1 180); do
+  if [ "$(readlink -f "$MODELS")" = "/workspace/models" ] && [ -f /opt/ComfyUI/main.py ]; then
+    SETUP_OK=1; break
+  fi
+  if [ $((i % 6)) -eq 0 ]; then echo "  ...still waiting ($((i * 10 / 60)) min)"; fi
+  sleep 10
+done
+if [ "$SETUP_OK" -ne 1 ]; then
+  echo "ERROR: $MODELS still does not resolve to /workspace/models after 30 min (setup failed? volume not mounted?)"
   exit 1
 fi
 
