@@ -216,6 +216,10 @@ def main():
                         help="loop_wrap workflows: pod input filename of a still to pin instead of source frame 0 "
                              "(only coherent at --denoise 1.0; lower denoise snaps)")
     parser.add_argument("--shuffle", action="store_true", help="Process clips in random order")
+    parser.add_argument("--queue-only", action="store_true",
+                        help="Submit all clips to ComfyUI's queue and exit without waiting or fetching. "
+                             "The pod renders autonomously (queue survives the local machine going offline); "
+                             "outputs land in ComfyUI's output dir (= the network volume) and are synced down later.")
     parser.add_argument("--dry-run", action="store_true", help="List clips and exit")
     parser.add_argument("clips", nargs="*", help="Optional: specific clip filenames (default: all in --dir)")
     args = parser.parse_args()
@@ -255,7 +259,7 @@ def main():
         raise SystemExit(f"ERROR: ComfyUI not reachable at {args.url}")
 
     args.out.mkdir(parents=True, exist_ok=True)
-    done = failed = 0
+    done = failed = queued = 0
     t_all = time.time()
     for i, clip in enumerate(pending, 1):
         print(f"\n=== [{i}/{len(pending)}] {clip.name} ({clip.stat().st_size / 1e6:.0f} MB) ===")
@@ -304,6 +308,10 @@ def main():
         try:
             t0 = time.time()
             prompt_id = client.queue_prompt(wf)
+            if args.queue_only:
+                print(f"  queued {clip.name} -> {prompt_id} (pod renders autonomously)")
+                queued += 1
+                continue
             history = client.wait_for_completion(prompt_id, poll_interval=5,
                                                  max_wait_time=args.timeout)
             files = find_output_files(history)
@@ -319,6 +327,10 @@ def main():
             failed += 1
 
     total_min = (time.time() - t_all) / 60
+    if args.queue_only:
+        print(f"\nAll {queued} clips queued on the pod. PC can go offline now.")
+        print("Outputs accumulate in the pod's output dir (= network volume); sync down later.")
+        return
     print(f"\nBatch complete: {done} ok, {failed} failed, {total_min:.0f} min total")
     sys.exit(1 if failed else 0)
 

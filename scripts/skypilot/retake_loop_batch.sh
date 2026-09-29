@@ -172,7 +172,7 @@ if [ "$CHUNK" -gt 0 ]; then
     [ "$RANDOM_SEEDS" -eq 0 ] && seed_args="--no-random-seed"
     uv run python scripts/invoke/invoke_skypilot_batch.py \
       --dir sample --workflow "$WORKFLOW" --out "$OUT_DIR" \
-      --timeout "$PER_CLIP_TIMEOUT" $seed_args "${names[@]}" &
+      --timeout "$PER_CLIP_TIMEOUT" $seed_args ${QONLY:-} "${names[@]}" &
   }
 
   # prime the pump: upload the first chunk, then pipeline
