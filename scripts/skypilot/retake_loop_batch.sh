@@ -22,9 +22,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-CLUSTER="ltx25"
-VOL="ltx25-vol"
-VOL_INFRA="runpod/NL/EU-NL-1"
+CLUSTER="${CLUSTER:-ltx25}"
+VOL="${VOL:-ltx25-vol}"
+VOL_INFRA="${VOL_INFRA:-runpod/NL/EU-NL-1}"
 VOL_SIZE="${VOL_SIZE:-100}"   # GB; export VOL_SIZE=200 for more headroom
 SAMPLE_SRC="${SAMPLE_SRC:-$HOME/Desktop/sample}"
 OUT_DIR="${OUT_DIR:-output/retake_loop_batch}"
@@ -32,12 +32,13 @@ WORKFLOW="${WORKFLOW:-examples/ltx25_v2v_retake48_loop_runpod.json}"   # e.g. WO
 PER_CLIP_TIMEOUT="${PER_CLIP_TIMEOUT:-3600}"
 
 KEEP_UP=0
-RANDOM_SEEDS=0
+RANDOM_SEEDS=1   # random per clip by default (production); --fixed-seeds for A/B tests
 CLIPS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --keep-up)      KEEP_UP=1; shift ;;
     --random-seeds) RANDOM_SEEDS=1; shift ;;
+    --fixed-seeds)  RANDOM_SEEDS=0; shift ;;
     *)              CLIPS+=("$1"); shift ;;
   esac
 done
