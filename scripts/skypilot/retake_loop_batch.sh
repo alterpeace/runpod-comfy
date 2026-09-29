@@ -59,7 +59,10 @@ cleanup() {
   if [ "$kill_tunnel" -eq 1 ] && [ -n "${TUNNEL_PID:-}" ] && kill -0 "$TUNNEL_PID" 2>/dev/null; then
     kill "$TUNNEL_PID" 2>/dev/null || true
   fi
-  if [ "$code" -eq 0 ] && [ "$KEEP_UP" -eq 0 ]; then
+  if [ "$code" -eq 0 ] && [ "$KEEP_UP" -eq 0 ] && [ -z "${QONLY:-}" ]; then
+    # In queue-only mode the renders happen AFTER this script exits, pod-side:
+    # tearing down here would kill the queue (learned 2026-09-29 — the overnight
+    # run queued all 123 clips and then immediately sky-downed itself).
     echo "=== Terminating cluster (volume + models survive) ==="
     sky down -y "$CLUSTER" 2>/dev/null || true
   fi
