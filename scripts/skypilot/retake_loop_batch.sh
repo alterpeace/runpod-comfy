@@ -140,26 +140,73 @@ done
 [ "$HEALTH" -eq 1 ] || { echo "ERROR: ComfyUI not healthy at localhost:8188"; exit 1; }
 
 # --- 5. Upload clips (resumable) ----------------------------------------------
-echo "=== Uploading $SAMPLE_SRC -> pod:/workspace/input/sample ==="
 ssh -o StrictHostKeyChecking=accept-new "$CLUSTER" 'mkdir -p /workspace/input/sample'
-rsync -a --no-owner --no-group --info=progress2 --partial \
-      -e "ssh -o StrictHostKeyChecking=accept-new" \
-      "$SAMPLE_SRC/" "$CLUSTER:/workspace/input/sample/"
-
 # --- 6. Batch V2V ---------------------------------------------------------------
 # The batch script plans against a local sample/ dir; symlink the source in.
 ln -sfn "$SAMPLE_SRC" sample
 mkdir -p "$OUT_DIR"
-echo "=== Running looping-retake batch (outputs -> $OUT_DIR) ==="
-SEED_ARGS=""
-[ "$RANDOM_SEEDS" -eq 0 ] && SEED_ARGS="--no-random-seed"
-uv run python scripts/invoke/invoke_skypilot_batch.py \
-  --dir sample \
-  --workflow "$WORKFLOW" \
-  --out "$OUT_DIR" \
-  --timeout "$PER_CLIP_TIMEOUT" \
-  $SEED_ARGS \
-  ${CLIPS+"${CLIPS[@]}"}
+
+CHUNK="${CHUNK:-0}"   # e.g. CHUNK=5: upload 5 clips, render them while the next
+                      # 5 upload in the background, etc. — overlaps a slow uplink
+                      # (~150kB/s here) with GPU rendering instead of serializing
+if [ "$CHUNK" -gt 0 ]; then
+  mapfile -t ALL < <(ls "$SAMPLE_SRC"/*.mp4 | sort)
+  if [ "${#CLIPS[@]}" -gt 0 ]; then   # honour explicit clip args as a filter
+    mapfile -t ALL < <(printf '%s\n' "${ALL[@]}" | grep -Fxf <(printf '%s\n' "${CLIPS[@]}" | sed "s|^|$SAMPLE_SRC/|") || true)
+  fi
+  total=${#ALL[@]}
+  nchunks=$(( (total + CHUNK - 1) / CHUNK ))
+  echo "=== Pipelined upload+render: $total clips in $nchunks chunks of $CHUNK ==="
+
+  upload_chunk() {  # upload_chunk <first_idx>
+    local batch=("${ALL[@]:$1:$CHUNK}")
+    rsync -a --no-owner --no-group --info=progress2 --partial \
+          -e "ssh -o StrictHostKeyChecking=accept-new" \
+          "${batch[@]}" "$CLUSTER:/workspace/input/sample/"
+  }
+  render_chunk() {  # render_chunk <first_idx> -> starts invoke in background
+    local batch=("${ALL[@]:$1:$CHUNK}") names=() f
+    for f in "${batch[@]}"; do names+=("$(basename "$f")"); done
+    echo "=== Rendering chunk $(( $1 / CHUNK + 1 ))/$nchunks: ${names[*]} ==="
+    local seed_args=""
+    [ "$RANDOM_SEEDS" -eq 0 ] && seed_args="--no-random-seed"
+    uv run python scripts/invoke/invoke_skypilot_batch.py \
+      --dir sample --workflow "$WORKFLOW" --out "$OUT_DIR" \
+      --timeout "$PER_CLIP_TIMEOUT" $seed_args "${names[@]}" &
+  }
+
+  # prime the pump: upload the first chunk, then pipeline
+  echo "=== Uploading chunk 1/$nchunks ==="
+  upload_chunk 0
+  render_chunk 0
+  pid=$!
+  idx=$CHUNK
+  while [ "$idx" -lt "$total" ]; do
+    echo "=== Uploading chunk $(( idx / CHUNK + 1 ))/$nchunks (overlapping render) ==="
+    upload_chunk "$idx"
+    wait "$pid" || echo "WARN: chunk render exited non-zero (resumable; failed clips retry on next run)"
+    render_chunk "$idx"
+    pid=$!
+    idx=$((idx + CHUNK))
+  done
+  wait "$pid" || echo "WARN: final chunk render exited non-zero"
+else
+  echo "=== Uploading $SAMPLE_SRC -> pod:/workspace/input/sample ==="
+  rsync -a --no-owner --no-group --info=progress2 --partial \
+        -e "ssh -o StrictHostKeyChecking=accept-new" \
+        "$SAMPLE_SRC/" "$CLUSTER:/workspace/input/sample/"
+
+  echo "=== Running looping-retake batch (outputs -> $OUT_DIR) ==="
+  SEED_ARGS=""
+  [ "$RANDOM_SEEDS" -eq 0 ] && SEED_ARGS="--no-random-seed"
+  uv run python scripts/invoke/invoke_skypilot_batch.py \
+    --dir sample \
+    --workflow "$WORKFLOW" \
+    --out "$OUT_DIR" \
+    --timeout "$PER_CLIP_TIMEOUT" \
+    $SEED_ARGS \
+    ${CLIPS+"${CLIPS[@]}"}
+fi
 
 echo "=== Done. Check loops: open tools/loop-checker.html, drop original + $OUT_DIR/*.mp4 ==="
 echo "    Pass requires: Start match <5%, End match <15%, retake Loop diff <5%, same frame count."
