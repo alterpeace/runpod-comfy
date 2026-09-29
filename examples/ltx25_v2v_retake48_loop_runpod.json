@@ -191,11 +191,11 @@
       ],
       "scheduler": "simple",
       "steps": 16,
-      "denoise": 0.55
+      "denoise": 0.6
     },
     "class_type": "BasicScheduler",
     "_meta": {
-      "title": "Pass 1 Sigmas: DENOISE slider (0.55 light restyle | 0.4 polish | 0.7 more life | 1.0 full restyle)"
+      "title": "Pass 1 Sigmas: DENOISE slider (0.4 polish | 0.55 light restyle | 0.60 MORE LIFE | 1.0 full restyle)"
     }
   },
   "14": {
@@ -354,11 +354,11 @@
       "denoise": "11"
     },
     "assumes": "the SOURCE already loops (its frame N-1 flows into frame 0)",
-    "pipeline": "DEFAULT (light_d55 recipe, locked 2026-09-23): source N + wrap 0..p-1 -> aspect-matched ~0.5MP LTX retake from the source noised by BasicScheduler denoise 0.55 -> loop pinned to the source's own frame 0 at indices 0/a/b -> native decode -> trim to N.",
+    "pipeline": "DEFAULT (light_d60 recipe, locked 2026-09-29): source N + wrap 0..p-1 -> aspect-matched ~0.5MP LTX retake from the source noised by BasicScheduler denoise 0.60 -> loop pinned to the source's own frame 0 at indices 0/a/b -> native decode -> trim to N.",
     "loop_mechanism": "All three pins are the source's own frame 0 at pass-1 res (node 45). Using the clip's own frame avoids the one-frame snap that a foreign anchor causes at denoise < ~0.95 (measured: neon anchor @0.4 = 20% frame-0->1 jump, 14% seam; source anchor @0.55 = 2.9% jump, 4.4% seam vs source 3.4%).",
     "frames": "driver per clip: node 7 cap=N, 40 len=p, 43/44 = seam pins a/b, sampler 15 indices, 42 len=N; nodes 8/30 = aspect-matched pass-1 WxH (mult of 32, ~960x544 area)",
     "creativity_knobs": {
-      "node 11 denoise": "0.4 polish (~3-4% change) | 0.55 default light restyle (~9%) | 0.65-0.7 more life (~10-15%) | 1.0 full reinvention (use with --anchor-image)",
+      "node 11 denoise": "0.4 polish (~3-4% change) | 0.55 light restyle (~9%) | 0.60 default more-life (~10-12%) | 0.65-0.7 heavy life (~12-15%) | 1.0 full reinvention (use with --anchor-image)",
       "node 5 prompt": "generic by default; at cfg 1 it steers gently, describe scene + extras via --prompt for targeted looks",
       "anchor": "--anchor-image FILE pins a still instead of source frame 0: only coherent at denoise 1.0 (full restyle); at lower denoise it snaps",
       "seed": "variation within the same recipe (driver randomizes per clip)"
@@ -368,9 +368,9 @@
       "prompt": "node 5 (driver walks CFGGuider -> LTXVConditioning)"
     },
     "oom_fallbacks": "n/a at 960x544 single tile (~28GB VRAM observed)",
-    "validate_after": "light_d55 reference: seam 4.44% (source 3.42%), frame0->1 2.87%, 8.8% mean change",
+    "validate_after": "light_d55 reference (superseded by d60 default 2026-09-29): seam 4.44% (source 3.42%), frame0->1 2.87%, 8.8% mean change",
     "removed_pass2": "2026-09-23: the IC-LoRA pixel-upscaler refine at 1920x1088 rendered the dilated reference's sparse grid literally (brown background + grid of small squares) and cost ~7 min/clip. Pass 2 is gone; git history has it.",
-    "timing": "L40S 288f: ~6-8 min/clip at denoise 0.55 (BasicScheduler 16 kept steps)",
+    "timing": "L40S 288f: ~6-8 min/clip at denoise 0.55, slightly more at 0.60 (BasicScheduler 16 kept steps)",
     "removed_latent_upscaler": "2026-09-23: decoding the LTX 2x latent upscaler output without a re-sample pass smears motion into a crosshatch texture; it must be followed by a refine pass or not used.",
     "creativity": "Creativity = where pass 1 starts on the distilled schedule '1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0'. Composition, colour and lighting are decided in the 1.0-0.975 steps; starting at 0.909 skips them and only redraws detail on the source (2026-09-23 diagnostics: 0.909 = 7-9% change and prompt ignored, 1.0 = 25% change and prompt fully applied)."
   }
