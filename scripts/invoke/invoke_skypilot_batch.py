@@ -305,6 +305,12 @@ def main():
                     if node.get("class_type") == "SeedVR2VideoUpscaler":
                         node["inputs"]["seed"] = seed
             print(f"  seed: {seed}")
+        # Persist the exact per-clip workflow (random seed + length-match pins
+        # baked in) so every render is reproducible/auditable from disk. The
+        # mp4's embedded 'prompt' tag carries the same data as a fallback.
+        wf_dir = args.out / ".workflows"
+        wf_dir.mkdir(parents=True, exist_ok=True)
+        (wf_dir / f"{clip.stem}.json").write_text(json.dumps(wf, indent=2))
         try:
             t0 = time.time()
             prompt_id = client.queue_prompt(wf)
