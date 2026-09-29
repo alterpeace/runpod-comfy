@@ -274,7 +274,7 @@
   "22": {
     "inputs": {
       "samples": [
-        "15",
+        "30",
         0
       ],
       "vae": [
@@ -288,7 +288,7 @@
     },
     "class_type": "VAEDecodeTiled",
     "_meta": {
-      "title": "VAE Decode @ Pass-1 Res (native, no latent upscale)"
+      "title": "VAE Decode @ 2x (refined pass 2, IC-LoRA)"
     }
   },
   "42": {
@@ -337,6 +337,137 @@
       "title": "Loop Anchor = source frame 0 (driver --anchor-image swaps in a still)"
     }
   },
+  "4": {
+    "class_type": "LTXICLoRALoaderModelOnly",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "lora_name": "ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors",
+      "strength_model": 0.7
+    },
+    "_meta": {
+      "title": "IC-LoRA Pixel Upscaler @0.7 (pass-2 only)"
+    }
+  },
+  "16": {
+    "class_type": "LTXVLatentUpsampler",
+    "inputs": {
+      "samples": [
+        "15",
+        0
+      ],
+      "upscale_model": [
+        "21",
+        0
+      ],
+      "vae": [
+        "26",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "2x Latent Upscale (pass-1 output -> 1088p)"
+    }
+  },
+  "18": {
+    "class_type": "ManualSigmas",
+    "inputs": {
+      "sigmas": "0.85, 0.725, 0.4219, 0.0"
+    },
+    "_meta": {
+      "title": "Pass 2 Refine Sigmas (3 steps)"
+    }
+  },
+  "21": {
+    "class_type": "LatentUpscaleModelLoader",
+    "inputs": {
+      "model_name": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
+    },
+    "_meta": {
+      "title": "Latent Upscale Model x2"
+    }
+  },
+  "30": {
+    "class_type": "LTXVLoopingSampler",
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "vae": [
+        "26",
+        0
+      ],
+      "noise": [
+        "13",
+        0
+      ],
+      "sampler": [
+        "12",
+        0
+      ],
+      "sigmas": [
+        "18",
+        0
+      ],
+      "guider": [
+        "14",
+        0
+      ],
+      "latents": [
+        "16",
+        0
+      ],
+      "temporal_tile_size": 392,
+      "temporal_overlap": 24,
+      "guiding_strength": 1.0,
+      "temporal_overlap_cond_strength": 0.5,
+      "cond_image_strength": 1.0,
+      "horizontal_tiles": 1,
+      "vertical_tiles": 1,
+      "spatial_overlap": 1,
+      "optional_cond_images": [
+        "48",
+        0
+      ],
+      "adain_factor": 0.0,
+      "guiding_start_step": 0,
+      "guiding_end_step": 1000,
+      "optional_cond_image_indices": "0, 359, 360"
+    },
+    "_meta": {
+      "title": "Pass 2 Refine @2x res (low-sigma, loop pins kept)"
+    }
+  },
+  "46": {
+    "class_type": "ImageScaleBy",
+    "inputs": {
+      "image": [
+        "45",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "scale_by": 2.0
+    },
+    "_meta": {
+      "title": "Loop Anchor @ 2x"
+    }
+  },
+  "48": {
+    "class_type": "RepeatImageBatch",
+    "inputs": {
+      "image": [
+        "46",
+        0
+      ],
+      "amount": 3
+    },
+    "_meta": {
+      "title": "Loop Anchor x3 @ 2x"
+    }
+  },
   "_metadata": {
     "gpu_tier": "48GB (L40/L40S/RTX6000-Ada), COMFYUI_ARGS=--cache-none",
     "length_match": {
@@ -344,7 +475,8 @@
       "wrap": "40",
       "trim": "42",
       "samplers": [
-        "15"
+        "15",
+        "30"
       ],
       "pass1_resize": [
         "8"
@@ -354,7 +486,7 @@
       "denoise": "11"
     },
     "assumes": "the SOURCE already loops (its frame N-1 flows into frame 0)",
-    "pipeline": "DEFAULT (light_d58 recipe, locked 2026-09-29): source N + wrap 0..p-1 -> aspect-matched ~0.5MP LTX retake from the source noised by BasicScheduler denoise 0.58 -> loop pinned to the source's own frame 0 at indices 0/a/b -> native decode -> trim to N.",
+    "pipeline": "DEFAULT (light_d58 two-pass, locked 2026-09-29): source N + wrap 0..p-1 -> aspect-matched ~0.5MP LTX retake from the source noised by BasicScheduler denoise 0.58 -> loop pinned to the source's own frame 0 at indices 0/a/b -> LTXVLatentUpsampler x2 spatial -> 3-step IC-LoRA pixel-upscaler refine (ManualSigmas 0.85/0.725/0.4219/0, LoRA @0.7) at 1088p -> native decode -> trim to N.",
     "loop_mechanism": "All three pins are the source's own frame 0 at pass-1 res (node 45). Using the clip's own frame avoids the one-frame snap that a foreign anchor causes at denoise < ~0.95 (measured: neon anchor @0.4 = 20% frame-0->1 jump, 14% seam; source anchor @0.55 = 2.9% jump, 4.4% seam vs source 3.4%).",
     "frames": "driver per clip: node 7 cap=N, 40 len=p, 43/44 = seam pins a/b, sampler 15 indices, 42 len=N; nodes 8/30 = aspect-matched pass-1 WxH (mult of 32, ~960x544 area)",
     "creativity_knobs": {
@@ -368,9 +500,9 @@
       "prompt": "node 5 (driver walks CFGGuider -> LTXVConditioning)"
     },
     "oom_fallbacks": "n/a at 960x544 single tile (~28GB VRAM observed)",
-    "validate_after": "d58 default 2026-09-29 (hands clip A/B/C 0.55/0.58/0.60, same seed: 0.58 chosen). d55 reference: seam 4.44% (source 3.42%), frame0->1 2.87%, 8.8% mean change",
-    "removed_pass2": "2026-09-23: the IC-LoRA pixel-upscaler refine at 1920x1088 rendered the dilated reference's sparse grid literally (brown background + grid of small squares) and cost ~7 min/clip. Pass 2 is gone; git history has it.",
-    "timing": "L40S 288f: ~6-8 min/clip at denoise 0.55, slightly more at 0.60 (BasicScheduler 16 kept steps)",
+    "validate_after": "two-pass B @1088p on hands clip (2026-09-29): seam/loop metrics pending loop-checker; compare vs single-pass 0.58 in output/retake_loop_batch/ and variants in output/twopass_tests/.",
+    "removed_pass2": "2026-09-23: two-pass removed after IC-LoRA refine rendered the dilated reference's sparse grid literally (brown background + grid of small squares) at ~7 min/clip. RESOLVED 2026-09-29: the original pass-2 was never fully wired (refine nodes dormant; latent upscaler fed decode directly = crosshatch). Properly wired pass-2 (LoopingSampler with same loop pins + IC-LoRA @0.7) renders clean; hands A/B/C tests: D 10.3min, A 13.1min, B 13.1min.",
+    "timing": "L40S 288f: ~13 min/clip two-pass (pass-1 ~8 + refine ~3-4; single-pass was ~8-10) at denoise 0.55, slightly more at 0.60 (BasicScheduler 16 kept steps)",
     "removed_latent_upscaler": "2026-09-23: decoding the LTX 2x latent upscaler output without a re-sample pass smears motion into a crosshatch texture; it must be followed by a refine pass or not used.",
     "creativity": "Creativity = where pass 1 starts on the distilled schedule '1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0'. Composition, colour and lighting are decided in the 1.0-0.975 steps; starting at 0.909 skips them and only redraws detail on the source (2026-09-23 diagnostics: 0.909 = 7-9% change and prompt ignored, 1.0 = 25% change and prompt fully applied)."
   }
