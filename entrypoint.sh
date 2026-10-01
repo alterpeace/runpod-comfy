@@ -705,6 +705,29 @@ ensure_runtime_extras() {
             log_warning "apt-get unavailable - cannot install Blender X11/GL libraries"
         fi
     fi
+
+    # sm_75 (Turing) CUDA extensions for the PixelArtistry watertight workflows.
+    # The prebuilt ComfyUI-Trellis2 Linux wheels ship only newer-arch kernels
+    # (they import but fail at runtime with "no kernel image is available" on
+    # RTX 20xx). The sources were rebuilt for sm_75 and archived in
+    # /comfyui/tools/sm75_build; restore them whenever the venv lacks a
+    # working copy (fresh container = fresh venv). Requires torch ABI match
+    # (torch is pinned by torch_lock.txt).
+    local site_packages
+    site_packages=$(/comfyui/venv/bin/python -c "import site; print(site.getsitepackages()[0])" 2>/dev/null || true)
+    if [ -d "/comfyui/tools/sm75_build" ] && [ -n "$site_packages" ]; then
+        local missing=0
+        /comfyui/venv/bin/python -c "import cumesh" 2>/dev/null || missing=1
+        /comfyui/venv/bin/python -c "import nvdiffrast" 2>/dev/null || missing=1
+        if [ "$missing" -eq 1 ]; then
+            log_info "Restoring sm_75-built cumesh/nvdiffrast from /comfyui/tools/sm75_build"
+            cp -a /comfyui/tools/sm75_build/cumesh "$site_packages/" 2>/dev/null \
+                && cp -a /comfyui/tools/sm75_build/nvdiffrast "$site_packages/" 2>/dev/null \
+                && /comfyui/venv/bin/python -c "import cumesh, nvdiffrast" 2>/dev/null \
+                && log_success "sm_75 cumesh/nvdiffrast restored" \
+                || log_warning "sm_75 restore failed - Quad Reconstruct / Trellis2MeshEncoder will fail on Turing GPUs"
+        fi
+    fi
 }
 ensure_runtime_extras
 
