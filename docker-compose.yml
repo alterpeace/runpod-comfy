@@ -35,6 +35,7 @@ services:
       - ./.env:/workspace/.env:ro  # Configuration file (optional features)
       - ./entrypoint.sh:/workspace/entrypoint.sh:ro  # Mount entrypoint for live changes
       - ~/.cache/huggingface:/home/chiral/.cache/huggingface:ro  # HF model cache (symlinks in models/ point here)
+      - ~/comfy/tools:/comfyui/tools  # Portable host tools (e.g. Blender for LODTailor/Bake Forger)
     environment:
       - MODE=local
       - COMFYUI_PORT=8188

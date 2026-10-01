@@ -663,6 +663,52 @@ install_custom_node_deps() {
 install_custom_node_deps
 
 # ============================================================================
+# RUNTIME EXTRAS — soxr guard + portable Blender support (local dev)
+# ============================================================================
+# 1. soxr: some node packs pull in librosa (directly or as a dependency), but
+#    transformers' audio_utils hard-imports soxr whenever librosa is
+#    importable. A venv with librosa but no soxr breaks EVERY transformers
+#    import (BertModel, AutoImageProcessor, BlipProcessor, ...) and takes down
+#    ~10 node packs at boot. See .kilocode/rules/uv-pip-gotchas.md Rule 2.
+# 2. Blender X11/GL runtime libs: LODTailor Mesh Trimmer / Bake Forger spawn a
+#    portable Blender from /comfyui/tools (mounted from ~/comfy/tools). The
+#    container base image lacks the shared libs Blender needs, even headless.
+ensure_runtime_extras() {
+    local uv_base="uv pip install --python /comfyui/venv/bin/python"
+    local constraint_args="--constraint /comfyui/venv/constraints/torch_lock.txt --constraint /comfyui/venv/constraints/opencv.txt"
+
+    # soxr guard: only needed when librosa is importable and soxr is not
+    if /comfyui/venv/bin/python -c "import librosa" 2>/dev/null && \
+       ! /comfyui/venv/bin/python -c "import soxr" 2>/dev/null; then
+        log_info "librosa present but soxr missing - installing soxr (transformers audio_utils hard dependency)"
+        if $uv_base $constraint_args soxr >/dev/null 2>&1; then
+            log_success "soxr installed"
+        else
+            log_warning "soxr install failed - transformers-based nodes will fail to import"
+        fi
+    fi
+
+    # Blender X11/GL runtime libs for portable Blender in /comfyui/tools
+    if ls /comfyui/tools/blender-*/blender >/dev/null 2>&1 && ! ldconfig -p 2>/dev/null | grep -q "libSM.so.6"; then
+        log_info "Portable Blender found - installing X11/GL runtime libraries"
+        if command -v apt-get &>/dev/null; then
+            apt-get update -qq >/dev/null 2>&1 || true
+            apt-get install -y -qq --no-install-recommends \
+                libsm6 libxext6 libxrender1 libx11-6 libxi6 libxxf86vm1 \
+                libxfixes3 libgl1 libxkbcommon0 libice6 libegl1 libglu1-mesa \
+                >/dev/null 2>&1 || log_warning "Blender X11/GL libs install failed - LODTailor/Bake Forger may not run"
+            ldconfig 2>/dev/null || true
+            if ldconfig -p 2>/dev/null | grep -q "libSM.so.6"; then
+                log_success "Blender runtime libraries installed"
+            fi
+        else
+            log_warning "apt-get unavailable - cannot install Blender X11/GL libraries"
+        fi
+    fi
+}
+ensure_runtime_extras
+
+# ============================================================================
 # CUSTOM NODE UPDATES (ensure latest ComfyUI-LTXVideo for LTX-2.5 support)
 # ============================================================================
 update_custom_nodes() {
