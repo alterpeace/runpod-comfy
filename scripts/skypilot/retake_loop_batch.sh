@@ -95,13 +95,13 @@ if ssh -o ConnectTimeout=10 -o BatchMode=yes "$CLUSTER" true 2>/dev/null; then
   echo "=== Cluster $CLUSTER already reachable — skipping launch/setup ==="
 else
   echo "=== Launching $CLUSTER (48GB, detached) ==="
-  ./scripts/skypilot/launch.sh -d -y
+  ./scripts/skypilot/launch.sh -d -y --retry-until-up
 fi
 
 # --- 3. Wait for the pod to accept SSH ----------------------------------------
 echo "=== Waiting for SSH (first boot: image + ~42GB model download) ==="
 SSH_OK=0
-for i in $(seq 1 180); do   # up to ~90 min
+for i in $(seq 1 720); do   # up to ~6 h (GPU availability)
   if ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
          -o BatchMode=yes "$CLUSTER" true 2>/dev/null; then
     SSH_OK=1; break
@@ -111,7 +111,7 @@ for i in $(seq 1 180); do   # up to ~90 min
     echo "ERROR: cluster vanished from sky status"; exit 1
   fi
 done
-[ "$SSH_OK" -eq 1 ] || { echo "ERROR: SSH never came up after 90 min"; exit 1; }
+[ "$SSH_OK" -eq 1 ] || { echo "ERROR: SSH never came up after ~6 h"; exit 1; }
 
 # --- 3.5 Sync model set to the network volume (idempotent; includes the
 #         retake48 extras the launch yaml skips: distilled int8 transformer,
