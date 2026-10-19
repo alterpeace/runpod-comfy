@@ -59,7 +59,8 @@ ensure() {  # ensure <repo> <repo_file> <category_dir>
   find "$3" -mindepth 2 -type f -name "*.safetensors" -exec mv -n {} "$3/" \;
 }
 
-mkdir -p "$MODELS"/{checkpoints,text_encoders,vae,loras,latent_upscale_models,SEEDVR2}
+mkdir -p "$MODELS"/{checkpoints,text_encoders,vae,loras,latent_upscale_models}
+[ "${ENSURE_SEEDVR2:-0}" = "1" ] && mkdir -p "$MODELS/SEEDVR2"
 
 # --- 48GB redetail build (from scripts/skypilot/ltx25-48gb.yaml setup) -------
 ensure Lightricks/LTX-2.5 \
@@ -83,9 +84,11 @@ else
   echo "present: text_encoders/gemma4-12b-ltx-2.5/ (tokenizer set)"
 fi
 
-ensure Lightricks/LTX-2.5 \
-  diffusion_models/ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors \
-  "$MODELS/checkpoints"
+if [ "${ENSURE_DEV_TRANSFORMER:-0}" = "1" ]; then
+  ensure Lightricks/LTX-2.5 \
+    diffusion_models/ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors \
+    "$MODELS/checkpoints"
+fi
 
 ensure Lightricks/LTX-2.5 \
   vae/ltx-2.5-video-vae-bf16.safetensors \
@@ -103,12 +106,14 @@ ensure Lightricks/LTX-2.5 \
   latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors \
   "$MODELS/latent_upscale_models"
 
-ensure numz/SeedVR2_comfyUI \
-  seedvr2_ema_3b_fp16.safetensors \
-  "$MODELS/SEEDVR2"
-ensure numz/SeedVR2_comfyUI \
-  ema_vae_fp16.safetensors \
-  "$MODELS/SEEDVR2"
+if [ "${ENSURE_SEEDVR2:-0}" = "1" ]; then
+  ensure numz/SeedVR2_comfyUI \
+    seedvr2_ema_3b_fp16.safetensors \
+    "$MODELS/SEEDVR2"
+  ensure numz/SeedVR2_comfyUI \
+    ema_vae_fp16.safetensors \
+    "$MODELS/SEEDVR2"
+fi
 
 # --- retake48_loop additions (ltx25_v2v_retake48_loop_runpod.json) -----------
 ensure Lightricks/LTX-2.5 \
