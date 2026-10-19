@@ -337,7 +337,6 @@ setup: |
       uv pip install -r ComfyUI-SeedVR2_VideoUpscaler/requirements.txt
     fi
   fi
-  fi
 
   # Safety net: flatten any nested leftovers from older runs (tokenizers and
   # the .cache metadata are exempt — only loose .safetensors move).
