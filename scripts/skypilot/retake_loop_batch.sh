@@ -196,6 +196,18 @@ if [ "$CHUNK" -gt 0 ]; then
     idx=$((idx + CHUNK))
   done
   wait "$pid" || echo "WARN: final chunk render exited non-zero"
+
+  # Catch-up pass (queue-only mode): an invoke whose POST /prompt timed out
+  # mid-upload can leave its chunk unqueued even though the files are on the
+  # pod. The invoke's queue-state pre-check makes this pass idempotent — it
+  # queues only clips that are neither queued, running nor done on the pod.
+  if [ -n "${QONLY:-}" ]; then
+    echo "=== Catch-up queue pass (idempotent) ==="
+    uv run python scripts/invoke/invoke_skypilot_batch.py \
+      --dir sample --workflow "$WORKFLOW" --out "$OUT_DIR" \
+      --timeout "$PER_CLIP_TIMEOUT" $seed_args ${QONLY:-} \
+      || echo "WARN: catch-up pass failed (re-run the night script to retry)"
+  fi
 else
   echo "=== Uploading $SAMPLE_SRC -> pod:/workspace/input/sample ==="
   rsync -a --no-owner --no-group --info=progress2 --partial \

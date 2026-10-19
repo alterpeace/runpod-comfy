@@ -266,7 +266,7 @@ def main():
         raise SystemExit(f"ERROR: ComfyUI not reachable at {args.url}")
 
     args.out.mkdir(parents=True, exist_ok=True)
-    done = failed = queued = 0
+    done = failed = queued = skipped = 0
     t_all = time.time()
     for i, clip in enumerate(pending, 1):
         print(f"\n=== [{i}/{len(pending)}] {clip.name} ({clip.stat().st_size / 1e6:.0f} MB) ===")
@@ -327,6 +327,37 @@ def main():
         (wf_dir / f"{clip.stem}.json").write_text(json.dumps(wf, indent=2))
         try:
             t0 = time.time()
+            if args.queue_only:
+                # Idempotency guard: _make_request retries POST /prompt on
+                # connection errors, and a retry can land after an earlier
+                # attempt was already queued (lost response over a flaky
+                # tunnel) — producing duplicate renders. Skip clips already
+                # queued, running or finished on the pod.
+                try:
+                    import requests
+                    queued = set()
+                    q = requests.get(f"{args.url}/queue", timeout=20).json()
+                    for e in q.get("queue_running", []) + q.get("queue_pending", []):
+                        p = e[2] if len(e) > 2 else {}
+                        for node in (p.values() if isinstance(p, dict) else []):
+                            v = node.get("inputs", {}).get("video")
+                            if v:
+                                queued.add(v)
+                    h = requests.get(f"{args.url}/history?max_items=1000",
+                                     timeout=30).json()
+                    for e in h.values():
+                        p = e.get("prompt")
+                        p = p[2] if isinstance(p, list) and len(p) > 2 else {}
+                        for node in (p.values() if isinstance(p, dict) else []):
+                            v = node.get("inputs", {}).get("video")
+                            if v:
+                                queued.add(v)
+                    if f"{args.dir}/{clip.name}" in queued:
+                        print(f"  already queued/running/done on pod: {clip.name} — skipping")
+                        skipped += 1
+                        continue
+                except Exception as e:  # noqa: BLE001 - state check is best-effort
+                    print(f"  queue-state check failed ({e}); queueing anyway")
             prompt_id = client.queue_prompt(wf)
             if args.queue_only:
                 (wf_dir / f"{clip.stem}.json").write_text(
@@ -350,7 +381,7 @@ def main():
 
     total_min = (time.time() - t_all) / 60
     if args.queue_only:
-        print(f"\nAll {queued} clips queued on the pod. PC can go offline now.")
+        print(f"\nAll {queued} clips queued ({skipped} already queued/running/done, skipped). PC can go offline now.")
         print("Outputs accumulate in the pod's output dir (= network volume); sync down later.")
         return
     print(f"\nBatch complete: {done} ok, {failed} failed, {total_min:.0f} min total")
