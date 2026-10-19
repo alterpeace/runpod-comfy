@@ -56,7 +56,12 @@ ensure() {  # ensure <repo> <repo_file> <category_dir>
     return 0
   fi
   hf download "$1" "$2" --local-dir "$3"
-  find "$3" -mindepth 2 -type f -name "*.safetensors" -exec mv -n {} "$3/" \;
+  # hf --local-dir lands at <dest>/<repo-subdir>/<file>; flatten. mv -f replaces
+  # stale flat copies (mv -n left partial/duplicate nested files behind on the
+  # 2026-10-19 CA-MTL-1 volume, wasting ~24GB as same-size twin copies).
+  find "$3" -mindepth 2 -type f -name "*.safetensors" -exec mv -f {} "$3/" \;
+  find "$3" -mindepth 2 -type f -name "*.safetensors" -delete
+  rm -rf "$3/.cache"
 }
 
 mkdir -p "$MODELS"/{checkpoints,text_encoders,vae,loras,latent_upscale_models}
@@ -127,13 +132,15 @@ mkdir -p "$MODELS/diffusion_models"
 ln -f "$MODELS/checkpoints/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors" \
   "$MODELS/diffusion_models/" 2>/dev/null || true
 
-ensure Lightricks/LTX-2.5 \
-  vae/ltx-2.5-audio-vae-bf16.safetensors \
-  "$MODELS/vae"
+if [ "${ENSURE_RETAKE48_EXTRAS:-0}" = "1" ]; then
+  ensure Lightricks/LTX-2.5 \
+    vae/ltx-2.5-audio-vae-bf16.safetensors \
+    "$MODELS/vae"
 
-ensure Comfy-Org/gemma-4 \
-  text_encoders/gemma4_e2b_it_int8_convrot.safetensors \
-  "$MODELS/text_encoders"
+  ensure Comfy-Org/gemma-4 \
+    text_encoders/gemma4_e2b_it_int8_convrot.safetensors \
+    "$MODELS/text_encoders"
+fi
 
 echo "=== Model set complete ==="
 df -h /workspace | tail -1
