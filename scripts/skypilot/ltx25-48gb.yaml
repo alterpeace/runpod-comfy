@@ -65,8 +65,8 @@ resources:
 
   # Replica MUST sit in the volume's datacenter — RunPod network volumes only
   # attach to pods in the same DC.
-  region: NL
-  zone: EU-NL-1
+  region: FR
+  zone: EU-FR-1
 
   # 48GB VRAM is enough for the int8-convrot models without --lowvram
   # But we need enough system RAM for model loading
@@ -77,7 +77,7 @@ resources:
   disk_size: 40
 
 # Persistent RunPod network volume (200GB in US-CA-2, created via:
-#   sky volumes apply -n ltx25-vol --infra runpod/NL/EU-NL-1 \
+#   sky volumes apply -n ltx25-vol --infra runpod/FR/EU-FR-1 \
 #     --type runpod-network-volume --size 200)
 # Survives stop/start and pod replacement. Mounted at /workspace.
 volumes:

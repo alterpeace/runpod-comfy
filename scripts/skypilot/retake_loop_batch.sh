@@ -24,7 +24,7 @@ cd "$ROOT"
 
 CLUSTER="${CLUSTER:-ltx25}"
 VOL="${VOL:-ltx25-vol}"
-VOL_INFRA="${VOL_INFRA:-runpod/NL/EU-NL-1}"
+VOL_INFRA="${VOL_INFRA:-runpod/FR/EU-FR-1}"
 VOL_SIZE="${VOL_SIZE:-100}"   # GB; export VOL_SIZE=200 for more headroom
 SAMPLE_SRC="${SAMPLE_SRC:-$HOME/Desktop/sample}"
 OUT_DIR="${OUT_DIR:-output/retake_loop_batch}"

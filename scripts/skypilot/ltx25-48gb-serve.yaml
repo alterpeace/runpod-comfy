@@ -40,7 +40,7 @@ resources:
   disk_size: 40
 
 # Persistent RunPod network volume (200GB, created via:
-#   sky volumes apply -n ltx25-vol --infra runpod/NL/EU-NL-1 \
+#   sky volumes apply -n ltx25-vol --infra runpod/FR/EU-FR-1 \
 #     --type runpod-network-volume --size 200)
 # Pins replicas to US-CA-2. Survives scale-to-zero and pod replacement.
 volumes:
