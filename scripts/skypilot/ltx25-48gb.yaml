@@ -358,8 +358,18 @@ run: |
   # - --listen 0.0.0.0  : allow external connections (for port-forward)
   # - --port 8188       : ComfyUI port
   # - COMFYUI_ARGS      : extra args from env (empty for 48GB, --lowvram for 24GB)
-  python main.py --listen 0.0.0.0 --port 8188 ${COMFYUI_ARGS} &
-  COMFY_PID=$!
+  # 2026-10-19 (A40 48GB pod): Ray's OOM monitor accounts against the
+  # container cgroup limit (~46.5GB) and ComfyUI's mmap'd int8 weights reach
+  # ~40GB RSS, so Ray killed the run task (and ComfyUI with it) at 95%.
+  # Detach ComfyUI from the Ray task: it reparents to PID 1 and Ray has no
+  # worker left to kill; the kernel reclaims mmap'd file pages under real
+  # pressure instead. Idempotent: kill any previous instance first.
+  pkill -f "ComfyUI/main.py" 2>/dev/null || true
+  sleep 1
+  mkdir -p /opt/ComfyUI/user
+  setsid nohup python main.py --listen 0.0.0.0 --port 8188 ${COMFYUI_ARGS} \
+    > /opt/ComfyUI/user/comfyui_8188.log 2>&1 < /dev/null &
+  disown 2>/dev/null || true
   sleep 2
 
   # Expose the WebUI on RunPod's pre-registered Jupyter HTTP port (19123):
@@ -372,4 +382,4 @@ run: |
   socat TCP-LISTEN:19123,fork,reuseaddr TCP:127.0.0.1:8188 \
     > /workspace/logs/socat-19123.log 2>&1 &
 
-  wait $COMFY_PID
+  echo "ComfyUI started detached (log: /opt/ComfyUI/user/comfyui_8188.log)"
