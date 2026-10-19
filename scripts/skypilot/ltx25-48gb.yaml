@@ -61,7 +61,15 @@ resources:
   # (RTX 4090 24GB fallback: use launch.sh --24gb)
   # NOTE: PRO-6000-MIG-48GB removed — SkyPilot 0.13 crashes with KeyError
   # when trying to acquire it on RunPod, aborting the whole provision attempt.
-  accelerators: ["L40S:1", "L40:1", "RTX6000-Ada:1", "RTXA6000:1", "A40:1"]
+  # 2026-10-19: live per-DC stock probe (RunPod GraphQL lowestPrice) showed
+  # zero availability for all five 48GB types in every volume-capable DC
+  # EXCEPT A40 in CA-MTL-1 (SECURE) and RTX 6000 Ada in US-IL-1 (community).
+  # A40_COMMUNITY was rejected at create time despite stock=Medium, while
+  # 1x_A40_SECURE CA-MTL-1 created successfully — so we pin it explicitly.
+  # Pinning also stops the optimizer from re-picking rejected COMMUNITY
+  # variants on every 30s retry.
+  accelerators: ["A40:1"]
+  instance_type: 1x_A40_SECURE
 
   # Replica MUST sit in the volume's datacenter — RunPod network volumes only
   # attach to pods in the same DC.
