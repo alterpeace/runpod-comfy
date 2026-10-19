@@ -1,0 +1,353 @@
+# =============================================================================
+# SkyPilot task file for LTX-2.5 video generation on 48GB GPUs.
+#
+# Usage:
+#   # Install SkyPilot first: pip install skypilot
+#
+#   # Set your API keys
+#   export RUNPOD_API_KEY=your_key
+#   export HF_TOKEN=your_hf_token
+#
+#   # Launch on RunPod (cheapest available 48GB GPU)
+#   sky launch -c ltx25 scripts/skypilot/ltx25-48gb.yaml
+#
+#   # Launch on Lambda Labs
+#   sky launch -c ltx25 --cloud lambda scripts/skypilot/ltx25-48gb.yaml
+#
+#   # Launch on Vast.ai (cheapest)
+#   sky launch -c ltx25 --cloud vast scripts/skypilot/ltx25-48gb.yaml
+#
+#   # Check status
+#   sky status
+#
+#   # SSH into the machine
+#   sky ssh ltx25
+#
+#   # Port-forward ComfyUI WebUI
+#   ssh -N -L 8188:localhost:8188 ltx25
+#
+#   # Stop when done (saves cost, keeps disk)
+#   sky stop ltx25
+#
+#   # Resume later
+#   sky start ltx25
+#
+#   # Terminate (destroys disk)
+#   sky down ltx25
+#
+# Environment variables:
+#   HF_TOKEN          HuggingFace token for gated LTX-2.5 repos (required)
+#   RUNPOD_API_KEY    RunPod API key (if using RunPod)
+#   LAMBDA_CLOUD_API_KEY  Lambda Labs API key (if using Lambda)
+#   VAST_API_KEY      Vast.ai API key (if using Vast.ai)
+# =============================================================================
+
+resources:
+  cloud: runpod
+
+  # NOTE: no `image_id` here — SkyPilot refuses to auto-pick a cloud when a
+  # custom docker image is pinned ("Cloud must be specified when image_id is
+  # provided"). The setup script installs CUDA 12.9 PyTorch from pip wheels
+  # onto the cloud's default Ubuntu image, which works on every supported
+  # cloud and keeps multi-DC cheapest-first picking functional.
+
+  # Request a 48GB GPU. SkyPilot considers ALL of these and picks the
+  # cheapest one actually available — if L40S Secure is sold out everywhere
+  # (it happens), it falls back to the others instead of failing.
+  #   L40S         — 48GB Ada, best for LTX-2.5
+  #   RTX6000-Ada  — 48GB Ada workstation
+  #   RTXA6000     — 48GB Ampere, slower but often available
+  #   A40          — 48GB Ampere datacenter
+  # (RTX 4090 24GB fallback: use launch.sh --24gb)
+  # NOTE: PRO-6000-MIG-48GB removed — SkyPilot 0.13 crashes with KeyError
+  # when trying to acquire it on RunPod, aborting the whole provision attempt.
+  accelerators: ["RTXA6000:1"]
+
+  # Replica MUST sit in the volume's datacenter — RunPod network volumes only
+  # attach to pods in the same DC.
+  region: US
+  zone: US-TX-1
+
+  # 48GB VRAM is enough for the int8-convrot models without --lowvram
+  # But we need enough system RAM for model loading
+  memory: 32+
+
+  # RunPod caps CONTAINER disk at 40GB — models, inputs and outputs live on
+  # the 200GB network volume below; container disk holds venv + code (~15GB).
+  disk_size: 40
+
+# Persistent RunPod network volume (200GB in US-CA-2, created via:
+#   sky volumes apply -n ltx25-vol --infra runpod/NL/EU-NL-1 \
+#     --type runpod-network-volume --size 200)
+# Survives stop/start and pod replacement. Mounted at /workspace.
+volumes:
+  /workspace:
+    name: ltx25-vol-tx
+
+# Note: For sky launch, use `ssh -N -L 8188:localhost:8188 ltx25` (or ./scripts/skypilot/launch.sh port-forward) to access the WebUI.
+#
+# SERVERLESS-LIKE AUTOSCALING (sky serve):
+# Uncomment the `service` block below, then boot with:
+#   sky serve up ltx25-service scripts/skypilot/ltx25-48gb.yaml
+# This runs an autoscaled endpoint behind a load balancer: replicas scale
+# between min and max based on request load, and scale back down when idle.
+# Query it with: sky serve status ltx25-service
+# The endpoint URL is printed by `sky serve status` (e.g. http://<lb-ip>:30001).
+#
+# service:
+#   readiness_probe:
+#     path: /
+#     initial_delay_seconds: 120
+#     post_data: ''
+#   replica_policy:
+#     min_replicas: 0        # scale to zero when idle (true pay-per-use)
+#     max_replicas: 2
+#     target_qps_per_replica: 0.5
+#     dynamic_ondemand_fallback: true
+
+# Environment variables to pass to the container
+envs:
+  HF_TOKEN: "${HF_TOKEN}"
+  # --cache-none: don't cache models in host RAM. The LTXV dynamic-VRAM loader
+  # stages ~20GB per model in host RAM; with default caching the retake48
+  # two-pass peaked at 105GB and Ray's 95% memory monitor killed ComfyUI
+  # mid-denoise (2026-09-19, 116GB node, swapon blocked in container).
+  # cache-none reloads per node (+~2min/clip) and keeps the RAM peak safe.
+  # Override with --env COMFYUI_ARGS="..." for VRAM-constrained debugging.
+  COMFYUI_ARGS: "--cache-none"
+
+# Setup runs ONCE on first launch (or when setup changes)
+# This is where we install deps and download models
+setup: |
+  set -e
+
+  # Datacenter IPs get rate-limited by GitHub; retry clones.
+  gitc() { for i in 1 2 3 4 5; do git clone "$@" && return 0; echo "git clone retry $i"; sleep 10; done; return 1; }
+
+  echo "=== SkyPilot LTX-2.5 48GB Setup ==="
+
+  # Install system dependencies
+  sudo apt-get update && sudo apt-get install -y \
+    git wget curl python3 python3-pip python3-venv \
+    libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
+    ffmpeg pkg-config socat
+
+  # Install uv (project package manager — fast, no pip needed)
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  export PATH="$HOME/.local/bin:$PATH"
+
+  # Create Python venv with uv
+  # Idempotent: reuse existing venv from a previous partial setup
+  if [ ! -d /opt/venv ]; then uv venv /opt/venv --python 3.12; fi
+  source /opt/venv/bin/activate
+
+  # Install PyTorch with CUDA 12.9
+  uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu129
+
+  # Install ComfyUI (skip if already cloned — setup re-runs on resume)
+  if [ ! -d /opt/ComfyUI/.git ]; then
+    gitc https://github.com/comfyanonymous/ComfyUI.git /opt/ComfyUI
+  fi
+  cd /opt/ComfyUI
+  uv pip install -r requirements.txt
+
+  # Install custom nodes
+  cd /opt/ComfyUI/custom_nodes
+
+  # ComfyUI-LTXVideo (LTX-2.5 support, IC-LoRA nodes)
+  if [ ! -d ComfyUI-LTXVideo/.git ]; then
+    gitc https://github.com/Lightricks/ComfyUI-LTXVideo.git
+  fi
+  if [ -f ComfyUI-LTXVideo/requirements.txt ]; then
+    uv pip install -r ComfyUI-LTXVideo/requirements.txt
+  fi
+  # LTXVideo's requirements.txt pulls latest kornia, whose
+  # kornia.geometry.transform.pyramid no longer exports `pad` ->
+  # ImportError -> IC-LoRA nodes unregistered. Pin 0.7.2 like the Dockerfile.
+  uv pip install "kornia==0.7.2" --no-deps --force-reinstall
+
+  # ComfyUI-VideoHelperSuite (video output)
+  if [ ! -d ComfyUI-VideoHelperSuite/.git ]; then
+    gitc https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git
+  fi
+  if [ -f ComfyUI-VideoHelperSuite/requirements.txt ]; then
+    uv pip install -r ComfyUI-VideoHelperSuite/requirements.txt
+  fi
+
+  # ComfyUI-Manager (node manager UI) + Crystools (GPU/RAM monitor widgets)
+  if [ ! -d ComfyUI-Manager/.git ]; then
+    gitc https://github.com/Comfy-Org/ComfyUI-Manager.git
+  fi
+  if [ -f ComfyUI-Manager/requirements.txt ]; then
+    uv pip install -r ComfyUI-Manager/requirements.txt
+  fi
+  if [ ! -d ComfyUI-Crystools/.git ]; then
+    gitc https://github.com/crystian/ComfyUI-Crystools.git
+  fi
+  if [ -f ComfyUI-Crystools/requirements.txt ]; then
+    uv pip install -r ComfyUI-Crystools/requirements.txt
+  fi
+  sudo apt-get install -y -q nginx apache2-utils
+
+  # NOTE: ComfyUI-GGUF, ComfyUI-SeedVR2_VideoUpscaler and their models are
+  # intentionally NOT installed on this 48GB build — the int8-convrot
+  # checkpoints fit in VRAM directly; GGUF quants / SeedVR2 restoration are
+  # 8-24GB-tier workarounds. Add them back if entry/seedvr2 workflows are
+  # needed (see git history of this file).
+
+  # Install HuggingFace CLI for model downloads
+  uv pip install huggingface_hub hf_transfer
+
+  # Enable hf_transfer for faster downloads
+  export HF_HUB_ENABLE_HF_TRANSFER=1
+
+  # Disable the Xet chunked protocol — its "receiver dropped" reconstruction
+  # errors abort the whole setup mid-download. Plain HTTPS is slower but
+  # resumes reliably on retry.
+  export HF_HUB_DISABLE_XET=1
+
+  # Clone this project for workflow examples + video format configs
+  if [ ! -d /opt/runpod-comfy/.git ]; then
+    gitc https://github.com/${GITHUB_REPO:-alterpeace/runpod-comfy}.git /opt/runpod-comfy || true
+  fi
+
+  # Install all-intra h264 video format (keyframe every frame — no motion artifacts)
+  if [ -f /opt/runpod-comfy/config/video_formats/h264-allintra.json ]; then
+    mkdir -p /opt/ComfyUI/custom_nodes/ComfyUI-VideoHelperSuite/video_formats
+    cp -f /opt/runpod-comfy/config/video_formats/h264-allintra.json \
+      /opt/ComfyUI/custom_nodes/ComfyUI-VideoHelperSuite/video_formats/
+    echo "Installed h264-allintra video format"
+  fi
+
+  # Models, inputs and outputs live on the network volume mounted at
+  # /workspace (RunPod caps container disk at 40GB). Symlink ComfyUI dirs on.
+  mkdir -p /workspace/models /workspace/input /workspace/output
+  rm -rf /opt/ComfyUI/models
+  ln -s /workspace/models /opt/ComfyUI/models
+  rm -rf /opt/ComfyUI/input /opt/ComfyUI/output
+  ln -s /workspace/input /opt/ComfyUI/input
+  ln -s /workspace/output /opt/ComfyUI/output
+  mkdir -p /workspace/models/{checkpoints,text_encoders,vae,loras,latent_upscale_models}
+
+  echo "=== Downloading LTX-2.5 models (48GB redetail build) ==="
+
+  # Download models from HuggingFace
+  # LTX-2.5 is gated — HF_TOKEN must be set
+  HF_TOKEN="${HF_TOKEN}"
+
+  # Optimized for 48GB VRAM + ltx25_v2v_redetail_comfortable_runpod.json:
+  # dev int8-convrot (21.5G) + gemma int8 (15G) + VAE/LoRAs/upscaler (~5G).
+  # Total ~42GB. Skipped on 48GB (unneeded): distilled int8, Q5_K_M GGUF,
+  # SeedVR2, gemma4_e2b, temporal upscaler, duration head, audio VAE.
+
+  # FLAT-PATH GUARD: hf --local-dir nests repo subfolders under the target
+  # dir (text_encoders/text_encoders/...) while the volume already holds
+  # flattened files from previous runs — re-downloading doubles storage
+  # until the quota blows ("Disk quota exceeded"). Only fetch files missing
+  # at their flat destination, then flatten.
+  ensure() {  # ensure <repo> <repo_file> <category_dir>
+    local dest="$3/$(basename "$2")"
+    if [ -f "$dest" ]; then
+      echo "present: $dest"
+    else
+      hf download "$1" "$2" --local-dir "$3"
+      find "$3" -mindepth 2 -type f -name "*.safetensors" -exec mv -n {} "$3/" \;
+    fi
+  }
+
+  ensure Lightricks/LTX-2.5 \
+    text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors \
+    /opt/ComfyUI/models/text_encoders
+
+  # --- Text encoder tokenizer files (nested dir is intentional for CLIPLoader) ---
+  if [ ! -f /opt/ComfyUI/models/text_encoders/gemma4-12b-ltx-2.5/tokenizer.json ]; then
+    hf download Lightricks/LTX-2.5-Pre-Trained \
+      ltx-2.5-22b-gemma4-12b/config.json \
+      ltx-2.5-22b-gemma4-12b/tokenizer_config.json \
+      ltx-2.5-22b-gemma4-12b/tokenizer.json \
+      ltx-2.5-22b-gemma4-12b/chat_template.jinja \
+      ltx-2.5-22b-gemma4-12b/generation_config.json \
+      ltx-2.5-22b-gemma4-12b/processor_config.json \
+      --local-dir /opt/ComfyUI/models/text_encoders/gemma4-12b-ltx-2.5
+
+    # Create model.safetensors symlink (for LTXVGemmaCLIPModelLoader)
+    ln -sf ../gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors \
+      /opt/ComfyUI/models/text_encoders/gemma4-12b-ltx-2.5/model.safetensors
+  fi
+
+  # --- Dev transformer (int8-convrot, ~22GB) — this build's checkpoint ---
+  ensure Lightricks/LTX-2.5 \
+    diffusion_models/ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors \
+    /opt/ComfyUI/models/checkpoints
+
+  # --- Video VAE (int8/GGUF checkpoints ship no VAE — always load explicitly) ---
+  ensure Lightricks/LTX-2.5 \
+    vae/ltx-2.5-video-vae-bf16.safetensors \
+    /opt/ComfyUI/models/vae
+
+  # --- LoRA: distilled 450 (speed/quality scheduling anchor) ---
+  ensure Lightricks/LTX-2.5 \
+    loras/ltx-2.5-22b-distilled-lora-450-bf16.safetensors \
+    /opt/ComfyUI/models/loras
+
+  # --- IC-LoRA pixel upscaler (pass-2 re-detail conditioning) ---
+  ensure Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler \
+    ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors \
+    /opt/ComfyUI/models/loras
+
+  # --- Latent spatial upscaler x2 (pass-1 -> pass-2 bridge) ---
+  ensure Lightricks/LTX-2.5 \
+    latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors \
+    /opt/ComfyUI/models/latent_upscale_models
+
+  # --- SeedVR2 3B fp16 (restoration + 2K upscale stage after LTX) ---
+  ensure numz/SeedVR2_comfyUI \
+    seedvr2_ema_3b_fp16.safetensors \
+    /opt/ComfyUI/models/SEEDVR2
+  ensure numz/SeedVR2_comfyUI \
+    ema_vae_fp16.safetensors \
+    /opt/ComfyUI/models/SEEDVR2
+
+  # ComfyUI-SeedVR2_VideoUpscaler node
+  if [ ! -d ComfyUI-SeedVR2_VideoUpscaler/.git ]; then
+    gitc https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler.git
+  fi
+  if [ -f ComfyUI-SeedVR2_VideoUpscaler/requirements.txt ]; then
+    uv pip install -r ComfyUI-SeedVR2_VideoUpscaler/requirements.txt
+  fi
+
+  # Safety net: flatten any nested leftovers from older runs (tokenizers and
+  # the .cache metadata are exempt — only loose .safetensors move).
+  for cat in checkpoints vae loras text_encoders latent_upscale_models; do
+    find /opt/ComfyUI/models/$cat -mindepth 2 -type f -name "*.safetensors" \
+      -exec mv -n {} /opt/ComfyUI/models/$cat/ \;
+  done
+
+  echo "=== Setup complete! ==="
+  echo "Models in /opt/ComfyUI/models/"
+  du -sh /opt/ComfyUI/models/*/
+
+# Run starts ComfyUI on every launch (including resume from stop)
+run: |
+  source /opt/venv/bin/activate
+  cd /opt/ComfyUI
+
+  # ComfyUI args:
+  # - --listen 0.0.0.0  : allow external connections (for port-forward)
+  # - --port 8188       : ComfyUI port
+  # - COMFYUI_ARGS      : extra args from env (empty for 48GB, --lowvram for 24GB)
+  python main.py --listen 0.0.0.0 --port 8188 ${COMFYUI_ARGS} &
+  COMFY_PID=$!
+  sleep 2
+
+  # Expose the WebUI on RunPod's pre-registered Jupyter HTTP port (19123):
+  #   https://<RUNPOD_POD_HOSTNAME>-19123.proxy.runpod.net
+  # Primary access path is the SSH tunnel (launch.sh port-forward) — this
+  # bridge is a convenience fallback. (An earlier nginx basic-auth variant
+  # of this block was removed: its column-1 heredoc made the whole task
+  # file invalid YAML. See git history if it's ever needed again.)
+  mkdir -p /workspace/logs
+  socat TCP-LISTEN:19123,fork,reuseaddr TCP:127.0.0.1:8188 \
+    > /workspace/logs/socat-19123.log 2>&1 &
+
+  wait $COMFY_PID

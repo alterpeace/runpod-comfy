@@ -51,6 +51,13 @@ def find_cond_nodes(workflow: dict) -> tuple[str, str]:
     raise SystemExit("ERROR: workflow has no CFGGuider to locate prompt nodes")
 
 
+def find_video_combine_node(workflow: dict) -> str | None:
+    for node_id, node in workflow.items():
+        if node.get("class_type") == "VHS_VideoCombine":
+            return node_id
+    return None
+
+
 def find_output_files(history: dict) -> list:
     files = []
     for node_output in history.get("outputs", {}).values():
@@ -308,6 +315,13 @@ def main():
         # Persist the exact per-clip workflow (random seed + length-match pins
         # baked in) so every render is reproducible/auditable from disk. The
         # mp4's embedded 'prompt' tag carries the same data as a fallback.
+        if args.queue_only:
+            # Name the pod-side output after the source clip so the later
+            # sync-down (scripts/skypilot/sync_down.sh) can map files without
+            # parsing embedded metadata: <stem>_00001.mp4 on the pod.
+            combine_id = find_video_combine_node(wf)
+            if combine_id:
+                wf[combine_id]["inputs"]["filename_prefix"] = clip.stem
         wf_dir = args.out / ".workflows"
         wf_dir.mkdir(parents=True, exist_ok=True)
         (wf_dir / f"{clip.stem}.json").write_text(json.dumps(wf, indent=2))
@@ -315,6 +329,8 @@ def main():
             t0 = time.time()
             prompt_id = client.queue_prompt(wf)
             if args.queue_only:
+                (wf_dir / f"{clip.stem}.json").write_text(
+                    json.dumps({**wf, "_prompt_id": prompt_id}, indent=2))
                 print(f"  queued {clip.name} -> {prompt_id} (pod renders autonomously)")
                 queued += 1
                 continue

@@ -29,6 +29,7 @@ VOL_SIZE="${VOL_SIZE:-100}"   # GB; export VOL_SIZE=200 for more headroom
 SAMPLE_SRC="${SAMPLE_SRC:-$HOME/Desktop/sample}"
 OUT_DIR="${OUT_DIR:-output/retake_loop_batch}"
 WORKFLOW="${WORKFLOW:-examples/ltx25_v2v_retake48_loop_runpod.json}"   # e.g. WORKFLOW=examples/ltx25_v2v_retake48_loop_nag.json OUT_DIR=output/retake48_nag_batch
+DENOISE="${DENOISE:-}"   # e.g. DENOISE=0.60 (workflow default is 0.58; empty = workflow's own value)
 PER_CLIP_TIMEOUT="${PER_CLIP_TIMEOUT:-3600}"
 
 KEEP_UP=0
@@ -174,6 +175,7 @@ if [ "$CHUNK" -gt 0 ]; then
     echo "=== Rendering chunk $(( $1 / CHUNK + 1 ))/$nchunks: ${names[*]} ==="
     local seed_args=""
     [ "$RANDOM_SEEDS" -eq 0 ] && seed_args="--no-random-seed"
+    [ -n "$DENOISE" ] && seed_args="$seed_args --denoise $DENOISE"
     uv run python scripts/invoke/invoke_skypilot_batch.py \
       --dir sample --workflow "$WORKFLOW" --out "$OUT_DIR" \
       --timeout "$PER_CLIP_TIMEOUT" $seed_args ${QONLY:-} "${names[@]}" &
@@ -203,6 +205,7 @@ else
   echo "=== Running looping-retake batch (outputs -> $OUT_DIR) ==="
   SEED_ARGS=""
   [ "$RANDOM_SEEDS" -eq 0 ] && SEED_ARGS="--no-random-seed"
+  [ -n "$DENOISE" ] && SEED_ARGS="$SEED_ARGS --denoise $DENOISE"
   uv run python scripts/invoke/invoke_skypilot_batch.py \
     --dir sample \
     --workflow "$WORKFLOW" \
