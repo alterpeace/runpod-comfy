@@ -335,14 +335,14 @@ def main():
                 # queued, running or finished on the pod.
                 try:
                     import requests
-                    queued = set()
+                    already = set()
                     q = requests.get(f"{args.url}/queue", timeout=20).json()
                     for e in q.get("queue_running", []) + q.get("queue_pending", []):
                         p = e[2] if len(e) > 2 else {}
                         for node in (p.values() if isinstance(p, dict) else []):
                             v = node.get("inputs", {}).get("video")
                             if v:
-                                queued.add(v)
+                                already.add(v)
                     h = requests.get(f"{args.url}/history?max_items=1000",
                                      timeout=30).json()
                     for e in h.values():
@@ -351,8 +351,8 @@ def main():
                         for node in (p.values() if isinstance(p, dict) else []):
                             v = node.get("inputs", {}).get("video")
                             if v:
-                                queued.add(v)
-                    if f"{args.dir}/{clip.name}" in queued:
+                                already.add(v)
+                    if f"{args.dir}/{clip.name}" in already:
                         print(f"  already queued/running/done on pod: {clip.name} — skipping")
                         skipped += 1
                         continue
