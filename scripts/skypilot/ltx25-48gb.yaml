@@ -284,9 +284,15 @@ setup: |
   fi
 
   # --- Dev transformer (int8-convrot, ~22GB) — this build's checkpoint ---
-  ensure Lightricks/LTX-2.5 \
-    diffusion_models/ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors \
-    /opt/ComfyUI/models/checkpoints
+  # 2026-10-19: gated off by default — it blew the 100GB volume quota and the
+  # loop-retake batch needs the DISTILLED transformer (fetch by
+  # scripts/skypilot/ensure_models.sh after boot). Set ENSURE_DEV_TRANSFORMER=1
+  # via --env for the old 48GB-redetail build.
+  if [ "${ENSURE_DEV_TRANSFORMER:-0}" = "1" ]; then
+    ensure Lightricks/LTX-2.5 \
+      diffusion_models/ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors \
+      /opt/ComfyUI/models/checkpoints
+  fi
 
   # --- Video VAE (int8/GGUF checkpoints ship no VAE — always load explicitly) ---
   ensure Lightricks/LTX-2.5 \
@@ -294,9 +300,12 @@ setup: |
     /opt/ComfyUI/models/vae
 
   # --- LoRA: distilled 450 (speed/quality scheduling anchor) ---
-  ensure Lightricks/LTX-2.5 \
-    loras/ltx-2.5-22b-distilled-lora-450-bf16.safetensors \
-    /opt/ComfyUI/models/loras
+  # 2026-10-19: gated — unused by the loop-retake batch (8.9GB; volume quota).
+  if [ "${ENSURE_DISTILLED_LORA:-0}" = "1" ]; then
+    ensure Lightricks/LTX-2.5 \
+      loras/ltx-2.5-22b-distilled-lora-450-bf16.safetensors \
+      /opt/ComfyUI/models/loras
+  fi
 
   # --- IC-LoRA pixel upscaler (pass-2 re-detail conditioning) ---
   ensure Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler \
@@ -309,19 +318,25 @@ setup: |
     /opt/ComfyUI/models/latent_upscale_models
 
   # --- SeedVR2 3B fp16 (restoration + 2K upscale stage after LTX) ---
-  ensure numz/SeedVR2_comfyUI \
-    seedvr2_ema_3b_fp16.safetensors \
-    /opt/ComfyUI/models/SEEDVR2
-  ensure numz/SeedVR2_comfyUI \
-    ema_vae_fp16.safetensors \
-    /opt/ComfyUI/models/SEEDVR2
-
-  # ComfyUI-SeedVR2_VideoUpscaler node
-  if [ ! -d ComfyUI-SeedVR2_VideoUpscaler/.git ]; then
-    gitc https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler.git
+  # 2026-10-19: gated — unused by the loop-retake batch (~9GB; volume quota).
+  if [ "${ENSURE_SEEDVR2:-0}" = "1" ]; then
+    ensure numz/SeedVR2_comfyUI \
+      seedvr2_ema_3b_fp16.safetensors \
+      /opt/ComfyUI/models/SEEDVR2
+    ensure numz/SeedVR2_comfyUI \
+      ema_vae_fp16.safetensors \
+      /opt/ComfyUI/models/SEEDVR2
   fi
-  if [ -f ComfyUI-SeedVR2_VideoUpscaler/requirements.txt ]; then
-    uv pip install -r ComfyUI-SeedVR2_VideoUpscaler/requirements.txt
+
+  # ComfyUI-SeedVR2_VideoUpscaler node (only when SEEDVR2 models are wanted)
+  if [ "${ENSURE_SEEDVR2:-0}" = "1" ]; then
+    if [ ! -d ComfyUI-SeedVR2_VideoUpscaler/.git ]; then
+      gitc https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler.git
+    fi
+    if [ -f ComfyUI-SeedVR2_VideoUpscaler/requirements.txt ]; then
+      uv pip install -r ComfyUI-SeedVR2_VideoUpscaler/requirements.txt
+    fi
+  fi
   fi
 
   # Safety net: flatten any nested leftovers from older runs (tokenizers and
