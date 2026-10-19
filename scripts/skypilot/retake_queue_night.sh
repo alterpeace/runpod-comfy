@@ -14,7 +14,7 @@ set -a; source .env; set +a
 export SAMPLE_SRC="${SAMPLE_SRC:-$HOME/Desktop/input}"
 export OUT_DIR="${OUT_DIR:-$HOME/Desktop/output}"
 export WORKFLOW=examples/ltx25_v2v_retake48_loop_runpod.json
-export DENOISE="${DENOISE:-0.60}"   # 0.58 default | 0.60 "more life" (this batch) | 1.0 full restyle
+export DENOISE="${DENOISE:-0.63}"   # 0.58 default | 0.60 "more life" | 0.63 this batch | 1.0 full restyle
 export CHUNK="${CHUNK:-5}"
 # QONLY also blocks the driver's success-cleanup from sky-downing the pod
 # (queue dies with the pod — learned 2026-09-29); --keep-up keeps the tunnel.
