@@ -101,11 +101,24 @@ todo=$((expected - already))
 echo "=== $expected queued, $already already synced, $todo to fetch ==="
 [ "$todo" -eq 0 ] && { echo "Nothing to do."; exit 0; }
 
-# Build the pod-side file list for the missing stems (<stem>_*.mp4)
+# Build the pod-side file list for the missing stems. rsync --files-from
+# does NOT glob, so list the pod's actual output files over ssh and match
+# <stem>_NNNNN.mp4 against the missing stems locally.
 LIST="$(mktemp)"
+MISSING_LIST="$(mktemp)"
 for stem in "${STEMS[@]}"; do
-  [ -f "$OUT_DIR/$stem.mp4" ] || echo "${stem}_*.mp4"
-done > "$LIST"
+  [ -f "$OUT_DIR/$stem.mp4" ] || echo "$stem"
+done > "$MISSING_LIST"
+ssh -o StrictHostKeyChecking=accept-new "$CLUSTER" \
+  "ls -1 '$POD_DIR' 2>/dev/null | grep -E '\.mp4$'" > "$LIST" || true
+FILTERED="$(mktemp)"
+while IFS= read -r podfile; do
+  [ -z "$podfile" ] && continue
+  stem="${podfile%_*}"   # strip the _NNNNN counter suffix
+  grep -qxF "$stem" "$MISSING_LIST" && echo "$podfile" >> "$FILTERED"
+done < "$LIST"
+wc -l < "$FILTERED" | xargs -I{} echo "=== {} pod files match missing stems ==="
+: > "$LIST"; cat "$FILTERED" > "$LIST"; rm -f "$FILTERED" "$MISSING_LIST"
 
 echo "=== rsync from $CLUSTER:$POD_DIR (missing stems only) ==="
 rsync -a --info=progress2 --partial --files-from="$LIST" \
