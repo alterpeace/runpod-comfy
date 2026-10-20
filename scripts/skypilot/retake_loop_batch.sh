@@ -203,9 +203,12 @@ if [ "$CHUNK" -gt 0 ]; then
   # queues only clips that are neither queued, running nor done on the pod.
   if [ -n "${QONLY:-}" ]; then
     echo "=== Catch-up queue pass (idempotent) ==="
+    CATCH_SEED_ARGS=""
+    [ "$RANDOM_SEEDS" -eq 0 ] && CATCH_SEED_ARGS="--no-random-seed"
+    [ -n "$DENOISE" ] && CATCH_SEED_ARGS="$CATCH_SEED_ARGS --denoise $DENOISE"
     uv run python scripts/invoke/invoke_skypilot_batch.py \
       --dir sample --workflow "$WORKFLOW" --out "$OUT_DIR" \
-      --timeout "$PER_CLIP_TIMEOUT" $seed_args ${QONLY:-} \
+      --timeout "$PER_CLIP_TIMEOUT" $CATCH_SEED_ARGS ${QONLY:-} \
       || echo "WARN: catch-up pass failed (re-run the night script to retry)"
   fi
 else
