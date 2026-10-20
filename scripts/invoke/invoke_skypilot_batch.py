@@ -239,9 +239,9 @@ def main():
     loader_id = find_video_loader_node(workflow)
     pos_id, neg_id = find_cond_nodes(workflow)
 
-    clips = sorted(Path("sample").glob("*.mp4"))
+    clips = sorted(Path(args.dir).glob("*.mp4"))
     if not clips:
-        raise SystemExit("ERROR: no clips found under sample/")
+        raise SystemExit(f"ERROR: no clips found under {args.dir}/")
     if args.clips:
         wanted = {Path(c).name for c in args.clips}
         clips = [c for c in clips if c.name in wanted]
